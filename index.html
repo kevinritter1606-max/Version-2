@@ -45,7 +45,6 @@
       gap: 16px;
     }
 
-    /* Klickbares Bayer Logo */
     .bayer-logo-btn {
       width: 64px; 
       height: 64px; 
@@ -93,17 +92,35 @@
       display: inline-block;
     }
 
-    .header-actions { display: flex; gap: 8px; align-items: center; }
+    .header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
-    .btn { padding: 8px 16px; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; }
+    .btn { padding: 8px 14px; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; position: relative; }
     .btn-primary { background: var(--bayer-blue); color: #fff; }
     .btn-primary:hover { background: #0077b6; }
     .btn-outline { border-color: #cbd5e1; background: #fff; color: #475569; }
     .btn-outline:hover { background: #f8fafc; }
 
+    /* Roter Zähler am Postfach-Button */
+    .inbox-badge {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      background: #dc2626;
+      color: #fff;
+      font-size: 0.72rem;
+      font-weight: 800;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 5px;
+      border-radius: 999px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 4px rgba(220,38,38,0.4);
+    }
+
     main { padding: 16px; display: flex; gap: 16px; flex: 1; width: 100%; }
 
-    /* Sidebar für Pool & Abwesend */
     .sidebar {
       width: 280px;
       flex-shrink: 0;
@@ -140,7 +157,6 @@
       gap: 6px;
     }
 
-    /* Kompakte Filter Box (Pool-Suche, Teams & Rollen) */
     .team-filter-box {
       display: none;
       background: #ffffff;
@@ -226,9 +242,8 @@
       overflow: hidden; 
       text-overflow: ellipsis;
     }
-    .card-role { font-size: 0.68rem; padding: 2px 4px; background: #f1f5f9; border-radius: 4px; color: #475569; font-weight: 600; white-space: nowrap; }
+    .card-role { font-size: 0.68rem; padding: 2px 4px; background: #f1f5f9; border-radius: 4px; color: #475569; font-weight: 600; white-space: nowrap; align-self: flex-start; }
     
-    /* Linien-Anzeige auf Kärtchen (nur im Planer-Modus) */
     .card-lines-info {
       display: none;
       font-size: 0.63rem;
@@ -239,6 +254,40 @@
     }
     body.planner-active .card-lines-info {
       display: block;
+    }
+
+    .card-sick-tag {
+      display: none;
+      font-size: 0.63rem;
+      color: #b91c1c;
+      background: #fee2e2;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-weight: 700;
+      margin-top: 2px;
+      align-self: flex-start;
+    }
+    body.planner-active .card-sick-tag {
+      display: inline-block;
+    }
+
+    /* Schnell-Button auf Kärtchen zum Krankmelden (nur für Planer) */
+    .quick-sick-btn {
+      display: none;
+      border: none;
+      background: #f1f5f9;
+      border-radius: 4px;
+      padding: 3px 5px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      line-height: 1;
+      transition: background 0.15s;
+    }
+    .quick-sick-btn:hover {
+      background: #fee2e2;
+    }
+    body.planner-active .quick-sick-btn {
+      display: inline-block;
     }
 
     .first-aider-icon {
@@ -272,13 +321,13 @@
     .drop-zone { padding: 6px; min-height: 120px; display: flex; flex-direction: column; gap: 6px; background: #fafafa; }
 
     /* Modals */
-    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 100; }
-    .modal { background: #fff; padding: 24px; border-radius: 10px; width: 100%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); }
-    .form-group { margin-bottom: 14px; }
-    .form-group label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #475569; }
-    .form-control { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.95rem; }
-    textarea.form-control { resize: vertical; min-height: 80px; }
-    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 100; padding: 12px; }
+    .modal { background: #fff; padding: 24px; border-radius: 10px; width: 100%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); max-height: 90vh; overflow-y: auto; }
+    .form-group { margin-bottom: 12px; }
+    .form-group label { display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; color: #475569; }
+    .form-control { width: 100%; padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.92rem; }
+    textarea.form-control { resize: vertical; min-height: 70px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 
     .tabs { display: flex; gap: 6px; border-bottom: 2px solid #e2e8f0; margin-bottom: 16px; overflow-x: auto; }
     .tab-btn { padding: 8px 12px; background: none; border: none; border-bottom: 2px solid transparent; font-weight: 600; cursor: pointer; color: #64748b; margin-bottom: -2px; font-size: 0.9rem; white-space: nowrap; }
@@ -286,6 +335,21 @@
     .tab-content { display: none; }
     .tab-content.active { display: block; }
     .item-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid #f1f5f9; font-size: 0.95rem; }
+
+    /* Postfach-Karten */
+    .sick-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-left: 4px solid var(--bayer-blue);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    .sick-card.unread {
+      background: #fff1f2;
+      border-color: #fecdd3;
+      border-left: 4px solid #dc2626;
+    }
 
     .admin-element { display: none; }
     body.planner-active .admin-element { display: inline-flex; }
@@ -306,6 +370,10 @@
       </div>
     </div>
     <div class="header-actions">
+      <button class="btn btn-outline admin-element" onclick="openInboxModal()">
+        📬 Postfach & Krank
+        <span id="inboxBadge" class="inbox-badge">0</span>
+      </button>
       <button class="btn btn-outline admin-element" onclick="openSettingsModal()">⚙️ Einstellungen</button>
       <button class="btn btn-outline admin-element" onclick="logoutPlanner()">Abmelden</button>
     </div>
@@ -344,7 +412,10 @@
         <div id="pool" class="card-list drop-zone" data-zone="pool"></div>
       </div>
       <div class="panel">
-        <h2>Abwesend (Urlaub / Krank)</h2>
+        <h2>
+          <span>Abwesend (Urlaub / Krank)</span>
+          <button class="btn btn-outline" style="padding:2px 7px; font-size:0.72rem;" onclick="openInboxModal()" title="Manuell Von-Bis eintragen">+ Zeitraum</button>
+        </h2>
         <div id="absent" class="card-list drop-zone" data-zone="absent" style="background: #fff1f2;"></div>
       </div>
     </aside>
@@ -368,6 +439,58 @@
       <div class="modal-actions" style="justify-content: center; gap: 12px; margin-top: 18px;">
         <button class="btn btn-outline" onclick="closeModal('pinModal')">Abbrechen</button>
         <button class="btn btn-primary" onclick="verifyPin()">Anmelden</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Planer Postfach & Manuelle Krankmeldung -->
+  <div id="inboxModal" class="modal-overlay">
+    <div class="modal" style="max-width: 600px;">
+      <h3 style="display:flex; justify-content:space-between; align-items:center; color:var(--bayer-blue); margin-bottom:14px;">
+        <span>📬 Postfach & Abwesenheiten</span>
+        <button onclick="closeModal('inboxModal')" style="border:none; background:none; font-size:1.5rem; cursor:pointer;">&times;</button>
+      </h3>
+
+      <!-- Manuelle Eingabe für den Planer -->
+      <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:14px; margin-bottom:18px;">
+        <h4 style="font-size:0.9rem; color:#0f172a; margin-bottom:10px;">➕ Mitarbeiter manuell krank / abwesend melden (Von – Bis)</h4>
+        <div class="form-group">
+          <label>Mitarbeiter auswählen</label>
+          <select id="manualSickEmpSelect" class="form-control"></select>
+        </div>
+        <div style="display:flex; gap:10px;">
+          <div class="form-group" style="flex:1;">
+            <label>Von (Startdatum)</label>
+            <input type="date" id="manualSickStart" class="form-control">
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label>Bis (Einschließlich)</label>
+            <input type="date" id="manualSickEnd" class="form-control">
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:10px;">
+          <label>Grund / Notiz (optional, z.B. Krank, Urlaub, Lehrgang)</label>
+          <input type="text" id="manualSickReason" class="form-control" placeholder="z.B. Telefonisch krankgemeldet / Urlaub">
+        </div>
+        <button class="btn btn-primary" style="width:100%;" onclick="addManualSickLeave()">Abwesenheit speichern & automatisch einteilen</button>
+      </div>
+
+      <!-- Ungelesene Portal-Meldungen -->
+      <div style="margin-bottom: 18px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+          <h4 style="font-size:0.92rem; color:#dc2626;">🔔 Neue Portal-Nachrichten (Ungelesen)</h4>
+          <button id="btnMarkAllRead" class="btn btn-outline" style="padding:4px 10px; font-size:0.75rem; display:none;" onclick="markAllSickLeavesRead()">Alle als gelesen markieren</button>
+        </div>
+        <div id="unreadSickList"></div>
+      </div>
+
+      <!-- Aktive & geplante Krankmeldungen -->
+      <div style="border-top: 2px solid #e2e8f0; padding-top: 14px;">
+        <h4 style="font-size:0.92rem; color:#1e293b; margin-bottom: 6px;">📋 Aktuelle & geplante Abwesenheiten</h4>
+        <p style="font-size:0.76rem; color:#64748b; margin-bottom: 10px;">
+          Im gültigen Zeitraum steht der Mitarbeiter automatisch im roten Feld „Abwesend“. Nach Ablauf des Bis-Datums wird der Eintrag gelöscht und der Mitarbeiter wandert zurück in den Pool.
+        </p>
+        <div id="activeSickList"></div>
       </div>
     </div>
   </div>
@@ -422,7 +545,7 @@
       
       <!-- Content: Mitarbeiter -->
       <div id="tabEmployees" class="tab-content active">
-        <div style="background:#f8fafc; padding:16px; border-radius:8px; margin-bottom:16px; border:1px solid #e2e8f0; max-height: 60vh; overflow-y: auto;">
+        <div style="background:#f8fafc; padding:16px; border-radius:8px; margin-bottom:16px; border:1px solid #e2e8f0; max-height: 58vh; overflow-y: auto;">
           <input type="hidden" id="editEmpId">
           <div style="display:flex; gap:12px;">
             <div class="form-group" style="flex:1;"><label>Vorname</label><input type="text" id="newEmpFirstName" class="form-control" placeholder="Vorname"></div>
@@ -435,24 +558,30 @@
             </div>
             <div class="form-group" style="flex:1;"><label>Rolle</label><select id="newEmpRole" class="form-control"></select></div>
           </div>
-          
-          <div class="form-group" style="margin-top: 4px;">
-            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size: 0.95rem;">
-              <input type="checkbox" id="newEmpFirstAider" style="width:18px; height:18px;">
-              Ist Ersthelfer <span style="color:#dc2626; font-weight:900; font-size:1.4rem; line-height:0.5;">+</span>
-            </label>
+
+          <div style="display:flex; gap:12px; align-items:center;">
+            <div class="form-group" style="flex:1; margin-bottom:6px;">
+              <label>Portal-Passwort / PIN</label>
+              <input type="text" id="newEmpPassword" class="form-control" placeholder="Standard: 1234">
+            </div>
+            <div class="form-group" style="flex:1; margin-bottom:6px; padding-top:18px;">
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size: 0.95rem;">
+                <input type="checkbox" id="newEmpFirstAider" style="width:18px; height:18px;">
+                Ist Ersthelfer <span style="color:#dc2626; font-weight:900; font-size:1.4rem; line-height:0.5;">+</span>
+              </label>
+            </div>
           </div>
 
           <!-- Prio Linien Auswahl -->
-          <div class="form-group" style="margin-top:10px;">
+          <div class="form-group" style="margin-top:8px;">
             <label>Prio-Linien:</label>
-            <div id="mainLinesCheckboxes" style="display:flex; flex-wrap:wrap; gap:8px; background:#fff; padding:8px; border:1px solid #cbd5e1; border-radius:6px; max-height:100px; overflow-y:auto;"></div>
+            <div id="mainLinesCheckboxes" style="display:flex; flex-wrap:wrap; gap:8px; background:#fff; padding:8px; border:1px solid #cbd5e1; border-radius:6px; max-height:90px; overflow-y:auto;"></div>
           </div>
 
           <!-- Sekundär Linien Auswahl -->
-          <div class="form-group" style="margin-top:10px;">
+          <div class="form-group" style="margin-top:8px;">
             <label>Sek-Linien:</label>
-            <div id="secLinesCheckboxes" style="display:flex; flex-wrap:wrap; gap:8px; background:#fff; padding:8px; border:1px solid #cbd5e1; border-radius:6px; max-height:100px; overflow-y:auto;"></div>
+            <div id="secLinesCheckboxes" style="display:flex; flex-wrap:wrap; gap:8px; background:#fff; padding:8px; border:1px solid #cbd5e1; border-radius:6px; max-height:90px; overflow-y:auto;"></div>
           </div>
 
           <div style="display:flex; gap:10px; margin-top: 12px;">
@@ -543,6 +672,7 @@
     let lines = defaultLines;
     let roles = ["Bediener", "LOP", "TL", "Schichtexperte", "Waschraumoperator"];
     let employees = []; 
+    let sickLeaves = [];
     let teamsConfig = {
       "team-1": { name: "Team 1", color: "#0091df" },
       "team-2": { name: "Team 2", color: "#f59e0b" },
@@ -557,6 +687,21 @@
     let isPlanner = false;
     let sortableInstances = [];
     let backupDoneToday = false; 
+
+    function getTodayIso() {
+      const d = new Date();
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function formatDateDe(isoStr) {
+      if (!isoStr) return "";
+      const parts = isoStr.split("-");
+      if (parts.length !== 3) return isoStr;
+      return `${parts[2]}.${parts[1]}.${parts[0]}`;
+    }
 
     function getSortedTeamKeys() {
       return Object.keys(teamsConfig).sort();
@@ -605,6 +750,7 @@
         const d = doc.data();
         if (d.lines) lines = d.lines;
         if (d.roles) roles = d.roles;
+        if (d.sickLeaves) sickLeaves = d.sickLeaves; else sickLeaves = [];
         if (d.employees) {
           employees = d.employees.map(e => {
             if (!e.firstName && e.name) {
@@ -614,6 +760,7 @@
             }
             if (!e.mainLines) e.mainLines = [];
             if (!e.secLines) e.secLines = [];
+            if (!e.password) e.password = "1234";
             return e;
           });
         }
@@ -637,10 +784,19 @@
           if (activeRoleFilters[r] === undefined) activeRoleFilters[r] = true;
         });
 
+        const changedBySickLogic = processSickLeavesAutomation();
+        if (changedBySickLogic) {
+          saveToFirebase();
+        }
+
         applyTeamStyles();
         updateTeamDropdowns();
         renderTeamFilterCheckboxes();
         renderRoleFilterCheckboxes();
+        updateInboxBadge();
+        if (document.getElementById("inboxModal").style.display === "flex") {
+          renderInboxModal();
+        }
         
         if (!backupDoneToday) {
           createDailyBackup(d);
@@ -651,13 +807,233 @@
       initBoard();
     });
 
+    function processSickLeavesAutomation() {
+      const today = getTodayIso();
+      let changed = false;
+
+      // 1. Abgelaufene Krankmeldungen löschen & Mitarbeiter zurück in den Pool schieben
+      const expired = sickLeaves.filter(sl => sl.endDate < today);
+      if (expired.length > 0) {
+        expired.forEach(exp => {
+          const emp = employees.find(e => e.id === exp.empId);
+          const hasOtherActive = sickLeaves.some(sl => sl.id !== exp.id && sl.empId === exp.empId && sl.startDate <= today && sl.endDate >= today);
+          if (emp && emp.zone === "absent" && !hasOtherActive) {
+            emp.zone = "pool";
+          }
+        });
+        sickLeaves = sickLeaves.filter(sl => sl.endDate >= today);
+        changed = true;
+      }
+
+      // 2. Aktuell gültige Krankmeldungen automatisch ins rote Feld "Abwesend" schieben
+      sickLeaves.forEach(sl => {
+        if (sl.startDate <= today && sl.endDate >= today) {
+          const emp = employees.find(e => e.id === sl.empId);
+          if (emp && emp.zone !== "absent") {
+            emp.zone = "absent";
+            changed = true;
+          }
+        }
+      });
+
+      return changed;
+    }
+
     function saveToFirebase() {
       db.collection("shiftplan").doc("live_board").set({
         lines: lines,
         roles: roles,
         employees: employees,
-        teamsConfig: teamsConfig
+        teamsConfig: teamsConfig,
+        sickLeaves: sickLeaves
       });
+    }
+
+    function updateInboxBadge() {
+      const badge = document.getElementById("inboxBadge");
+      if (!badge) return;
+      const unreadCount = sickLeaves.filter(sl => !sl.readByPlanner).length;
+      if (unreadCount > 0) {
+        badge.textContent = unreadCount;
+        badge.style.display = "inline-flex";
+      } else {
+        badge.style.display = "none";
+      }
+    }
+
+    function openInboxModal(preselectEmpId = null) {
+      document.getElementById("inboxModal").style.display = "flex";
+      
+      // Dropdown für manuelle Abwesenheit befüllen
+      const sel = document.getElementById("manualSickEmpSelect");
+      sel.innerHTML = `<option value="">-- Mitarbeiter auswählen --</option>`;
+      const sorted = [...employees].sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`));
+      sorted.forEach(e => {
+        const opt = document.createElement("option");
+        opt.value = e.id;
+        opt.textContent = `${e.firstName || ''} ${e.lastName || ''}`.trim() + ` (${e.role})`;
+        sel.appendChild(opt);
+      });
+
+      if (preselectEmpId) {
+        sel.value = preselectEmpId;
+      }
+
+      const today = getTodayIso();
+      if (!document.getElementById("manualSickStart").value) {
+        document.getElementById("manualSickStart").value = today;
+      }
+      if (!document.getElementById("manualSickEnd").value) {
+        document.getElementById("manualSickEnd").value = today;
+      }
+
+      renderInboxModal();
+    }
+
+    function addManualSickLeave() {
+      const empId = document.getElementById("manualSickEmpSelect").value;
+      const startDate = document.getElementById("manualSickStart").value;
+      const endDate = document.getElementById("manualSickEnd").value;
+      const reason = document.getElementById("manualSickReason").value.trim();
+
+      if (!empId) {
+        alert("Bitte wähle einen Mitarbeiter aus!");
+        return;
+      }
+      if (!startDate || !endDate) {
+        alert("Bitte Start- und Enddatum auswählen!");
+        return;
+      }
+      if (endDate < startDate) {
+        alert("Das Enddatum darf nicht vor dem Startdatum liegen!");
+        return;
+      }
+
+      const emp = employees.find(e => e.id === empId);
+      if (!emp) return;
+
+      const fullName = `${emp.firstName || ''} ${emp.lastName || ''}`.trim();
+      const nowStr = new Date().toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const today = getTodayIso();
+
+      sickLeaves.push({
+        id: "sl_" + Date.now(),
+        empId: emp.id,
+        empName: fullName,
+        startDate: startDate,
+        endDate: endDate,
+        reason: reason || "Vom Planer eingetragen",
+        createdAt: nowStr,
+        readByPlanner: true // Da vom Planer selbst angelegt, direkt als gelesen markiert
+      });
+
+      if (startDate <= today && endDate >= today) {
+        emp.zone = "absent";
+      }
+
+      document.getElementById("manualSickReason").value = "";
+      saveToFirebase();
+      renderInboxModal();
+      renderEmployees();
+    }
+
+    function renderInboxModal() {
+      const unreadContainer = document.getElementById("unreadSickList");
+      const activeContainer = document.getElementById("activeSickList");
+      const btnMarkAll = document.getElementById("btnMarkAllRead");
+      const today = getTodayIso();
+
+      const unreadList = sickLeaves.filter(sl => !sl.readByPlanner);
+      btnMarkAll.style.display = unreadList.length > 0 ? "inline-block" : "none";
+
+      if (unreadList.length === 0) {
+        unreadContainer.innerHTML = `<div style="color:#64748b; font-size:0.83rem; padding:8px; background:#f8fafc; border-radius:6px;">Keine neuen ungelesenen Nachrichten.</div>`;
+      } else {
+        unreadContainer.innerHTML = "";
+        unreadList.forEach(sl => {
+          unreadContainer.innerHTML += `
+            <div class="sick-card unread">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+                <div>
+                  <div style="font-weight:700; color:#9f1239; font-size:0.95rem;">${sl.empName}</div>
+                  <div style="font-size:0.82rem; font-weight:600; color:#1e293b; margin-top:2px;">
+                    📅 Zeitraum: ${formatDateDe(sl.startDate)} bis ${formatDateDe(sl.endDate)}
+                  </div>
+                  <div style="font-size:0.82rem; color:#334155; margin-top:6px; background:#fff; padding:6px 8px; border-radius:4px; border:1px solid #fecdd3;">
+                    <b>Begleitschreiben:</b> ${sl.reason ? sl.reason : '<i>Keine Notiz angegeben</i>'}
+                  </div>
+                  <div style="font-size:0.7rem; color:#64748b; margin-top:4px;">Eingegangen am: ${sl.createdAt || '-'}</div>
+                </div>
+                <button class="btn btn-primary" style="padding:5px 10px; font-size:0.78rem; white-space:nowrap;" onclick="markSickLeaveRead('${sl.id}')">✓ Gelesen</button>
+              </div>
+            </div>
+          `;
+        });
+      }
+
+      if (sickLeaves.length === 0) {
+        activeContainer.innerHTML = `<div style="color:#64748b; font-size:0.83rem; padding:8px; background:#f8fafc; border-radius:6px;">Aktuell liegen keine eingetragenen Zeiträume vor.</div>`;
+      } else {
+        activeContainer.innerHTML = "";
+        const sortedActive = [...sickLeaves].sort((a, b) => a.startDate.localeCompare(b.startDate));
+        sortedActive.forEach(sl => {
+          const isCurrent = sl.startDate <= today && sl.endDate >= today;
+          const statusBadge = isCurrent 
+            ? `<span style="background:#fee2e2; color:#b91c1c; font-size:0.7rem; padding:2px 6px; border-radius:4px; font-weight:700;">AKTUELL ABWESEND</span>`
+            : `<span style="background:#fef3c7; color:#b45309; font-size:0.7rem; padding:2px 6px; border-radius:4px; font-weight:700;">GEPLANT AB ${formatDateDe(sl.startDate)}</span>`;
+
+          activeContainer.innerHTML += `
+            <div class="sick-card">
+              <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                <div>
+                  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <span style="font-weight:700; color:#0f172a; font-size:0.92rem;">${sl.empName}</span>
+                    ${statusBadge}
+                  </div>
+                  <div style="font-size:0.8rem; color:#334155; margin-top:3px;">
+                    Zeitraum: <b>${formatDateDe(sl.startDate)}</b> bis einschließlich <b>${formatDateDe(sl.endDate)}</b>
+                  </div>
+                  ${sl.reason ? `<div style="font-size:0.78rem; color:#475569; margin-top:3px;">💬 "${sl.reason}"</div>` : ''}
+                </div>
+                <button class="btn btn-outline" style="padding:4px 8px; font-size:0.75rem; color:#ef4444; white-space:nowrap;" onclick="deleteSickLeave('${sl.id}')">Beenden</button>
+              </div>
+            </div>
+          `;
+        });
+      }
+    }
+
+    function markSickLeaveRead(id) {
+      const sl = sickLeaves.find(x => x.id === id);
+      if (sl) {
+        sl.readByPlanner = true;
+        saveToFirebase();
+        renderInboxModal();
+        updateInboxBadge();
+      }
+    }
+
+    function markAllSickLeavesRead() {
+      sickLeaves.forEach(sl => sl.readByPlanner = true);
+      saveToFirebase();
+      renderInboxModal();
+      updateInboxBadge();
+    }
+
+    function deleteSickLeave(id) {
+      if (!confirm("Möchtest du diese Abwesenheit/Krankmeldung beenden? Der Mitarbeiter wird wieder in den verfügbaren Pool verschoben.")) return;
+      const sl = sickLeaves.find(x => x.id === id);
+      if (sl) {
+        const emp = employees.find(e => e.id === sl.empId);
+        if (emp && emp.zone === "absent") {
+          emp.zone = "pool";
+        }
+      }
+      sickLeaves = sickLeaves.filter(x => x.id !== id);
+      saveToFirebase();
+      renderInboxModal();
+      updateInboxBadge();
+      renderEmployees();
     }
 
     function applyTeamStyles() {
@@ -699,7 +1075,6 @@
       renderEmployees();
     }
 
-    // Prüft, ob eine Liste von Linien-IDs zur Suchanfrage passt (z.B. "37", "09", "9")
     function matchesLineIds(lineIds, query) {
       if (!lineIds || !lineIds.length || !query) return false;
       const cleanQuery = query.replace(/^linie\s*/i, '').trim();
@@ -804,7 +1179,7 @@
     }
 
     function createDailyBackup(data) {
-      const todayIso = new Date().toISOString().split('T')[0]; 
+      const todayIso = getTodayIso(); 
       const todayDe = new Date().toLocaleDateString('de-DE'); 
 
       db.collection("shiftplan_backups").doc(todayIso).get().then(snap => {
@@ -815,7 +1190,8 @@
             lines: data.lines || [],
             roles: data.roles || [],
             employees: data.employees || [],
-            teamsConfig: data.teamsConfig || teamsConfig
+            teamsConfig: data.teamsConfig || teamsConfig,
+            sickLeaves: data.sickLeaves || []
           }).then(() => {
             cleanupOldBackups(); 
           });
@@ -866,7 +1242,8 @@
             lines: b.lines,
             roles: b.roles,
             employees: b.employees,
-            teamsConfig: b.teamsConfig || teamsConfig
+            teamsConfig: b.teamsConfig || teamsConfig,
+            sickLeaves: b.sickLeaves || []
           });
           alert("Erfolgreich wiederhergestellt!");
           closeModal('settingsModal');
@@ -904,6 +1281,7 @@
       renderRoleFilterCheckboxes();
       applyTeamStyles();
       renderLineCheckboxes();
+      updateInboxBadge();
     }
 
     function renderHeaderColumns() {
@@ -932,8 +1310,8 @@
 
     function renderEmployees() {
       document.querySelectorAll(".drop-zone").forEach(el => el.innerHTML = "");
+      const today = getTodayIso();
       
-      // Kopie für Anzeige-Reihenfolge (damit bei Linien-Suche Prio-Kräfte im Pool oben stehen)
       const displayList = [...employees];
       if (isPlanner && poolSearchQuery) {
         displayList.sort((a, b) => {
@@ -947,7 +1325,6 @@
       displayList.forEach(emp => {
         const fullName = `${emp.firstName || ''} ${emp.lastName || ''}`.trim();
 
-        // Filter & Suche wirken sich NUR auf den Verfügbaren Pool aus
         if (isPlanner && emp.zone === "pool") {
           if (activeTeamFilters[emp.team] === false) return;
           if (activeRoleFilters[emp.role] === false) return;
@@ -984,13 +1361,20 @@
           linesInfoHtml = `<div class="card-lines-info">${parts.join(" | ")}</div>`;
         }
 
+        const activeSl = sickLeaves.find(sl => sl.empId === emp.id && sl.startDate <= today && sl.endDate >= today);
+        const sickHtml = activeSl ? `<span class="card-sick-tag">🏥 Bis ${formatDateDe(activeSl.endDate)}</span>` : '';
+
         card.innerHTML = `
           <div style="display: flex; flex-direction: column; gap: 1px; overflow: hidden; flex: 1;">
             <span class="card-name">${fullName}</span>
             <span class="card-role">${emp.role}</span>
             ${linesInfoHtml}
+            ${sickHtml}
           </div>
-          ${firstAiderHtml}
+          <div style="display:flex; align-items:center; gap:4px;">
+            <button class="quick-sick-btn" onclick="openInboxModal('${emp.id}')" title="Krank / Abwesend (Von-Bis) eintragen">🏥</button>
+            ${firstAiderHtml}
+          </div>
         `;
 
         const targetZone = document.getElementById(emp.zone);
@@ -1160,7 +1544,10 @@
         const fullName = `${e.firstName || ''} ${e.lastName || ''}`.trim();
         empC.innerHTML += `
           <div class="item-row">
-            <div><b>${fullName}</b> <small>(${e.role})${firstAiderMark}</small></div>
+            <div>
+              <b>${fullName}</b> <small>(${e.role})${firstAiderMark}</small>
+              <span style="font-size:0.72rem; color:#64748b; margin-left:6px;">🔑 PIN: ${e.password || '1234'}</span>
+            </div>
             <div style="display:flex; gap:6px;">
               <button class="btn btn-outline" style="padding:4px 10px; font-size:0.85rem;" onclick="editEmployee('${e.id}')">Bearbeiten</button>
               <button class="btn btn-outline" style="padding:4px 10px; font-size:0.85rem; color:#ef4444;" onclick="deleteEmployee('${e.id}')">Löschen</button>
@@ -1262,6 +1649,7 @@
       const lastName = document.getElementById("newEmpLastName").value.trim();
       const team = document.getElementById("newEmpTeam").value;
       const role = document.getElementById("newEmpRole").value;
+      const password = document.getElementById("newEmpPassword").value.trim() || "1234";
       const isFirstAider = document.getElementById("newEmpFirstAider").checked;
       
       const mainLines = [];
@@ -1279,6 +1667,7 @@
           emp.lastName = lastName;
           emp.team = team;
           emp.role = role;
+          emp.password = password;
           emp.ersthelfer = isFirstAider;
           emp.mainLines = mainLines;
           emp.secLines = secLines;
@@ -1290,6 +1679,7 @@
           lastName, 
           team, 
           role, 
+          password,
           ersthelfer: isFirstAider, 
           mainLines, 
           secLines, 
@@ -1312,6 +1702,7 @@
       document.getElementById("newEmpLastName").value = emp.lastName || "";
       document.getElementById("newEmpTeam").value = emp.team || getSortedTeamKeys()[0];
       document.getElementById("newEmpRole").value = emp.role;
+      document.getElementById("newEmpPassword").value = emp.password || "1234";
       document.getElementById("newEmpFirstAider").checked = !!emp.ersthelfer;
 
       renderLineCheckboxes(emp.mainLines || [], emp.secLines || []);
@@ -1324,6 +1715,7 @@
       document.getElementById("editEmpId").value = "";
       document.getElementById("newEmpFirstName").value = "";
       document.getElementById("newEmpLastName").value = "";
+      document.getElementById("newEmpPassword").value = "";
       document.getElementById("newEmpFirstAider").checked = false;
       renderLineCheckboxes([], []);
       document.getElementById("btnSaveEmp").textContent = "Hinzufügen";
@@ -1332,6 +1724,7 @@
 
     function deleteEmployee(id) {
       employees = employees.filter(e => e.id !== id);
+      sickLeaves = sickLeaves.filter(sl => sl.empId !== id);
       saveToFirebase();
       renderEmployees();
       renderSettingsLists();
@@ -1339,4 +1732,3 @@
   </script>
 </body>
 </html>
-
