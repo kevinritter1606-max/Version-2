@@ -140,11 +140,11 @@
       gap: 6px;
     }
 
-    /* Kompakte Filter Box (Teams & Rollen) */
+    /* Kompakte Filter Box (Pool-Suche, Teams & Rollen) */
     .team-filter-box {
       display: none;
       background: #ffffff;
-      padding: 8px 10px;
+      padding: 10px;
       border-radius: 8px;
       border: 1px solid #e2e8f0;
       box-shadow: 0 1px 3px rgba(0,0,0,0.05);
@@ -170,6 +170,36 @@
     }
     .filter-quick-links span:hover {
       text-decoration: underline;
+    }
+
+    .search-wrapper {
+      position: relative;
+      margin-bottom: 8px;
+    }
+    .search-input {
+      width: 100%;
+      padding: 6px 26px 6px 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      background: #f8fafc;
+    }
+    .search-input:focus {
+      outline: none;
+      border-color: var(--bayer-blue);
+      background: #fff;
+    }
+    .search-clear {
+      display: none;
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      cursor: pointer;
+      color: #64748b;
+      font-weight: bold;
+      font-size: 1rem;
+      line-height: 1;
     }
 
     /* Mitarbeiter Kärtchen */
@@ -283,10 +313,15 @@
 
   <main>
     <aside class="sidebar">
-      <!-- Kompakte Filter-Box: Teams & Rollen -->
+      <!-- Kompakte Filter-Box (Wirkt nur auf den Pool) -->
       <div class="team-filter-box">
+        <div class="search-wrapper">
+          <input type="text" id="poolSearchInput" class="search-input" placeholder="🔍 Name oder Linie (z.B. 37)..." oninput="updatePoolSearch(this.value)">
+          <span id="clearSearchBtn" class="search-clear" onclick="updatePoolSearch('')" title="Suche löschen">&times;</span>
+        </div>
+
         <div style="display:flex; justify-content:space-between; align-items:center;">
-          <span style="font-weight:700; color:#1e293b;">Teams filtern</span>
+          <span style="font-weight:700; color:#1e293b;">Pool-Teams</span>
           <div class="filter-quick-links">
             <span onclick="toggleAllTeamFilters(true)">Alle</span> / <span onclick="toggleAllTeamFilters(false)">Keine</span>
           </div>
@@ -296,7 +331,7 @@
         <div style="border-top: 1px dashed #cbd5e1; margin: 7px 0 5px 0;"></div>
 
         <div style="display:flex; justify-content:space-between; align-items:center;">
-          <span style="font-weight:700; color:#1e293b;">Rollen filtern</span>
+          <span style="font-weight:700; color:#1e293b;">Pool-Rollen</span>
           <div class="filter-quick-links">
             <span onclick="toggleAllRoleFilters(true)">Alle</span> / <span onclick="toggleAllRoleFilters(false)">Keine</span>
           </div>
@@ -517,6 +552,7 @@
 
     let activeTeamFilters = {};
     let activeRoleFilters = {};
+    let poolSearchQuery = "";
 
     let isPlanner = false;
     let sortableInstances = [];
@@ -583,7 +619,6 @@
         }
         if (d.teamsConfig) {
           teamsConfig = d.teamsConfig;
-          // Alte Farb-Zusätze wie "(Blau)" automatisch bereinigen
           let cleaned = false;
           for (const key of Object.keys(teamsConfig)) {
             const newName = teamsConfig[key].name.replace(/\s*\((Blau|Gelb|Grün|Rot)\)/i, '');
@@ -649,6 +684,35 @@
         opt.textContent = teamsConfig[key].name;
         sel.appendChild(opt);
       }
+    }
+
+    function updatePoolSearch(val) {
+      poolSearchQuery = val.trim().toLowerCase();
+      const input = document.getElementById("poolSearchInput");
+      if (input && input.value !== val) {
+        input.value = val;
+      }
+      const clearBtn = document.getElementById("clearSearchBtn");
+      if (clearBtn) {
+        clearBtn.style.display = poolSearchQuery.length > 0 ? "block" : "none";
+      }
+      renderEmployees();
+    }
+
+    // Prüft, ob eine Liste von Linien-IDs zur Suchanfrage passt (z.B. "37", "09", "9")
+    function matchesLineIds(lineIds, query) {
+      if (!lineIds || !lineIds.length || !query) return false;
+      const cleanQuery = query.replace(/^linie\s*/i, '').trim();
+      if (!cleanQuery) return false;
+      const noZeroQuery = cleanQuery.replace(/^0+/, '');
+
+      return lineIds.some(id => {
+        const l = lines.find(x => x.id === id);
+        if (!l) return false;
+        const shortName = l.name.replace(/Linie\s*/i, '').trim().toLowerCase();
+        const noZeroShort = shortName.replace(/^0+/, '');
+        return shortName.startsWith(cleanQuery) || (noZeroQuery && noZeroShort.startsWith(noZeroQuery));
+      });
     }
 
     function renderTeamFilterCheckboxes() {
@@ -869,10 +933,30 @@
     function renderEmployees() {
       document.querySelectorAll(".drop-zone").forEach(el => el.innerHTML = "");
       
-      employees.forEach(emp => {
-        if (isPlanner) {
+      // Kopie für Anzeige-Reihenfolge (damit bei Linien-Suche Prio-Kräfte im Pool oben stehen)
+      const displayList = [...employees];
+      if (isPlanner && poolSearchQuery) {
+        displayList.sort((a, b) => {
+          if (a.zone !== "pool" || b.zone !== "pool") return 0;
+          const aPrio = matchesLineIds(a.mainLines, poolSearchQuery) ? 2 : (matchesLineIds(a.secLines, poolSearchQuery) ? 1 : 0);
+          const bPrio = matchesLineIds(b.mainLines, poolSearchQuery) ? 2 : (matchesLineIds(b.secLines, poolSearchQuery) ? 1 : 0);
+          return bPrio - aPrio;
+        });
+      }
+
+      displayList.forEach(emp => {
+        const fullName = `${emp.firstName || ''} ${emp.lastName || ''}`.trim();
+
+        // Filter & Suche wirken sich NUR auf den Verfügbaren Pool aus
+        if (isPlanner && emp.zone === "pool") {
           if (activeTeamFilters[emp.team] === false) return;
           if (activeRoleFilters[emp.role] === false) return;
+          if (poolSearchQuery) {
+            const nameMatch = fullName.toLowerCase().includes(poolSearchQuery);
+            const prioLineMatch = matchesLineIds(emp.mainLines, poolSearchQuery);
+            const secLineMatch = matchesLineIds(emp.secLines, poolSearchQuery);
+            if (!nameMatch && !prioLineMatch && !secLineMatch) return;
+          }
         }
 
         const card = document.createElement("div");
@@ -880,7 +964,6 @@
         card.setAttribute("data-id", emp.id);
         
         let firstAiderHtml = emp.ersthelfer ? '<span class="first-aider-icon" title="Ersthelfer">+</span>' : '';
-        const fullName = `${emp.firstName || ''} ${emp.lastName || ''}`.trim();
         
         let linesInfoHtml = "";
         if (emp.mainLines && emp.mainLines.length > 0 || emp.secLines && emp.secLines.length > 0) {
@@ -1256,3 +1339,4 @@
   </script>
 </body>
 </html>
+
