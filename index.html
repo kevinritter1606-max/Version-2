@@ -156,7 +156,7 @@
     .team-filter-options {
       display: flex;
       flex-wrap: wrap;
-      gap: 4px 8px;
+      gap: 4px 10px;
       margin-top: 4px;
     }
     .filter-quick-links {
@@ -452,7 +452,7 @@
           <label style="font-size:0.85rem; font-weight:600; margin-bottom:6px; display:block; color:#475569;">Neues Team hinzufügen</label>
           <div style="display:flex; gap:10px; align-items:center;">
             <input type="color" id="newTeamColor" value="#3b82f6" style="width:40px; height:38px; border:none; cursor:pointer; background:none;">
-            <input type="text" id="newTeamName" class="form-control" placeholder="Team-Name (z.B. Team A)">
+            <input type="text" id="newTeamName" class="form-control" placeholder="Team-Name (z.B. Team 5)">
             <button class="btn btn-primary" onclick="addTeam()">Hinzufügen</button>
           </div>
         </div>
@@ -509,10 +509,10 @@
     let roles = ["Bediener", "LOP", "TL", "Schichtexperte", "Waschraumoperator"];
     let employees = []; 
     let teamsConfig = {
-      "team-1": { name: "Team 1 (Blau)", color: "#0091df" },
-      "team-2": { name: "Team 2 (Gelb)", color: "#f59e0b" },
-      "team-3": { name: "Team 3 (Grün)", color: "#10b981" },
-      "team-4": { name: "Team 4 (Rot)", color: "#f43f5e" }
+      "team-1": { name: "Team 1", color: "#0091df" },
+      "team-2": { name: "Team 2", color: "#f59e0b" },
+      "team-3": { name: "Team 3", color: "#10b981" },
+      "team-4": { name: "Team 4", color: "#f43f5e" }
     };
 
     let activeTeamFilters = {};
@@ -521,6 +521,10 @@
     let isPlanner = false;
     let sortableInstances = [];
     let backupDoneToday = false; 
+
+    function getSortedTeamKeys() {
+      return Object.keys(teamsConfig).sort();
+    }
 
     setInterval(() => {
       if (!isPlanner) {
@@ -577,9 +581,21 @@
             return e;
           });
         }
-        if (d.teamsConfig) teamsConfig = d.teamsConfig;
+        if (d.teamsConfig) {
+          teamsConfig = d.teamsConfig;
+          // Alte Farb-Zusätze wie "(Blau)" automatisch bereinigen
+          let cleaned = false;
+          for (const key of Object.keys(teamsConfig)) {
+            const newName = teamsConfig[key].name.replace(/\s*\((Blau|Gelb|Grün|Rot)\)/i, '');
+            if (newName !== teamsConfig[key].name) {
+              teamsConfig[key].name = newName;
+              cleaned = true;
+            }
+          }
+          if (cleaned) saveToFirebase();
+        }
         
-        for (const key of Object.keys(teamsConfig)) {
+        for (const key of getSortedTeamKeys()) {
           if (activeTeamFilters[key] === undefined) activeTeamFilters[key] = true;
         }
         roles.forEach(r => {
@@ -614,8 +630,8 @@
       styleTag.id = "dynamicTeamStyles";
       
       let cssText = "";
-      for (const [key, team] of Object.entries(teamsConfig)) {
-        cssText += `.employee-card.${key} { border-left-color: ${team.color} !important; }\n`;
+      for (const key of getSortedTeamKeys()) {
+        cssText += `.employee-card.${key} { border-left-color: ${teamsConfig[key].color} !important; }\n`;
       }
       styleTag.textContent = cssText;
       if (!document.getElementById("dynamicTeamStyles")) {
@@ -627,10 +643,10 @@
       const sel = document.getElementById("newEmpTeam");
       if(!sel) return;
       sel.innerHTML = "";
-      for (const [key, team] of Object.entries(teamsConfig)) {
+      for (const key of getSortedTeamKeys()) {
         const opt = document.createElement("option");
         opt.value = key;
-        opt.textContent = team.name;
+        opt.textContent = teamsConfig[key].name;
         sel.appendChild(opt);
       }
     }
@@ -639,7 +655,8 @@
       const container = document.getElementById("teamFilterContainer");
       if(!container) return;
       container.innerHTML = "";
-      for (const [key, team] of Object.entries(teamsConfig)) {
+      for (const key of getSortedTeamKeys()) {
+        const team = teamsConfig[key];
         if(activeTeamFilters[key] === undefined) activeTeamFilters[key] = true;
         container.innerHTML += `
           <label style="display:flex; align-items:center; gap:4px; cursor:pointer; font-size:0.75rem;">
@@ -656,7 +673,7 @@
     }
 
     function toggleAllTeamFilters(state) {
-      for(const key of Object.keys(teamsConfig)) {
+      for(const key of getSortedTeamKeys()) {
         activeTeamFilters[key] = state;
       }
       renderTeamFilterCheckboxes();
@@ -1021,7 +1038,7 @@
     }
 
     function deleteTeam(key) {
-      const keys = Object.keys(teamsConfig);
+      const keys = getSortedTeamKeys();
       if (keys.length <= 1) {
         alert("Es muss mindestens ein Team erhalten bleiben!");
         return;
@@ -1031,7 +1048,7 @@
       delete teamsConfig[key];
       delete activeTeamFilters[key];
 
-      const fallbackKey = Object.keys(teamsConfig)[0];
+      const fallbackKey = getSortedTeamKeys()[0];
       employees.forEach(emp => {
         if (emp.team === key) {
           emp.team = fallbackKey;
@@ -1084,7 +1101,8 @@
 
       const teamC = document.getElementById("teamSettingsList");
       teamC.innerHTML = "";
-      for (const [key, team] of Object.entries(teamsConfig)) {
+      for (const key of getSortedTeamKeys()) {
+        const team = teamsConfig[key];
         teamC.innerHTML += `
           <div class="item-row" style="gap:8px;">
             <input type="color" id="teamColorInput_${key}" value="${team.color}" style="width:36px; height:32px; border:none; cursor:pointer; background:none;">
@@ -1209,7 +1227,7 @@
       document.getElementById("editEmpId").value = emp.id;
       document.getElementById("newEmpFirstName").value = emp.firstName || "";
       document.getElementById("newEmpLastName").value = emp.lastName || "";
-      document.getElementById("newEmpTeam").value = emp.team || Object.keys(teamsConfig)[0];
+      document.getElementById("newEmpTeam").value = emp.team || getSortedTeamKeys()[0];
       document.getElementById("newEmpRole").value = emp.role;
       document.getElementById("newEmpFirstAider").checked = !!emp.ersthelfer;
 
