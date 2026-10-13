@@ -171,11 +171,33 @@
       </div>
 
       <div class="form-group">
-        <label>Passwort / PIN</label>
+        <label>Passwort / PIN (Erst-Login: 1234)</label>
         <input type="password" id="loginPassword" class="form-control" placeholder="Passwort eingeben" onkeydown="if(event.key==='Enter') loginEmp()">
       </div>
 
       <button class="btn btn-primary" onclick="loginEmp()">Anmelden</button>
+    </div>
+
+    <!-- Ansicht 1b: Erst-Anmeldung -> Neues Passwort vergeben -->
+    <div id="changePasswordView" class="card" style="display:none;">
+      <h2 style="color: var(--bayer-blue); margin-bottom: 8px;">🔒 Eigenes Passwort festlegen</h2>
+      <p style="font-size:0.85rem; color:#64748b; margin-bottom:16px; line-height:1.4;">
+        Hallo <b id="cpEmpName"></b>! Bitte vergib jetzt ein eigenes, persönliches Passwort (oder eine eigene PIN) für deine zukünftigen Anmeldungen. Der Planer kann dieses Passwort nicht einsehen.
+      </p>
+
+      <div id="cpError" class="error-msg"></div>
+
+      <div class="form-group">
+        <label>Neues Passwort / PIN (mind. 4 Zeichen)</label>
+        <input type="password" id="newPasswordInput" class="form-control" placeholder="Neues Passwort eingeben">
+      </div>
+
+      <div class="form-group">
+        <label>Neues Passwort wiederholen</label>
+        <input type="password" id="newPasswordConfirm" class="form-control" placeholder="Neues Passwort bestätigen" onkeydown="if(event.key==='Enter') saveNewPassword()">
+      </div>
+
+      <button class="btn btn-primary" onclick="saveNewPassword()">Passwort speichern & weiter zum Portal</button>
     </div>
 
     <!-- Ansicht 2: Mitarbeiter-Dashboard -->
@@ -309,13 +331,16 @@
             e.lastName = parts.slice(1).join(" ") || "";
           }
           if (!e.password) e.password = "1234";
+          if (e.mustChangePw === undefined) {
+            e.mustChangePw = (e.password === "1234");
+          }
           return e;
         });
 
         if (loggedInEmpId) {
           const emp = employees.find(e => e.id === loggedInEmpId);
           if (emp) {
-            showPortalFor(emp);
+            routeAuthenticatedEmp(emp);
           } else {
             logoutEmp();
           }
@@ -372,14 +397,12 @@
       if (selectedLoginEmpId) {
         emp = employees.find(e => e.id === selectedLoginEmpId);
       }
-      // Falls nicht auf den Vorschlag geklickt wurde, direkt über den getippten Namen suchen
       if (!emp && typedName) {
         emp = employees.find(e => {
           const full = `${e.firstName || ''} ${e.lastName || ''}`.trim().toLowerCase();
           const rev = `${e.lastName || ''} ${e.firstName || ''}`.trim().toLowerCase();
           return full === typedName || rev === typedName;
         });
-        // Falls nur Vorname oder Nachname getippt wurde und dieser eindeutig ist
         if (!emp) {
           const partialMatches = employees.filter(e => {
             const full = `${e.firstName || ''} ${e.lastName || ''}`.trim().toLowerCase();
@@ -399,7 +422,63 @@
       localStorage.setItem("portal_emp_id", emp.id);
       document.getElementById("loginPassword").value = "";
       document.getElementById("sickSuccessBanner").style.display = "none";
-      showPortalFor(emp);
+      routeAuthenticatedEmp(emp);
+    }
+
+    function routeAuthenticatedEmp(emp) {
+      document.getElementById("loginView").style.display = "none";
+      document.getElementById("logoutBtn").style.display = "inline-block";
+
+      // Prüfen, ob Erst-Anmeldung oder Passwort vom Planer zurückgesetzt wurde
+      if (emp.mustChangePw || emp.password === "1234") {
+        document.getElementById("portalView").style.display = "none";
+        document.getElementById("changePasswordView").style.display = "block";
+        document.getElementById("cpEmpName").textContent = `${emp.firstName || ''} ${emp.lastName || ''}`.trim();
+      } else {
+        document.getElementById("changePasswordView").style.display = "none";
+        showPortalFor(emp);
+      }
+    }
+
+    function saveNewPassword() {
+      const p1 = document.getElementById("newPasswordInput").value.trim();
+      const p2 = document.getElementById("newPasswordConfirm").value.trim();
+      const err = document.getElementById("cpError");
+
+      if (p1.length < 4) {
+        err.textContent = "Das neue Passwort muss mindestens 4 Zeichen lang sein!";
+        err.style.display = "block";
+        return;
+      }
+      if (p1 === "1234") {
+        err.textContent = "Bitte wähle ein anderes Passwort als die Standard-PIN 1234!";
+        err.style.display = "block";
+        return;
+      }
+      if (p1 !== p2) {
+        err.textContent = "Die beiden Passwörter stimmen nicht überein!";
+        err.style.display = "block";
+        return;
+      }
+
+      const emp = employees.find(e => e.id === loggedInEmpId);
+      if (!emp) return;
+
+      err.style.display = "none";
+      emp.password = p1;
+      emp.mustChangePw = false;
+
+      db.collection("shiftplan").doc("live_board").set({
+        lines: rawDocData.lines || lines,
+        roles: rawDocData.roles || [],
+        employees: employees,
+        teamsConfig: rawDocData.teamsConfig || {},
+        sickLeaves: sickLeaves
+      }).then(() => {
+        document.getElementById("newPasswordInput").value = "";
+        document.getElementById("newPasswordConfirm").value = "";
+        routeAuthenticatedEmp(emp);
+      });
     }
 
     function logoutEmp() {
@@ -408,14 +487,13 @@
       localStorage.removeItem("portal_emp_id");
       document.getElementById("loginEmpInput").value = "";
       document.getElementById("portalView").style.display = "none";
+      document.getElementById("changePasswordView").style.display = "none";
       document.getElementById("logoutBtn").style.display = "none";
       document.getElementById("loginView").style.display = "block";
     }
 
     function showPortalFor(emp) {
-      document.getElementById("loginView").style.display = "none";
       document.getElementById("portalView").style.display = "block";
-      document.getElementById("logoutBtn").style.display = "inline-block";
 
       const fullName = `${emp.firstName || ''} ${emp.lastName || ''}`.trim();
       document.getElementById("empWelcomeName").textContent = fullName;
