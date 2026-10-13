@@ -61,11 +61,39 @@
       gap: 8px;
     }
 
-    .form-group { margin-bottom: 14px; }
+    .form-group { margin-bottom: 14px; position: relative; }
     .form-group label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #475569; }
     .form-control { width: 100%; padding: 11px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; background: #f8fafc; }
     .form-control:focus { outline: none; border-color: var(--bayer-blue); background: #fff; }
     textarea.form-control { resize: vertical; min-height: 85px; }
+
+    /* Suchvorschläge beim Tippen */
+    .suggestions-box {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: #fff;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+      max-height: 190px;
+      overflow-y: auto;
+      z-index: 50;
+      margin-top: 4px;
+    }
+    .suggestion-item {
+      padding: 10px 12px;
+      font-size: 0.92rem;
+      cursor: pointer;
+      border-bottom: 1px solid #f1f5f9;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .suggestion-item:last-child { border-bottom: none; }
+    .suggestion-item:hover { background: #f0f9ff; color: var(--bayer-blue); }
 
     .btn { padding: 11px 18px; border-radius: 8px; font-size: 0.95rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; width: 100%; transition: 0.15s; }
     .btn-primary { background: var(--bayer-blue); color: #fff; }
@@ -136,11 +164,10 @@
       <h2 style="color: var(--bayer-blue); justify-content: center; margin-bottom: 16px;">🔐 Mitarbeiter-Anmeldung</h2>
       <div id="loginError" class="error-msg">Name oder Passwort nicht korrekt!</div>
       
-      <div class="form-group">
+      <div class="form-group" id="nameSearchGroup">
         <label>Dein Name</label>
-        <select id="loginEmpSelect" class="form-control">
-          <option value="">Lade Mitarbeiterliste...</option>
-        </select>
+        <input type="text" id="loginEmpInput" class="form-control" placeholder="Vor- und Nachname eingeben..." autocomplete="off" oninput="onNameInput(this.value)" onkeydown="if(event.key==='Enter') document.getElementById('loginPassword').focus()">
+        <div id="loginSuggestions" class="suggestions-box"></div>
       </div>
 
       <div class="form-group">
@@ -240,6 +267,7 @@
     let sickLeaves = [];
     let rawDocData = {};
     let loggedInEmpId = localStorage.getItem("portal_emp_id") || null;
+    let selectedLoginEmpId = null;
 
     function getTodayIso() {
       const d = new Date();
@@ -260,6 +288,13 @@
       const today = getTodayIso();
       document.getElementById("sickStartDate").value = today;
       document.getElementById("sickEndDate").value = today;
+
+      document.addEventListener("click", (e) => {
+        const group = document.getElementById("nameSearchGroup");
+        if (group && !group.contains(e.target)) {
+          document.getElementById("loginSuggestions").style.display = "none";
+        }
+      });
     });
 
     db.collection("shiftplan").doc("live_board").onSnapshot((doc) => {
@@ -277,8 +312,6 @@
           return e;
         });
 
-        populateLoginDropdown();
-
         if (loggedInEmpId) {
           const emp = employees.find(e => e.id === loggedInEmpId);
           if (emp) {
@@ -290,34 +323,72 @@
       }
     });
 
-    function populateLoginDropdown() {
-      const sel = document.getElementById("loginEmpSelect");
-      const currentVal = sel.value;
-      sel.innerHTML = `<option value="">-- Bitte Namen auswählen --</option>`;
-      
-      const sorted = [...employees].sort((a, b) => {
-        const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
-        const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
-        return nameA.localeCompare(nameB);
+    function onNameInput(val) {
+      selectedLoginEmpId = null;
+      const box = document.getElementById("loginSuggestions");
+      const query = val.trim().toLowerCase();
+
+      if (query.length < 1) {
+        box.style.display = "none";
+        return;
+      }
+
+      const matches = employees.filter(e => {
+        const full = `${e.firstName || ''} ${e.lastName || ''}`.trim().toLowerCase();
+        const rev = `${e.lastName || ''} ${e.firstName || ''}`.trim().toLowerCase();
+        return full.includes(query) || rev.includes(query);
       });
 
-      sorted.forEach(e => {
+      if (matches.length === 0) {
+        box.style.display = "none";
+        return;
+      }
+
+      box.innerHTML = "";
+      matches.forEach(e => {
         const fullName = `${e.firstName || ''} ${e.lastName || ''}`.trim();
-        const opt = document.createElement("option");
-        opt.value = e.id;
-        opt.textContent = fullName;
-        sel.appendChild(opt);
+        const item = document.createElement("div");
+        item.className = "suggestion-item";
+        item.innerHTML = `<span><b>${fullName}</b></span><small style="color:#64748b;">${e.role}</small>`;
+        item.onclick = () => selectLoginEmp(e.id, fullName);
+        box.appendChild(item);
       });
+      box.style.display = "block";
+    }
 
-      if (currentVal) sel.value = currentVal;
+    function selectLoginEmp(id, fullName) {
+      selectedLoginEmpId = id;
+      document.getElementById("loginEmpInput").value = fullName;
+      document.getElementById("loginSuggestions").style.display = "none";
+      document.getElementById("loginPassword").focus();
     }
 
     function loginEmp() {
-      const empId = document.getElementById("loginEmpSelect").value;
+      const typedName = document.getElementById("loginEmpInput").value.trim().toLowerCase();
       const pass = document.getElementById("loginPassword").value.trim();
       const errBox = document.getElementById("loginError");
 
-      const emp = employees.find(e => e.id === empId);
+      let emp = null;
+      if (selectedLoginEmpId) {
+        emp = employees.find(e => e.id === selectedLoginEmpId);
+      }
+      // Falls nicht auf den Vorschlag geklickt wurde, direkt über den getippten Namen suchen
+      if (!emp && typedName) {
+        emp = employees.find(e => {
+          const full = `${e.firstName || ''} ${e.lastName || ''}`.trim().toLowerCase();
+          const rev = `${e.lastName || ''} ${e.firstName || ''}`.trim().toLowerCase();
+          return full === typedName || rev === typedName;
+        });
+        // Falls nur Vorname oder Nachname getippt wurde und dieser eindeutig ist
+        if (!emp) {
+          const partialMatches = employees.filter(e => {
+            const full = `${e.firstName || ''} ${e.lastName || ''}`.trim().toLowerCase();
+            return full.includes(typedName);
+          });
+          if (partialMatches.length === 1) emp = partialMatches[0];
+        }
+      }
+
       if (!emp || (emp.password || "1234") !== pass) {
         errBox.style.display = "block";
         return;
@@ -333,7 +404,9 @@
 
     function logoutEmp() {
       loggedInEmpId = null;
+      selectedLoginEmpId = null;
       localStorage.removeItem("portal_emp_id");
+      document.getElementById("loginEmpInput").value = "";
       document.getElementById("portalView").style.display = "none";
       document.getElementById("logoutBtn").style.display = "none";
       document.getElementById("loginView").style.display = "block";
