@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Schicht- und Linienplanung</title>
+
+  <!-- SortableJS für Drag & Drop -->
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+  <style>
+    :root {
+      --bayer-blue: #0091df;
+      --bayer-light-blue: #00bcff;
+      --bayer-green: #89d329;
+      --bg-gray: #f4f6f9;
+      --border-color: #cbd5e1;
+      
+      /* Standard Team Farben (werden dynamisch überschrieben) */
+      --team-1: #0091df;
+      --team-2: #f59e0b;
+      --team-3: #10b981;
+      --team-4: #f43f5e;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+    body { background-color: var(--bg-gray); min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
+
+    .brand-gradient { height: 6px; background: linear-gradient(90deg, #0091df 0%, #00bcff 50%, #89d329 100%); width: 100%; flex-shrink: 0; }
+
+    header {
+      background: #ffffff;
+      padding: 10px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+      flex-shrink: 0;
+      z-index: 50;
+      position: sticky;
+      top: 0;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    /* Klickbares Bayer Logo */
+    .bayer-logo-btn {
+      width: 64px; 
+      height: 64px; 
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s, filter 0.2s;
+    }
+    .bayer-logo-btn:hover {
+      transform: scale(1.05);
+      filter: brightness(0.95);
+    }
+    .bayer-logo-btn img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .header-title {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 2px;
+    }
+
+    .header-title h1 {
+      font-size: 1.45rem;
+      font-weight: 700;
+      color: var(--bayer-blue);
+      margin: 0;
+    }
+
+    .status-badge {
+      display: none; 
+      font-size: 0.75rem;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-weight: 600;
+      align-self: flex-start;
+      background: #dcfce7; 
+      color: #166534;
+    }
+    body.planner-active .status-badge {
+      display: inline-block;
+    }
+
+    .header-actions { display: flex; gap: 8px; align-items: center; }
+
+    .btn { padding: 8px 16px; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; }
+    .btn-primary { background: var(--bayer-blue); color: #fff; }
+    .btn-primary:hover { background: #0077b6; }
+    .btn-outline { border-color: #cbd5e1; background: #fff; color: #475569; }
+    .btn-outline:hover { background: #f8fafc; }
+
+    main { padding: 16px; display: flex; gap: 16px; flex: 1; width: 100%; }
+
+    /* Sidebar für Pool & Abwesend */
+    .sidebar {
+      width: 270px;
+      flex-shrink: 0;
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+    }
+    body.planner-active .sidebar {
+      display: flex;
+    }
+
+    .panel {
+      background: #fff;
+      border-radius: 10px;
+      padding: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      border: 1px solid #e2e8f0;
+      display: flex;
+      flex-direction: column;
+      max-height: 46vh;
+    }
+    .panel h2 { font-size: 0.9rem; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; color: #1e293b; }
+
+    .card-list {
+      flex: 1;
+      overflow-y: auto;
+      min-height: 80px;
+      padding: 6px;
+      background: #f8fafc;
+      border-radius: 6px;
+      border: 1px dashed #cbd5e1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    /* Mitarbeiter Kärtchen */
+    .employee-card {
+      background: #fff;
+      padding: 7px 9px;
+      border-radius: 6px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-left: 5px solid #94a3b8;
+      user-select: none;
+      gap: 6px;
+    }
+    body.planner-active .employee-card { cursor: grab; }
+    body.planner-active .employee-card:active { cursor: grabbing; }
+
+    .employee-card.team-1 { border-left-color: var(--team-1); }
+    .employee-card.team-2 { border-left-color: var(--team-2); }
+    .employee-card.team-3 { border-left-color: var(--team-3); }
+    .employee-card.team-4 { border-left-color: var(--team-4); }
+
+    .card-name { 
+      font-size: 0.82rem; 
+      font-weight: 600; 
+      color: #1e293b; 
+      white-space: nowrap; 
+      overflow: hidden; 
+      text-overflow: ellipsis;
+    }
+    .card-role { font-size: 0.68rem; padding: 2px 4px; background: #f1f5f9; border-radius: 4px; color: #475569; font-weight: 600; white-space: nowrap; }
+    
+    .first-aider-icon {
+      color: #dc2626; 
+      font-size: 1.3rem; 
+      font-weight: 900; 
+      line-height: 0.5; 
+      padding-right: 2px;
+    }
+
+    /* Board-Matrix */
+    .board-container { flex: 1; background: #fff; border-radius: 10px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: flex; flex-direction: column; overflow: hidden; }
+    
+    .board-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .board-table th, .board-table td { border: 1px solid #e2e8f0; vertical-align: top; }
+
+    .line-header { background: #f8fafc; padding: 10px 4px; text-align: center; position: relative; }
+    body.planner-active .line-header { cursor: pointer; }
+    body.planner-active .line-header:hover { background: #f1f5f9; }
+    body.planner-active .line-header::after { content: "✏️"; position: absolute; top: 4px; right: 4px; font-size: 0.6rem; opacity: 0.5; }
+
+    .line-title { font-size: 0.85rem; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .badge-container { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; margin-top: 2px; }
+    .line-prio { font-size: 0.6rem; padding: 1px 3px; border-radius: 3px; background: #e2e8f0; font-weight: 700; color: #334155; }
+    .line-prio.prio-high { background: #fee2e2; color: #b91c1c; }
+    .line-prio.prio-mid { background: #fef3c7; color: #b45309; }
+    .line-status-tag { font-size: 0.6rem; padding: 1px 3px; border-radius: 3px; background: #fecdd3; color: #9f1239; font-weight: 700; }
+    .line-notes { font-size: 0.65rem; color: #475569; margin-top: 3px; background: #ffffff; padding: 3px; border-radius: 3px; border: 1px dashed #cbd5e1; white-space: pre-wrap; word-break: break-word; }
+
+    .shift-header { background: #f1f5f9; font-weight: 700; font-size: 0.9rem; width: 75px; text-align: center; padding: 15px 2px; color: #334155; vertical-align: middle; }
+    .drop-zone { padding: 6px; min-height: 120px; display: flex; flex-direction: column; gap: 6px; background: #fafafa; }
+
+    /* Modals */
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 100; }
+    .modal { background: #fff; padding: 24px; border-radius: 10px; width: 100%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); }
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #475569; }
+    .form-control { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.95rem; }
+    textarea.form-control { resize: vertical; min-height: 80px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+
+    .tabs { display: flex; gap: 6px; border-bottom: 2px solid #e2e8f0; margin-bottom: 16px; overflow-x: auto; }
+    .tab-btn { padding: 8px 12px; background: none; border: none; border-bottom: 2px solid transparent; font-weight: 600; cursor: pointer; color: #64748b; margin-bottom: -2px; font-size: 0.9rem; white-space: nowrap; }
+    .tab-btn.active { color: var(--bayer-blue); border-bottom-color: var(--bayer-blue); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .item-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid #f1f5f9; font-size: 0.95rem; }
+
+    .admin-element { display: none; }
+    body.planner-active .admin-element { display: inline-flex; }
+  </style>
+</head>
+<body>
+
+  <div class="brand-gradient"></div>
+
+  <header>
+    <div class="header-left">
+      <div class="bayer-logo-btn" onclick="handleLogoClick()" title="Planer-Zugang (Klicken)">
+        <img src="logo.png" alt="Bayer Logo">
+      </div>
+      <div class="header-title">
+        <h1>Schicht- und Linienübersicht</h1>
+        <span class="status-badge">Planer-Modus aktiv</span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-outline admin-element" onclick="openSettingsModal()">⚙️ Einstellungen</button>
+      <button class="btn btn-outline admin-element" onclick="logoutPlanner()">Abmelden</button>
+    </div>
+  </header>
+
+  <main>
+    <aside class="sidebar">
+      <div class="panel">
+        <h2>Verfügbarer Pool <span id="poolCount" style="font-size:0.85rem; color:#64748b;">(0)</span></h2>
+        <div id="pool" class="card-list drop-zone" data-zone="pool"></div>
+      </div>
+      <div class="panel">
+        <h2>Abwesend (Urlaub / Krank)</h2>
+        <div id="absent" class="card-list drop-zone" data-zone="absent" style="background: #fff1f2;"></div>
+      </div>
+    </aside>
+
+    <section class="board-container">
+      <table class="board-table">
+        <thead>
+          <tr id="headerRow"><th class="shift-header">Schicht</th></tr>
+        </thead>
+        <tbody id="matrixBody"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <!-- Modal: PIN Eingabe -->
+  <div id="pinModal" class="modal-overlay">
+    <div class="modal" style="max-width: 350px; text-align: center;">
+      <h3 style="color: var(--bayer-blue); margin-bottom: 12px;">Planer-Freischaltung</h3>
+      <p style="font-size: 0.95rem; color: #64748b; margin-bottom: 16px;">Bitte PIN eingeben:</p>
+      <input type="password" id="pinInput" class="form-control" placeholder="****" style="text-align: center; font-size: 1.5rem; letter-spacing: 6px;">
+      <div class="modal-actions" style="justify-content: center; gap: 12px; margin-top: 18px;">
+        <button class="btn btn-outline" onclick="closeModal('pinModal')">Abbrechen</button>
+        <button class="btn btn-primary" onclick="verifyPin()">Anmelden</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Linie bearbeiten -->
+  <div id="lineEditModal" class="modal-overlay">
+    <div class="modal" style="max-width: 450px;">
+      <h3 id="lineEditTitle" style="color: var(--bayer-blue); margin-bottom: 16px;">Linie bearbeiten</h3>
+      <input type="hidden" id="editLineId">
+      <div class="form-group">
+        <label>Priorität</label>
+        <select id="editLinePrio" class="form-control">
+          <option value="">Keine Priorität</option>
+          <option value="PRIO 1">PRIO 1</option>
+          <option value="PRIO 2">PRIO 2</option>
+          <option value="PRIO 3">PRIO 3</option>
+          <option value="PRIO 4">PRIO 4</option>
+          <option value="PRIO 5">PRIO 5</option>
+          <option value="PRIO 6">PRIO 6</option>
+          <option value="PRIO 7">PRIO 7</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Status / Tag (z. B. Wartung!, Pack 4)</label>
+        <input type="text" id="editLineTag" class="form-control">
+      </div>
+      <div class="form-group">
+        <label>Stückzahlen & Notiz</label>
+        <textarea id="editLineNote" class="form-control"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeModal('lineEditModal')">Abbrechen</button>
+        <button class="btn btn-primary" onclick="saveLineDetails()">Speichern</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Einstellungen -->
+  <div id="settingsModal" class="modal-overlay">
+    <div class="modal" style="max-width: 580px;">
+      <h3 style="display:flex; justify-content:space-between; color:var(--bayer-blue); margin-bottom:16px;">
+        Verwaltung
+        <button onclick="closeModal('settingsModal')" style="border:none; background:none; font-size:1.5rem; cursor:pointer;">&times;</button>
+      </h3>
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('tabEmployees')">Mitarbeiter</button>
+        <button class="tab-btn" onclick="switchTab('tabRoles')">Rollen</button>
+        <button class="tab-btn" onclick="switchTab('tabLines')">Linien</button>
+        <button class="tab-btn" onclick="switchTab('tabTeams')">Teams & Farben</button>
+        <button class="tab-btn" onclick="switchTab('tabBackups')">Backups</button>
+      </div>
+      
+      <!-- Content: Mitarbeiter -->
+      <div id="tabEmployees" class="tab-content active">
+        <div style="background:#f8fafc; padding:16px; border-radius:8px; margin-bottom:16px; border:1px solid #e2e8f0;">
+          <input type="hidden" id="editEmpId">
+          <div class="form-group"><label>Name</label><input type="text" id="newEmpName" class="form-control" placeholder="Vorname Nachname"></div>
+          <div style="display:flex; gap:12px;">
+            <div class="form-group" style="flex:1;">
+              <label>Fokus Team</label>
+              <select id="newEmpTeam" class="form-control">
+                <option value="team-1">Team 1 (Blau)</option>
+                <option value="team-2">Team 2 (Gelb)</option>
+                <option value="team-3">Team 3 (Grün)</option>
+                <option value="team-4">Team 4 (Rot)</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex:1;"><label>Rolle</label><select id="newEmpRole" class="form-control"></select></div>
+          </div>
+          
+          <div class="form-group" style="margin-top: 4px;">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size: 0.95rem;">
+              <input type="checkbox" id="newEmpFirstAider" style="width:18px; height:18px;">
+              Ist Ersthelfer <span style="color:#dc2626; font-weight:900; font-size:1.4rem; line-height:0.5;">+</span>
+            </label>
+          </div>
+
+          <div style="display:flex; gap:10px; margin-top: 12px;">
+            <button id="btnSaveEmp" class="btn btn-primary" style="flex:1;" onclick="saveEmployee()">Hinzufügen</button>
+            <button id="btnCancelEditEmp" class="btn btn-outline" style="display:none;" onclick="resetEmpForm()">Abbrechen</button>
+          </div>
+        </div>
+        <div id="employeeList" style="max-height: 250px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
+      </div>
+      
+      <!-- Content: Rollen -->
+      <div id="tabRoles" class="tab-content">
+        <div style="display:flex; gap:10px; margin-bottom:16px;">
+          <input type="text" id="newRoleName" class="form-control" placeholder="Neue Rolle">
+          <button class="btn btn-primary" onclick="addRole()">Hinzufügen</button>
+        </div>
+        <div id="roleList" style="max-height: 250px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
+      </div>
+
+      <!-- Content: Linien -->
+      <div id="tabLines" class="tab-content">
+        <div style="display:flex; gap:10px; margin-bottom:16px;">
+          <input type="text" id="newLineName" class="form-control" placeholder="Neue Linie (z.B. Linie 40)">
+          <button class="btn btn-primary" onclick="addLine()">Hinzufügen</button>
+        </div>
+        <div id="lineSettingsList" style="max-height: 250px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
+      </div>
+
+      <!-- Content: Teams & Farben -->
+      <div id="tabTeams" class="tab-content">
+        <p style="font-size:0.9rem; color:#64748b; margin-bottom:14px;">Passe hier die Namen und Kennzeichnungsfarben der Fokus-Teams an:</p>
+        <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:16px;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <input type="color" id="teamColor1" value="#0091df" style="width:40px; height:38px; border:none; cursor:pointer; background:none;">
+            <input type="text" id="teamName1" class="form-control" placeholder="Team 1 Name">
+          </div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <input type="color" id="teamColor2" value="#f59e0b" style="width:40px; height:38px; border:none; cursor:pointer; background:none;">
+            <input type="text" id="teamName2" class="form-control" placeholder="Team 2 Name">
+          </div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <input type="color" id="teamColor3" value="#10b981" style="width:40px; height:38px; border:none; cursor:pointer; background:none;">
+            <input type="text" id="teamName3" class="form-control" placeholder="Team 3 Name">
+          </div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <input type="color" id="teamColor4" value="#f43f5e" style="width:40px; height:38px; border:none; cursor:pointer; background:none;">
+            <input type="text" id="teamName4" class="form-control" placeholder="Team 4 Name">
+          </div>
+        </div>
+        <button class="btn btn-primary" style="width:100%;" onclick="saveTeamSettings()">Team-Änderungen speichern</button>
+      </div>
+
+      <!-- Content: Backups -->
+      <div id="tabBackups" class="tab-content">
+        <p style="font-size:0.9rem; color:#64748b; margin-bottom:14px; line-height: 1.4;">
+          Das System speichert jeden Tag automatisch eine Sicherung (max. die letzten 7 Tage). Klicke auf "Wiederherstellen", um einen alten Stand zu laden.
+        </p>
+        <div id="backupList" style="max-height: 250px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px; padding:10px;">
+          Lade Backups...
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBPOYRYyUm5gA-j7YSAZl7EJoxedFhDTl4",
+      authDomain: "schichtplan-bayer.firebaseapp.com",
+      projectId: "schichtplan-bayer",
+      storageBucket: "schichtplan-bayer.firebasestorage.app",
+      messagingSenderId: "152929285194",
+      appId: "1:152929285194:web:00b73aa6058a70aed3a2b3",
+      measurementId: "G-4GPXMLNVYK"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const shifts = [
+      { id: "frueh", name: "Früh" },
+      { id: "spaet", name: "Spät" },
+      { id: "nacht", name: "Nacht" }
+    ];
+
+    const defaultLines = [
+      { id: "L32", name: "Linie 32", prio: "", tag: "", note: "" },
+      { id: "L33", name: "Linie 33", prio: "", tag: "", note: "" },
+      { id: "L34", name: "Linie 34", prio: "", tag: "", note: "" },
+      { id: "L09", name: "Linie 09", prio: "", tag: "", note: "" },
+      { id: "L22", name: "Linie 22", prio: "", tag: "", note: "" },
+      { id: "L39", name: "Linie 39", prio: "", tag: "", note: "" },
+      { id: "L36", name: "Linie 36", prio: "", tag: "", note: "" },
+      { id: "L37", name: "Linie 37", prio: "", tag: "", note: "" },
+      { id: "L38", name: "Linie 38", prio: "", tag: "", note: "" },
+      { id: "L54", name: "Linie 54", prio: "", tag: "", note: "" }
+    ];
+
+    let lines = defaultLines;
+    let roles = ["Bediener", "LOP", "TL", "Schichtexperte", "Waschraumoperator"];
+    let employees = []; 
+    let teamsConfig = {
+      "team-1": { name: "Team 1 (Blau)", color: "#0091df" },
+      "team-2": { name: "Team 2 (Gelb)", color: "#f59e0b" },
+      "team-3": { name: "Team 3 (Grün)", color: "#10b981" },
+      "team-4": { name: "Team 4 (Rot)", color: "#f43f5e" }
+    };
+
+    let isPlanner = false;
+    let sortableInstances = [];
+    let backupDoneToday = false; 
+
+    setInterval(() => {
+      if (!isPlanner) {
+        window.location.reload();
+      }
+    }, 60 * 60 * 1000); 
+
+    function handleLogoClick() {
+      if (!isPlanner) {
+        document.getElementById("pinModal").style.display = "flex";
+        document.getElementById("pinInput").value = "";
+        document.getElementById("pinInput").focus();
+      }
+    }
+
+    function verifyPin() {
+      if (document.getElementById("pinInput").value === "1234") {
+        isPlanner = true;
+        closeModal("pinModal");
+        applyPlannerState();
+      } else {
+        alert("Falsche PIN!");
+      }
+    }
+
+    function logoutPlanner() {
+      isPlanner = false;
+      applyPlannerState();
+    }
+
+    function applyPlannerState() {
+      if (isPlanner) {
+        document.body.classList.add("planner-active");
+      } else {
+        document.body.classList.remove("planner-active");
+      }
+      initBoard();
+    }
+
+    db.collection("shiftplan").doc("live_board").onSnapshot((doc) => {
+      if (doc.exists) {
+        const d = doc.data();
+        if (d.lines) lines = d.lines;
+        if (d.roles) roles = d.roles;
+        if (d.employees) employees = d.employees;
+        if (d.teamsConfig) teamsConfig = d.teamsConfig;
+        
+        applyTeamStyles();
+        updateTeamDropdowns();
+        
+        if (!backupDoneToday) {
+          createDailyBackup(d);
+        }
+      } else {
+        saveToFirebase();
+      }
+      initBoard();
+    });
+
+    function saveToFirebase() {
+      db.collection("shiftplan").doc("live_board").set({
+        lines: lines,
+        roles: roles,
+        employees: employees,
+        teamsConfig: teamsConfig
+      });
+    }
+
+    function applyTeamStyles() {
+      const root = document.documentElement;
+      root.style.setProperty('--team-1', teamsConfig["team-1"].color);
+      root.style.setProperty('--team-2', teamsConfig["team-2"].color);
+      root.style.setProperty('--team-3', teamsConfig["team-3"].color);
+      root.style.setProperty('--team-4', teamsConfig["team-4"].color);
+    }
+
+    function updateTeamDropdowns() {
+      const sel = document.getElementById("newEmpTeam");
+      if(!sel) return;
+      sel.innerHTML = `
+        <option value="team-1">${teamsConfig["team-1"].name}</option>
+        <option value="team-2">${teamsConfig["team-2"].name}</option>
+        <option value="team-3">${teamsConfig["team-3"].name}</option>
+        <option value="team-4">${teamsConfig["team-4"].name}</option>
+      `;
+    }
+
+    function createDailyBackup(data) {
+      const todayIso = new Date().toISOString().split('T')[0]; 
+      const todayDe = new Date().toLocaleDateString('de-DE'); 
+
+      db.collection("shiftplan_backups").doc(todayIso).get().then(snap => {
+        if (!snap.exists) {
+          db.collection("shiftplan_backups").doc(todayIso).set({
+            date: todayIso,
+            displayDate: todayDe,
+            lines: data.lines || [],
+            roles: data.roles || [],
+            employees: data.employees || [],
+            teamsConfig: data.teamsConfig || teamsConfig
+          }).then(() => {
+            cleanupOldBackups(); 
+          });
+        }
+        backupDoneToday = true;
+      });
+    }
+
+    function cleanupOldBackups() {
+      db.collection("shiftplan_backups").orderBy("date", "desc").get().then(snap => {
+        let count = 0;
+        snap.forEach(doc => {
+          count++;
+          if (count > 7) {
+            doc.ref.delete(); 
+          }
+        });
+      });
+    }
+
+    function renderBackups() {
+      const list = document.getElementById("backupList");
+      list.innerHTML = "Lade Backups...";
+      db.collection("shiftplan_backups").orderBy("date", "desc").get().then(snap => {
+        list.innerHTML = "";
+        if(snap.empty) {
+          list.innerHTML = "<div style='color:#64748b; font-size:0.95rem;'>Noch keine Backups vorhanden. Das erste Backup wird heute automatisch erstellt.</div>";
+          return;
+        }
+        snap.forEach(doc => {
+          const b = doc.data();
+          list.innerHTML += `
+            <div class="item-row">
+              <span>Stand vom <b>${b.displayDate}</b></span>
+              <button class="btn btn-outline" style="padding:4px 10px; color:var(--bayer-blue);" onclick="restoreBackup('${doc.id}')">Wiederherstellen</button>
+            </div>`;
+        });
+      });
+    }
+
+    function restoreBackup(docId) {
+      if(!confirm("Möchtest du diesen Stand wirklich laden? Die aktuelle Planung (von heute) wird dadurch überschrieben!")) return;
+      
+      db.collection("shiftplan_backups").doc(docId).get().then(snap => {
+        if(snap.exists) {
+          const b = snap.data();
+          db.collection("shiftplan").doc("live_board").set({
+            lines: b.lines,
+            roles: b.roles,
+            employees: b.employees,
+            teamsConfig: b.teamsConfig || teamsConfig
+          });
+          alert("Erfolgreich wiederhergestellt!");
+          closeModal('settingsModal');
+        }
+      });
+    }
+
+    function initBoard() {
+      renderHeaderColumns();
+      const matrixBody = document.getElementById("matrixBody");
+      matrixBody.innerHTML = "";
+
+      shifts.forEach(shift => {
+        const tr = document.createElement("tr");
+        const thShift = document.createElement("th");
+        thShift.className = "shift-header";
+        thShift.textContent = shift.name;
+        tr.appendChild(thShift);
+
+        lines.forEach(line => {
+          const td = document.createElement("td");
+          const zoneId = `${line.id}_${shift.id}`;
+          td.innerHTML = `<div id="${zoneId}" class="card-list drop-zone" data-zone="${zoneId}"></div>`;
+          tr.appendChild(td);
+        });
+
+        matrixBody.appendChild(tr);
+      });
+
+      renderEmployees();
+      initDragAndDrop();
+      updateRoleDropdown();
+      updateTeamDropdowns();
+      applyTeamStyles();
+    }
+
+    function renderHeaderColumns() {
+      const headerRow = document.getElementById("headerRow");
+      headerRow.innerHTML = '<th class="shift-header">Schicht</th>';
+      lines.forEach(line => {
+        const th = document.createElement("th");
+        th.className = "line-header";
+        if (isPlanner) th.onclick = () => openLineEditModal(line.id);
+
+        let prioClass = "";
+        if (line.prio && (line.prio.includes("1") || line.prio.includes("2"))) prioClass = "prio-high";
+        else if (line.prio && (line.prio.includes("3") || line.prio.includes("4"))) prioClass = "prio-mid";
+
+        th.innerHTML = `
+          <div class="line-title">${line.name}</div>
+          <div class="badge-container">
+            ${line.prio ? `<span class="line-prio ${prioClass}">${line.prio}</span>` : ''}
+            ${line.tag ? `<span class="line-status-tag">${line.tag}</span>` : ''}
+          </div>
+          ${line.note ? `<div class="line-notes">${line.note}</div>` : ''}
+        `;
+        headerRow.appendChild(th);
+      });
+    }
+
+    function renderEmployees() {
+      document.querySelectorAll(".drop-zone").forEach(el => el.innerHTML = "");
+      employees.forEach(emp => {
+        const card = document.createElement("div");
+        card.className = `employee-card ${emp.team}`;
+        card.setAttribute("data-id", emp.id);
+        
+        let firstAiderHtml = emp.ersthelfer ? '<span class="first-aider-icon" title="Ersthelfer">+</span>' : '';
+        
+        card.innerHTML = `
+          <div style="display: flex; flex-direction: column; gap: 2px; overflow: hidden;">
+            <span class="card-name">${emp.name}</span>
+            <span class="card-role">${emp.role}</span>
+          </div>
+          ${firstAiderHtml}
+        `;
+
+        const targetZone = document.getElementById(emp.zone);
+        if (targetZone) targetZone.appendChild(card);
+      });
+
+      const poolEl = document.getElementById("pool");
+      if (poolEl) {
+        document.getElementById("poolCount").textContent = `(${poolEl.children.length})`;
+      }
+    }
+
+    function initDragAndDrop() {
+      sortableInstances.forEach(s => s.destroy());
+      sortableInstances = [];
+
+      document.querySelectorAll(".drop-zone").forEach(zone => {
+        const s = new Sortable(zone, {
+          group: "shared-shifts",
+          animation: 150,
+          disabled: !isPlanner,
+          onEnd: function (evt) {
+            const empId = evt.item.getAttribute("data-id");
+            const newZone = evt.to.getAttribute("data-zone");
+            const emp = employees.find(e => e.id === empId);
+            if (emp) {
+              emp.zone = newZone;
+              saveToFirebase();
+            }
+          }
+        });
+        sortableInstances.push(s);
+      });
+    }
+
+    function openLineEditModal(lineId) {
+      const line = lines.find(l => l.id === lineId);
+      if (!line) return;
+      document.getElementById("editLineId").value = line.id;
+      document.getElementById("lineEditTitle").textContent = `${line.name} bearbeiten`;
+      document.getElementById("editLinePrio").value = line.prio || "";
+      document.getElementById("editLineTag").value = line.tag || "";
+      document.getElementById("editLineNote").value = line.note || "";
+      document.getElementById("lineEditModal").style.display = "flex";
+    }
+
+    function saveLineDetails() {
+      const lineId = document.getElementById("editLineId").value;
+      const line = lines.find(l => l.id === lineId);
+      if (!line) return;
+      line.prio = document.getElementById("editLinePrio").value;
+      line.tag = document.getElementById("editLineTag").value.trim();
+      line.note = document.getElementById("editLineNote").value.trim();
+      saveToFirebase();
+      renderHeaderColumns();
+      closeModal('lineEditModal');
+    }
+
+    function closeModal(id) { 
+      document.getElementById(id).style.display = "none"; 
+      if(id === 'settingsModal') resetEmpForm();
+    }
+    
+    function openSettingsModal() { 
+      document.getElementById("settingsModal").style.display = "flex"; 
+      renderSettingsLists(); 
+      loadTeamSettingsToForm();
+    }
+    
+    function switchTab(t) {
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+      
+      if(t === 'tabEmployees') document.querySelectorAll(".tab-btn")[0].classList.add("active");
+      else if(t === 'tabRoles') document.querySelectorAll(".tab-btn")[1].classList.add("active");
+      else if(t === 'tabLines') document.querySelectorAll(".tab-btn")[2].classList.add("active");
+      else if(t === 'tabTeams') document.querySelectorAll(".tab-btn")[3].classList.add("active");
+      else if(t === 'tabBackups') {
+        document.querySelectorAll(".tab-btn")[4].classList.add("active");
+        renderBackups(); 
+      }
+      
+      document.getElementById(t).classList.add("active");
+    }
+
+    function updateRoleDropdown() {
+      const sel = document.getElementById("newEmpRole");
+      sel.innerHTML = "";
+      roles.forEach(r => {
+        const opt = document.createElement("option");
+        opt.value = r; opt.textContent = r; sel.appendChild(opt);
+      });
+    }
+
+    function loadTeamSettingsToForm() {
+      for(let i=1; i<=4; i++) {
+        document.getElementById(`teamName${i}`).value = teamsConfig[`team-${i}`].name;
+        document.getElementById(`teamColor${i}`).value = teamsConfig[`team-${i}`].color;
+      }
+    }
+
+    function saveTeamSettings() {
+      for(let i=1; i<=4; i++) {
+        const name = document.getElementById(`teamName${i}`).value.trim();
+        const color = document.getElementById(`teamColor${i}`).value;
+        if(name) {
+          teamsConfig[`team-${i}`].name = name;
+          teamsConfig[`team-${i}`].color = color;
+        }
+      }
+      saveToFirebase();
+      applyTeamStyles();
+      updateTeamDropdowns();
+      alert("Team-Einstellungen gespeichert!");
+    }
+
+    function renderSettingsLists() {
+      const roleC = document.getElementById("roleList");
+      roleC.innerHTML = "";
+      roles.forEach((r, idx) => {
+        roleC.innerHTML += `<div class="item-row"><span>${r}</span><button class="btn btn-outline" style="padding:4px 10px; color:#ef4444;" onclick="deleteRole(${idx})">Löschen</button></div>`;
+      });
+
+      const empC = document.getElementById("employeeList");
+      empC.innerHTML = "";
+      employees.forEach(e => {
+        let firstAiderMark = e.ersthelfer ? ' <span style="color:#dc2626; font-weight:900; font-size:1.1rem; line-height:0.5;">+</span>' : '';
+        empC.innerHTML += `
+          <div class="item-row">
+            <div><b>${e.name}</b> <small>(${e.role})${firstAiderMark}</small></div>
+            <div style="display:flex; gap:6px;">
+              <button class="btn btn-outline" style="padding:4px 10px; font-size:0.85rem;" onclick="editEmployee('${e.id}')">Bearbeiten</button>
+              <button class="btn btn-outline" style="padding:4px 10px; font-size:0.85rem; color:#ef4444;" onclick="deleteEmployee('${e.id}')">Löschen</button>
+            </div>
+          </div>`;
+      });
+
+      const lineC = document.getElementById("lineSettingsList");
+      lineC.innerHTML = "";
+      lines.forEach((l, index) => {
+        lineC.innerHTML += `
+          <div class="item-row">
+            <span><b>${l.name}</b></span>
+            <div style="display:flex; gap:6px; align-items:center;">
+              <button class="btn btn-outline" style="padding:2px 8px; font-size:0.8rem;" ${index === 0 ? 'disabled' : ''} onclick="moveLine(${index}, -1)">▲</button>
+              <button class="btn btn-outline" style="padding:2px 8px; font-size:0.8rem;" ${index === lines.length - 1 ? 'disabled' : ''} onclick="moveLine(${index}, 1)">▼</button>
+              <button class="btn btn-outline" style="padding:4px 10px; color:#ef4444; font-size:0.85rem;" onclick="deleteLine('${l.id}')">Löschen</button>
+            </div>
+          </div>`;
+      });
+    }
+
+    function addLine() {
+      const name = document.getElementById("newLineName").value.trim();
+      if (!name) return;
+      const newId = "L_" + Date.now();
+      lines.push({ id: newId, name: name, prio: "", tag: "", note: "" });
+      document.getElementById("newLineName").value = "";
+      saveToFirebase();
+      initBoard(); 
+      renderSettingsLists();
+    }
+
+    function moveLine(index, direction) {
+      const newIndex = index + direction;
+      if (newIndex < 0 || newIndex >= lines.length) return;
+      
+      const item = lines.splice(index, 1)[0];
+      lines.splice(newIndex, 0, item);
+      
+      saveToFirebase();
+      initBoard();
+      renderSettingsLists();
+    }
+
+    function deleteLine(id) {
+      if (!confirm("Möchtest du diese Linie wirklich löschen?")) return;
+      
+      lines = lines.filter(l => l.id !== id);
+      
+      employees.forEach(emp => {
+        if (emp.zone && emp.zone.startsWith(id + "_")) {
+          emp.zone = "pool";
+        }
+      });
+      
+      saveToFirebase();
+      initBoard(); 
+      renderSettingsLists();
+    }
+
+    function addRole() {
+      const val = document.getElementById("newRoleName").value.trim();
+      if (!val || roles.includes(val)) return;
+      roles.push(val);
+      document.getElementById("newRoleName").value = "";
+      saveToFirebase();
+      updateRoleDropdown();
+      renderSettingsLists();
+    }
+
+    function deleteRole(idx) {
+      roles.splice(idx, 1);
+      saveToFirebase();
+      updateRoleDropdown();
+      renderSettingsLists();
+    }
+
+    function saveEmployee() {
+      const idInput = document.getElementById("editEmpId").value;
+      const name = document.getElementById("newEmpName").value.trim();
+      const team = document.getElementById("newEmpTeam").value;
+      const role = document.getElementById("newEmpRole").value;
+      const isFirstAider = document.getElementById("newEmpFirstAider").checked;
+      
+      if (!name || !role) return;
+
+      if (idInput) {
+        const emp = employees.find(e => e.id === idInput);
+        if (emp) {
+          emp.name = name;
+          emp.team = team;
+          emp.role = role;
+          emp.ersthelfer = isFirstAider;
+        }
+      } else {
+        employees.push({ id: "e_" + Date.now(), name, team, role, ersthelfer: isFirstAider, zone: "pool" });
+      }
+
+      resetEmpForm();
+      saveToFirebase();
+      renderEmployees();
+      renderSettingsLists();
+    }
+
+    function editEmployee(id) {
+      const emp = employees.find(e => e.id === id);
+      if (!emp) return;
+      
+      document.getElementById("editEmpId").value = emp.id;
+      document.getElementById("newEmpName").value = emp.name;
+      document.getElementById("newEmpTeam").value = emp.team || "team-1";
+      document.getElementById("newEmpRole").value = emp.role;
+      document.getElementById("newEmpFirstAider").checked = !!emp.ersthelfer;
+      
+      document.getElementById("btnSaveEmp").textContent = "Aktualisieren";
+      document.getElementById("btnCancelEditEmp").style.display = "inline-block";
+    }
+
+    function resetEmpForm() {
+      document.getElementById("editEmpId").value = "";
+      document.getElementById("newEmpName").value = "";
+      document.getElementById("newEmpFirstAider").checked = false;
+      document.getElementById("btnSaveEmp").textContent = "Hinzufügen";
+      document.getElementById("btnCancelEditEmp").style.display = "none";
+    }
+
+    function deleteEmployee(id) {
+      employees = employees.filter(e => e.id !== id);
+      saveToFirebase();
+      renderEmployees();
+      renderSettingsLists();
+    }
+  </script>
+</body>
+</html>
