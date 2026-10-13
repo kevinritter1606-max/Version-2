@@ -19,12 +19,6 @@
       --bayer-green: #89d329;
       --bg-gray: #f4f6f9;
       --border-color: #cbd5e1;
-      
-      /* Standard Team Farben (werden dynamisch überschrieben) */
-      --team-1: #0091df;
-      --team-2: #f59e0b;
-      --team-3: #10b981;
-      --team-4: #f43f5e;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
@@ -161,11 +155,6 @@
     }
     body.planner-active .employee-card { cursor: grab; }
     body.planner-active .employee-card:active { cursor: grabbing; }
-
-    .employee-card.team-1 { border-left-color: var(--team-1); }
-    .employee-card.team-2 { border-left-color: var(--team-2); }
-    .employee-card.team-3 { border-left-color: var(--team-3); }
-    .employee-card.team-4 { border-left-color: var(--team-4); }
 
     .card-name { 
       font-size: 0.82rem; 
@@ -341,12 +330,7 @@
           <div style="display:flex; gap:12px;">
             <div class="form-group" style="flex:1;">
               <label>Fokus Team</label>
-              <select id="newEmpTeam" class="form-control">
-                <option value="team-1">Team 1 (Blau)</option>
-                <option value="team-2">Team 2 (Gelb)</option>
-                <option value="team-3">Team 3 (Grün)</option>
-                <option value="team-4">Team 4 (Rot)</option>
-              </select>
+              <select id="newEmpTeam" class="form-control"></select>
             </div>
             <div class="form-group" style="flex:1;"><label>Rolle</label><select id="newEmpRole" class="form-control"></select></div>
           </div>
@@ -386,26 +370,15 @@
 
       <!-- Content: Teams & Farben -->
       <div id="tabTeams" class="tab-content">
-        <p style="font-size:0.9rem; color:#64748b; margin-bottom:14px;">Passe hier die Namen und Kennzeichnungsfarben der Fokus-Teams an:</p>
-        <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:16px;">
-          <div style="display:flex; align-items:center; gap:10px;">
-            <input type="color" id="teamColor1" value="#0091df" style="width:40px; height:38px; border:none; cursor:pointer; background:none;">
-            <input type="text" id="teamName1" class="form-control" placeholder="Team 1 Name">
-          </div>
-          <div style="display:flex; align-items:center; gap:10px;">
-            <input type="color" id="teamColor2" value="#f59e0b" style="width:40px; height:38px; border:none; cursor:pointer; background:none;">
-            <input type="text" id="teamName2" class="form-control" placeholder="Team 2 Name">
-          </div>
-          <div style="display:flex; align-items:center; gap:10px;">
-            <input type="color" id="teamColor3" value="#10b981" style="width:40px; height:38px; border:none; cursor:pointer; background:none;">
-            <input type="text" id="teamName3" class="form-control" placeholder="Team 3 Name">
-          </div>
-          <div style="display:flex; align-items:center; gap:10px;">
-            <input type="color" id="teamColor4" value="#f43f5e" style="width:40px; height:38px; border:none; cursor:pointer; background:none;">
-            <input type="text" id="teamName4" class="form-control" placeholder="Team 4 Name">
+        <div style="background:#f8fafc; padding:14px; border-radius:8px; margin-bottom:16px; border:1px solid #e2e8f0;">
+          <label style="font-size:0.85rem; font-weight:600; margin-bottom:6px; display:block; color:#475569;">Neues Team hinzufügen</label>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <input type="color" id="newTeamColor" value="#3b82f6" style="width:40px; height:38px; border:none; cursor:pointer; background:none;">
+            <input type="text" id="newTeamName" class="form-control" placeholder="Team-Name (z.B. Team A)">
+            <button class="btn btn-primary" onclick="addTeam()">Hinzufügen</button>
           </div>
         </div>
-        <button class="btn btn-primary" style="width:100%;" onclick="saveTeamSettings()">Team-Änderungen speichern</button>
+        <div id="teamSettingsList" style="max-height: 220px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
       </div>
 
       <!-- Content: Backups -->
@@ -512,7 +485,6 @@
         if (d.lines) lines = d.lines;
         if (d.roles) roles = d.roles;
         if (d.employees) {
-          // Kompatibilitätsschrift für alte Datensätze (falls firstName/lastName fehlt)
           employees = d.employees.map(e => {
             if (!e.firstName && e.name) {
               const parts = e.name.split(" ");
@@ -546,22 +518,29 @@
     }
 
     function applyTeamStyles() {
-      const root = document.documentElement;
-      root.style.setProperty('--team-1', teamsConfig["team-1"].color);
-      root.style.setProperty('--team-2', teamsConfig["team-2"].color);
-      root.style.setProperty('--team-3', teamsConfig["team-3"].color);
-      root.style.setProperty('--team-4', teamsConfig["team-4"].color);
+      const styleTag = document.getElementById("dynamicTeamStyles") || document.createElement("style");
+      styleTag.id = "dynamicTeamStyles";
+      
+      let cssText = "";
+      for (const [key, team] of Object.entries(teamsConfig)) {
+        cssText += `.employee-card.${key} { border-left-color: ${team.color} !important; }\n`;
+      }
+      styleTag.textContent = cssText;
+      if (!document.getElementById("dynamicTeamStyles")) {
+        document.head.appendChild(styleTag);
+      }
     }
 
     function updateTeamDropdowns() {
       const sel = document.getElementById("newEmpTeam");
       if(!sel) return;
-      sel.innerHTML = `
-        <option value="team-1">${teamsConfig["team-1"].name}</option>
-        <option value="team-2">${teamsConfig["team-2"].name}</option>
-        <option value="team-3">${teamsConfig["team-3"].name}</option>
-        <option value="team-4">${teamsConfig["team-4"].name}</option>
-      `;
+      sel.innerHTML = "";
+      for (const [key, team] of Object.entries(teamsConfig)) {
+        const opt = document.createElement("option");
+        opt.value = key;
+        opt.textContent = team.name;
+        sel.appendChild(opt);
+      }
     }
 
     function createDailyBackup(data) {
@@ -770,7 +749,6 @@
     function openSettingsModal() { 
       document.getElementById("settingsModal").style.display = "flex"; 
       renderSettingsLists(); 
-      loadTeamSettingsToForm();
     }
     
     function switchTab(t) {
@@ -798,26 +776,62 @@
       });
     }
 
-    function loadTeamSettingsToForm() {
-      for(let i=1; i<=4; i++) {
-        document.getElementById(`teamName${i}`).value = teamsConfig[`team-${i}`].name;
-        document.getElementById(`teamColor${i}`).value = teamsConfig[`team-${i}`].color;
-      }
-    }
+    function addTeam() {
+      const name = document.getElementById("newTeamName").value.trim();
+      const color = document.getElementById("newTeamColor").value;
+      if (!name) return;
 
-    function saveTeamSettings() {
-      for(let i=1; i<=4; i++) {
-        const name = document.getElementById(`teamName${i}`).value.trim();
-        const color = document.getElementById(`teamColor${i}`).value;
-        if(name) {
-          teamsConfig[`team-${i}`].name = name;
-          teamsConfig[`team-${i}`].color = color;
-        }
-      }
+      const teamKey = "team_" + Date.now();
+      teamsConfig[teamKey] = { name: name, color: color };
+      document.getElementById("newTeamName").value = "";
+      
       saveToFirebase();
       applyTeamStyles();
       updateTeamDropdowns();
-      alert("Team-Einstellungen gespeichert!");
+      renderSettingsLists();
+    }
+
+    function updateTeam(key) {
+      const nameInput = document.getElementById(`teamNameInput_${key}`);
+      const colorInput = document.getElementById(`teamColorInput_${key}`);
+      if (!nameInput || !colorInput) return;
+
+      const name = nameInput.value.trim();
+      const color = colorInput.value;
+
+      if (name && teamsConfig[key]) {
+        teamsConfig[key].name = name;
+        teamsConfig[key].color = color;
+        saveToFirebase();
+        applyTeamStyles();
+        updateTeamDropdowns();
+        alert("Team aktualisiert!");
+      }
+    }
+
+    function deleteTeam(key) {
+      const keys = Object.keys(teamsConfig);
+      if (keys.length <= 1) {
+        alert("Es muss mindestens ein Team erhalten bleiben!");
+        return;
+      }
+      if (!confirm("Möchtest du dieses Team wirklich löschen?")) return;
+
+      delete teamsConfig[key];
+
+      // Mitarbeiter, die in diesem Team waren, auf das erste verbleibende Team setzen
+      const fallbackKey = Object.keys(teamsConfig)[0];
+      employees.forEach(emp => {
+        if (emp.team === key) {
+          emp.team = fallbackKey;
+        }
+      });
+
+      saveToFirebase();
+      applyTeamStyles();
+      updateTeamDropdowns();
+      renderSettingsLists();
+      renderEmployees();
     }
 
     function renderSettingsLists() {
@@ -855,6 +869,18 @@
             </div>
           </div>`;
       });
+
+      const teamC = document.getElementById("teamSettingsList");
+      teamC.innerHTML = "";
+      for (const [key, team] of Object.entries(teamsConfig)) {
+        teamC.innerHTML += `
+          <div class="item-row" style="gap:8px;">
+            <input type="color" id="teamColorInput_${key}" value="${team.color}" style="width:36px; height:32px; border:none; cursor:pointer; background:none;">
+            <input type="text" id="teamNameInput_${key}" class="form-control" value="${team.name}" style="flex:1; padding:6px 10px;">
+            <button class="btn btn-outline" style="padding:6px 10px; color:var(--bayer-blue); font-size:0.85rem;" onclick="updateTeam('${key}')">Speichern</button>
+            <button class="btn btn-outline" style="padding:6px 10px; color:#ef4444; font-size:0.85rem;" onclick="deleteTeam('${key}')">Löschen</button>
+          </div>`;
+      }
     }
 
     function addLine() {
@@ -949,7 +975,7 @@
       document.getElementById("editEmpId").value = emp.id;
       document.getElementById("newEmpFirstName").value = emp.firstName || "";
       document.getElementById("newEmpLastName").value = emp.lastName || "";
-      document.getElementById("newEmpTeam").value = emp.team || "team-1";
+      document.getElementById("newEmpTeam").value = emp.team || Object.keys(teamsConfig)[0];
       document.getElementById("newEmpRole").value = emp.role;
       document.getElementById("newEmpFirstAider").checked = !!emp.ersthelfer;
       
