@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mitarbeiter-Portal | Schichtplanung</title>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+  <style>
+    :root {
+      --bayer-blue: #0091df;
+      --bayer-light-blue: #00bcff;
+      --bayer-green: #89d329;
+      --bg-gray: #f4f6f9;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+    body { background-color: var(--bg-gray); min-height: 100vh; display: flex; flex-direction: column; color: #1e293b; }
+
+    .brand-gradient { height: 6px; background: linear-gradient(90deg, #0091df 0%, #00bcff 50%, #89d329 100%); width: 100%; }
+
+    header {
+      background: #fff;
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .header-left img { width: 48px; height: 48px; object-fit: contain; }
+    .header-title h1 { font-size: 1.2rem; color: var(--bayer-blue); font-weight: 700; }
+    .header-title span { font-size: 0.75rem; color: #64748b; }
+
+    .container {
+      width: 100%;
+      max-width: 520px;
+      margin: 24px auto;
+      padding: 0 16px 40px 16px;
+      flex: 1;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+      border: 1px solid #e2e8f0;
+      margin-bottom: 16px;
+    }
+
+    .card h2 {
+      font-size: 1.05rem;
+      color: #0f172a;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #475569; }
+    .form-control { width: 100%; padding: 11px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; background: #f8fafc; }
+    .form-control:focus { outline: none; border-color: var(--bayer-blue); background: #fff; }
+    textarea.form-control { resize: vertical; min-height: 85px; }
+
+    .btn { padding: 11px 18px; border-radius: 8px; font-size: 0.95rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; width: 100%; transition: 0.15s; }
+    .btn-primary { background: var(--bayer-blue); color: #fff; }
+    .btn-primary:hover { background: #0077b6; }
+    .btn-outline { border-color: #cbd5e1; background: #fff; color: #475569; width: auto; padding: 7px 12px; font-size: 0.85rem; }
+
+    .status-box {
+      padding: 16px;
+      border-radius: 10px;
+      font-weight: 600;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .status-assigned { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .status-pool { background: #e0f2fe; color: #075985; border: 1px solid #bae6fd; }
+    .status-absent { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+
+    .line-badge-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .line-badge { padding: 5px 10px; border-radius: 6px; font-size: 0.82rem; font-weight: 600; }
+    .badge-prio { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; font-weight: 700; }
+    .badge-sec { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+
+    .success-banner {
+      display: none;
+      background: #dcfce7;
+      color: #166534;
+      border: 1px solid #86efac;
+      padding: 14px;
+      border-radius: 8px;
+      margin-bottom: 14px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    .error-msg {
+      display: none;
+      background: #fee2e2;
+      color: #b91c1c;
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      margin-bottom: 12px;
+      text-align: center;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="brand-gradient"></div>
+
+  <header>
+    <div class="header-left">
+      <img src="logo.png" alt="Logo" onerror="this.style.display='none'">
+      <div class="header-title">
+        <h1>Mitarbeiter-Portal</h1>
+        <span>Persönliche Schicht- & Linienübersicht</span>
+      </div>
+    </div>
+    <button id="logoutBtn" class="btn btn-outline" style="display:none;" onclick="logoutEmp()">Abmelden</button>
+  </header>
+
+  <div class="container">
+    <!-- Ansicht 1: Login -->
+    <div id="loginView" class="card">
+      <h2 style="color: var(--bayer-blue); justify-content: center; margin-bottom: 16px;">🔐 Mitarbeiter-Anmeldung</h2>
+      <div id="loginError" class="error-msg">Name oder Passwort nicht korrekt!</div>
+      
+      <div class="form-group">
+        <label>Dein Name</label>
+        <select id="loginEmpSelect" class="form-control">
+          <option value="">Lade Mitarbeiterliste...</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Passwort / PIN</label>
+        <input type="password" id="loginPassword" class="form-control" placeholder="Passwort eingeben" onkeydown="if(event.key==='Enter') loginEmp()">
+      </div>
+
+      <button class="btn btn-primary" onclick="loginEmp()">Anmelden</button>
+    </div>
+
+    <!-- Ansicht 2: Mitarbeiter-Dashboard -->
+    <div id="portalView" style="display:none;">
+      
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-size:0.8rem; color:#64748b;">Angemeldet als</div>
+            <div id="empWelcomeName" style="font-size:1.3rem; font-weight:700; color:#0f172a;"></div>
+          </div>
+          <span id="empRoleBadge" style="background:#f1f5f9; padding:5px 10px; border-radius:6px; font-size:0.82rem; font-weight:700; color:#334155;"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📍 Meine heutige Einteilung</h2>
+        <div id="empCurrentStatus" class="status-box status-pool">
+          Prüfe aktuelle Einteilung...
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>⚙️ Meine Linien-Qualifikationen</h2>
+        <div style="margin-bottom: 12px;">
+          <div style="font-size:0.82rem; font-weight:600; color:#475569;">Meine Stammlinien (Prio-Linien):</div>
+          <div id="empPrioLines" class="line-badge-list"></div>
+        </div>
+        <div>
+          <div style="font-size:0.82rem; font-weight:600; color:#475569;">Weitere Linien, die ich beherrsche (Sek-Linien):</div>
+          <div id="empSecLines" class="line-badge-list"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>🏥 Krankmeldung / Abwesenheit melden</h2>
+        <p style="font-size:0.83rem; color:#64748b; margin-bottom:14px; line-height:1.4;">
+          Hier kannst du dich direkt krankmelden. Du wirst für den angegebenen Zeitraum automatisch im Schichtplan als abwesend eingetragen und der Planer erhält deine Nachricht.
+        </p>
+
+        <div id="sickSuccessBanner" class="success-banner"></div>
+
+        <div style="display:flex; gap:10px;">
+          <div class="form-group" style="flex:1;">
+            <label>Von (Startdatum)</label>
+            <input type="date" id="sickStartDate" class="form-control">
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label>Bis (Einschließlich)</label>
+            <input type="date" id="sickEndDate" class="form-control">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Begleitschreiben / Begründung / Hinweis</label>
+          <textarea id="sickReason" class="form-control" placeholder="z.B. Grippe, Arzttermin heute Vormittag, AU-Bescheinigung folgt..."></textarea>
+        </div>
+
+        <button class="btn btn-primary" style="background:#dc2626;" onclick="submitSickLeave()">Krankmeldung jetzt absenden</button>
+
+        <div id="mySickLeavesHistory" style="margin-top:16px;"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBPOYRYyUm5gA-j7YSAZl7EJoxedFhDTl4",
+      authDomain: "schichtplan-bayer.firebaseapp.com",
+      projectId: "schichtplan-bayer",
+      storageBucket: "schichtplan-bayer.firebasestorage.app",
+      messagingSenderId: "152929285194",
+      appId: "1:152929285194:web:00b73aa6058a70aed3a2b3",
+      measurementId: "G-4GPXMLNVYK"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const shiftsMap = {
+      "frueh": "Frühschicht",
+      "spaet": "Spätschicht",
+      "nacht": "Nachtschicht"
+    };
+
+    let lines = [];
+    let employees = [];
+    let sickLeaves = [];
+    let rawDocData = {};
+    let loggedInEmpId = localStorage.getItem("portal_emp_id") || null;
+
+    function getTodayIso() {
+      const d = new Date();
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function formatDateDe(isoStr) {
+      if (!isoStr) return "";
+      const parts = isoStr.split("-");
+      if (parts.length !== 3) return isoStr;
+      return `${parts[2]}.${parts[1]}.${parts[0]}`;
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      const today = getTodayIso();
+      document.getElementById("sickStartDate").value = today;
+      document.getElementById("sickEndDate").value = today;
+    });
+
+    db.collection("shiftplan").doc("live_board").onSnapshot((doc) => {
+      if (doc.exists) {
+        rawDocData = doc.data();
+        lines = rawDocData.lines || [];
+        sickLeaves = rawDocData.sickLeaves || [];
+        employees = (rawDocData.employees || []).map(e => {
+          if (!e.firstName && e.name) {
+            const parts = e.name.split(" ");
+            e.firstName = parts[0] || "";
+            e.lastName = parts.slice(1).join(" ") || "";
+          }
+          if (!e.password) e.password = "1234";
+          return e;
+        });
+
+        populateLoginDropdown();
+
+        if (loggedInEmpId) {
+          const emp = employees.find(e => e.id === loggedInEmpId);
+          if (emp) {
+            showPortalFor(emp);
+          } else {
+            logoutEmp();
+          }
+        }
+      }
+    });
+
+    function populateLoginDropdown() {
+      const sel = document.getElementById("loginEmpSelect");
+      const currentVal = sel.value;
+      sel.innerHTML = `<option value="">-- Bitte Namen auswählen --</option>`;
+      
+      const sorted = [...employees].sort((a, b) => {
+        const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
+        const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+
+      sorted.forEach(e => {
+        const fullName = `${e.firstName || ''} ${e.lastName || ''}`.trim();
+        const opt = document.createElement("option");
+        opt.value = e.id;
+        opt.textContent = fullName;
+        sel.appendChild(opt);
+      });
+
+      if (currentVal) sel.value = currentVal;
+    }
+
+    function loginEmp() {
+      const empId = document.getElementById("loginEmpSelect").value;
+      const pass = document.getElementById("loginPassword").value.trim();
+      const errBox = document.getElementById("loginError");
+
+      const emp = employees.find(e => e.id === empId);
+      if (!emp || (emp.password || "1234") !== pass) {
+        errBox.style.display = "block";
+        return;
+      }
+
+      errBox.style.display = "none";
+      loggedInEmpId = emp.id;
+      localStorage.setItem("portal_emp_id", emp.id);
+      document.getElementById("loginPassword").value = "";
+      document.getElementById("sickSuccessBanner").style.display = "none";
+      showPortalFor(emp);
+    }
+
+    function logoutEmp() {
+      loggedInEmpId = null;
+      localStorage.removeItem("portal_emp_id");
+      document.getElementById("portalView").style.display = "none";
+      document.getElementById("logoutBtn").style.display = "none";
+      document.getElementById("loginView").style.display = "block";
+    }
+
+    function showPortalFor(emp) {
+      document.getElementById("loginView").style.display = "none";
+      document.getElementById("portalView").style.display = "block";
+      document.getElementById("logoutBtn").style.display = "inline-block";
+
+      const fullName = `${emp.firstName || ''} ${emp.lastName || ''}`.trim();
+      document.getElementById("empWelcomeName").textContent = fullName;
+      document.getElementById("empRoleBadge").textContent = emp.role + (emp.ersthelfer ? " (+ Ersthelfer)" : "");
+
+      const statusBox = document.getElementById("empCurrentStatus");
+      const today = getTodayIso();
+      const activeSick = sickLeaves.find(sl => sl.empId === emp.id && sl.startDate <= today && sl.endDate >= today);
+
+      if (emp.zone === "absent" || activeSick) {
+        statusBox.className = "status-box status-absent";
+        statusBox.innerHTML = `
+          <div style="font-size:1.05rem;">🛑 Status: Abwesend / Krank gemeldet</div>
+          <div style="font-size:0.83rem; font-weight:normal;">
+            ${activeSick ? `Du bist aktuell bis einschließlich <b>${formatDateDe(activeSick.endDate)}</b> als abwesend/krank eingetragen.` : `Du bist heute im Schichtplan als abwesend (Urlaub / Krank) eingetragen.`}
+          </div>
+        `;
+      } else if (!emp.zone || emp.zone === "pool") {
+        statusBox.className = "status-box status-pool";
+        statusBox.innerHTML = `
+          <div style="font-size:1.05rem;">⏳ Noch keiner Linie fest zugeteilt (Pool)</div>
+          <div style="font-size:0.83rem; font-weight:normal;">Du befindest dich aktuell im verfügbaren Pool und wirst vom Planer eingeteilt.</div>
+        `;
+      } else {
+        const parts = emp.zone.split("_");
+        const shiftId = parts.pop();
+        const lineId = parts.join("_");
+        const lineObj = lines.find(l => l.id === lineId);
+        const lineName = lineObj ? lineObj.name : lineId;
+        const shiftName = shiftsMap[shiftId] || shiftId;
+
+        statusBox.className = "status-box status-assigned";
+        statusBox.innerHTML = `
+          <div style="font-size:0.82rem; text-transform:uppercase; letter-spacing:0.5px;">Heute eingeteilt an:</div>
+          <div style="font-size:1.35rem; font-weight:800;">✅ ${lineName} – ${shiftName}</div>
+          ${lineObj && lineObj.note ? `<div style="font-size:0.8rem; font-weight:normal; margin-top:4px;">📌 Linien-Info: ${lineObj.note}</div>` : ''}
+        `;
+      }
+
+      const prioContainer = document.getElementById("empPrioLines");
+      const secContainer = document.getElementById("empSecLines");
+      prioContainer.innerHTML = "";
+      secContainer.innerHTML = "";
+
+      const mainList = (emp.mainLines || []).map(id => lines.find(l => l.id === id)).filter(Boolean);
+      const secList = (emp.secLines || []).map(id => lines.find(l => l.id === id)).filter(Boolean);
+
+      if (mainList.length === 0) {
+        prioContainer.innerHTML = `<span style="font-size:0.82rem; color:#94a3b8;">Keine Stammlinie hinterlegt</span>`;
+      } else {
+        mainList.forEach(l => {
+          prioContainer.innerHTML += `<span class="line-badge badge-prio">${l.name}</span>`;
+        });
+      }
+
+      if (secList.length === 0) {
+        secContainer.innerHTML = `<span style="font-size:0.82rem; color:#94a3b8;">Keine Sekundärlinie hinterlegt</span>`;
+      } else {
+        secList.forEach(l => {
+          secContainer.innerHTML += `<span class="line-badge badge-sec">${l.name}</span>`;
+        });
+      }
+
+      const myLeaves = sickLeaves.filter(sl => sl.empId === emp.id && sl.endDate >= today);
+      const histContainer = document.getElementById("mySickLeavesHistory");
+      if (myLeaves.length === 0) {
+        histContainer.innerHTML = "";
+      } else {
+        histContainer.innerHTML = `<div style="font-size:0.82rem; font-weight:700; color:#475569; margin-bottom:6px;">Aktive / gemeldete Zeiträume:</div>`;
+        myLeaves.forEach(sl => {
+          histContainer.innerHTML += `
+            <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:6px; padding:8px 10px; font-size:0.8rem; margin-bottom:6px;">
+              <b>📅 ${formatDateDe(sl.startDate)} bis ${formatDateDe(sl.endDate)}</b>
+              <span style="color:#16a34a; font-weight:600; margin-left:6px;">(✓ Im System aktiv)</span>
+              ${sl.reason ? `<div style="color:#64748b; margin-top:2px;">Notiz: ${sl.reason}</div>` : ''}
+            </div>
+          `;
+        });
+      }
+    }
+
+    function submitSickLeave() {
+      if (!loggedInEmpId) return;
+      const emp = employees.find(e => e.id === loggedInEmpId);
+      if (!emp) return;
+
+      const startDate = document.getElementById("sickStartDate").value;
+      const endDate = document.getElementById("sickEndDate").value;
+      const reason = document.getElementById("sickReason").value.trim();
+
+      if (!startDate || !endDate) {
+        alert("Bitte wähle ein Start- und Enddatum aus!");
+        return;
+      }
+      if (endDate < startDate) {
+        alert("Das Enddatum darf nicht vor dem Startdatum liegen!");
+        return;
+      }
+
+      const fullName = `${emp.firstName || ''} ${emp.lastName || ''}`.trim();
+      const nowStr = new Date().toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const today = getTodayIso();
+
+      const newSickLeave = {
+        id: "sl_" + Date.now(),
+        empId: emp.id,
+        empName: fullName,
+        startDate: startDate,
+        endDate: endDate,
+        reason: reason,
+        createdAt: nowStr,
+        readByPlanner: false
+      };
+
+      sickLeaves.push(newSickLeave);
+
+      if (startDate <= today && endDate >= today) {
+        emp.zone = "absent";
+      }
+
+      db.collection("shiftplan").doc("live_board").set({
+        lines: rawDocData.lines || lines,
+        roles: rawDocData.roles || [],
+        employees: employees,
+        teamsConfig: rawDocData.teamsConfig || {},
+        sickLeaves: sickLeaves
+      }).then(() => {
+        document.getElementById("sickReason").value = "";
+        const banner = document.getElementById("sickSuccessBanner");
+        banner.innerHTML = `✅ Deine Krankmeldung vom <b>${formatDateDe(startDate)}</b> bis <b>${formatDateDe(endDate)}</b> wurde erfolgreich an den Planer weitergeleitet und automatisch im Schichtplan eingetragen!`;
+        banner.style.display = "block";
+      });
+    }
+  </script>
+</body>
+</html>
