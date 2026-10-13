@@ -386,13 +386,13 @@
 
           <!-- Prio Linien Auswahl -->
           <div class="form-group" style="margin-top:10px;">
-            <label>Prio-Linien (Fett angezeigt):</label>
+            <label>Prio-Linien:</label>
             <div id="mainLinesCheckboxes" style="display:flex; flex-wrap:wrap; gap:8px; background:#fff; padding:8px; border:1px solid #cbd5e1; border-radius:6px; max-height:100px; overflow-y:auto;"></div>
           </div>
 
           <!-- Sekundär Linien Auswahl -->
           <div class="form-group" style="margin-top:10px;">
-            <label>Sek-Linien (Klein angezeigt):</label>
+            <label>Sek-Linien:</label>
             <div id="secLinesCheckboxes" style="display:flex; flex-wrap:wrap; gap:8px; background:#fff; padding:8px; border:1px solid #cbd5e1; border-radius:6px; max-height:100px; overflow-y:auto;"></div>
           </div>
 
@@ -646,8 +646,6 @@
         const isMainChecked = selectedMain.includes(l.id) ? 'checked' : '';
         const isSecChecked = selectedSec.includes(l.id) ? 'checked' : '';
 
-        // Entfernt das Wort "Linie" beim Anzeigen in den Checkboxen falls gewünscht, 
-        // oder behält nur den Namen (z.B. "37" statt "Linie 37")
         const shortName = l.name.replace(/Linie\s*/i, '');
 
         mainContainer.innerHTML += `
@@ -805,7 +803,6 @@
         let firstAiderHtml = emp.ersthelfer ? '<span class="first-aider-icon" title="Ersthelfer">+</span>' : '';
         const fullName = `${emp.firstName || ''} ${emp.lastName || ''}`.trim();
         
-        // Kompakte Linien-Anzeige ohne "Linie"-Wort-Wust (nur Nummern/Namen gekürzt)
         let linesInfoHtml = "";
         if (emp.mainLines && emp.mainLines.length > 0 || emp.secLines && emp.secLines.length > 0) {
           const mainNames = (emp.mainLines || []).map(id => {
