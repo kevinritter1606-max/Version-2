@@ -334,7 +334,10 @@
       <div id="tabEmployees" class="tab-content active">
         <div style="background:#f8fafc; padding:16px; border-radius:8px; margin-bottom:16px; border:1px solid #e2e8f0;">
           <input type="hidden" id="editEmpId">
-          <div class="form-group"><label>Name</label><input type="text" id="newEmpName" class="form-control" placeholder="Vorname Nachname"></div>
+          <div style="display:flex; gap:12px;">
+            <div class="form-group" style="flex:1;"><label>Vorname</label><input type="text" id="newEmpFirstName" class="form-control" placeholder="Vorname"></div>
+            <div class="form-group" style="flex:1;"><label>Nachname</label><input type="text" id="newEmpLastName" class="form-control" placeholder="Nachname"></div>
+          </div>
           <div style="display:flex; gap:12px;">
             <div class="form-group" style="flex:1;">
               <label>Fokus Team</label>
@@ -508,7 +511,17 @@
         const d = doc.data();
         if (d.lines) lines = d.lines;
         if (d.roles) roles = d.roles;
-        if (d.employees) employees = d.employees;
+        if (d.employees) {
+          // Kompatibilitätsschrift für alte Datensätze (falls firstName/lastName fehlt)
+          employees = d.employees.map(e => {
+            if (!e.firstName && e.name) {
+              const parts = e.name.split(" ");
+              e.firstName = parts[0] || "";
+              e.lastName = parts.slice(1).join(" ") || "";
+            }
+            return e;
+          });
+        }
         if (d.teamsConfig) teamsConfig = d.teamsConfig;
         
         applyTeamStyles();
@@ -683,10 +696,11 @@
         card.setAttribute("data-id", emp.id);
         
         let firstAiderHtml = emp.ersthelfer ? '<span class="first-aider-icon" title="Ersthelfer">+</span>' : '';
+        const fullName = `${emp.firstName || ''} ${emp.lastName || ''}`.trim();
         
         card.innerHTML = `
           <div style="display: flex; flex-direction: column; gap: 2px; overflow: hidden;">
-            <span class="card-name">${emp.name}</span>
+            <span class="card-name">${fullName}</span>
             <span class="card-role">${emp.role}</span>
           </div>
           ${firstAiderHtml}
@@ -817,9 +831,10 @@
       empC.innerHTML = "";
       employees.forEach(e => {
         let firstAiderMark = e.ersthelfer ? ' <span style="color:#dc2626; font-weight:900; font-size:1.1rem; line-height:0.5;">+</span>' : '';
+        const fullName = `${e.firstName || ''} ${e.lastName || ''}`.trim();
         empC.innerHTML += `
           <div class="item-row">
-            <div><b>${e.name}</b> <small>(${e.role})${firstAiderMark}</small></div>
+            <div><b>${fullName}</b> <small>(${e.role})${firstAiderMark}</small></div>
             <div style="display:flex; gap:6px;">
               <button class="btn btn-outline" style="padding:4px 10px; font-size:0.85rem;" onclick="editEmployee('${e.id}')">Bearbeiten</button>
               <button class="btn btn-outline" style="padding:4px 10px; font-size:0.85rem; color:#ef4444;" onclick="deleteEmployee('${e.id}')">Löschen</button>
@@ -900,23 +915,25 @@
 
     function saveEmployee() {
       const idInput = document.getElementById("editEmpId").value;
-      const name = document.getElementById("newEmpName").value.trim();
+      const firstName = document.getElementById("newEmpFirstName").value.trim();
+      const lastName = document.getElementById("newEmpLastName").value.trim();
       const team = document.getElementById("newEmpTeam").value;
       const role = document.getElementById("newEmpRole").value;
       const isFirstAider = document.getElementById("newEmpFirstAider").checked;
       
-      if (!name || !role) return;
+      if (!firstName || !lastName || !role) return;
 
       if (idInput) {
         const emp = employees.find(e => e.id === idInput);
         if (emp) {
-          emp.name = name;
+          emp.firstName = firstName;
+          emp.lastName = lastName;
           emp.team = team;
           emp.role = role;
           emp.ersthelfer = isFirstAider;
         }
       } else {
-        employees.push({ id: "e_" + Date.now(), name, team, role, ersthelfer: isFirstAider, zone: "pool" });
+        employees.push({ id: "e_" + Date.now(), firstName, lastName, team, role, ersthelfer: isFirstAider, zone: "pool" });
       }
 
       resetEmpForm();
@@ -930,7 +947,8 @@
       if (!emp) return;
       
       document.getElementById("editEmpId").value = emp.id;
-      document.getElementById("newEmpName").value = emp.name;
+      document.getElementById("newEmpFirstName").value = emp.firstName || "";
+      document.getElementById("newEmpLastName").value = emp.lastName || "";
       document.getElementById("newEmpTeam").value = emp.team || "team-1";
       document.getElementById("newEmpRole").value = emp.role;
       document.getElementById("newEmpFirstAider").checked = !!emp.ersthelfer;
@@ -941,7 +959,8 @@
 
     function resetEmpForm() {
       document.getElementById("editEmpId").value = "";
-      document.getElementById("newEmpName").value = "";
+      document.getElementById("newEmpFirstName").value = "";
+      document.getElementById("newEmpLastName").value = "";
       document.getElementById("newEmpFirstAider").checked = false;
       document.getElementById("btnSaveEmp").textContent = "Hinzufügen";
       document.getElementById("btnCancelEditEmp").style.display = "none";
