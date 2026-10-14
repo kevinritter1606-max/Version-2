@@ -42,17 +42,17 @@
     .search-wrapper { position: relative; margin-bottom: 8px; }
     .search-input { width: 100%; padding: 6px 26px 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.8rem; background: #f8fafc; }
     .search-clear { display: none; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #64748b; font-weight: bold; font-size: 1rem; }
-    .employee-card { background: #fff; padding: 7px 9px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); display: flex; justify-content: space-between; align-items: center; border-left: 5px solid #94a3b8; user-select: none; gap: 6px; }
+    .employee-card { background: #fff; padding: 6px 8px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); display: flex; flex-direction: column; border-left: 5px solid #94a3b8; user-select: none; gap: 3px; }
     body.planner-active .employee-card { cursor: grab; }
-    .card-name { font-size: 0.82rem; font-weight: 600; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .card-role { font-size: 0.68rem; padding: 2px 4px; background: #f1f5f9; border-radius: 4px; color: #475569; font-weight: 600; align-self: flex-start; }
-    .card-lines-info { display: none; font-size: 0.63rem; color: #64748b; margin-top: 2px; line-height: 1.1; word-break: break-all; }
+    .card-name { font-size: 0.8rem; font-weight: 700; color: #1e293b; line-height: 1.15; word-break: break-word; }
+    .card-role { font-size: 0.68rem; padding: 2px 5px; background: #f1f5f9; border-radius: 4px; color: #475569; font-weight: 600; }
+    .card-lines-info { display: none; font-size: 0.65rem; color: #64748b; margin-top: 1px; line-height: 1.25; word-break: normal; overflow-wrap: break-word; }
     body.planner-active .card-lines-info { display: block; }
-    .card-sick-tag { display: none; font-size: 0.63rem; color: #b91c1c; background: #fee2e2; padding: 1px 5px; border-radius: 4px; font-weight: 700; margin-top: 2px; align-self: flex-start; }
+    .card-sick-tag { display: none; font-size: 0.63rem; color: #b91c1c; background: #fee2e2; padding: 1px 5px; border-radius: 4px; font-weight: 700; margin-top: 1px; align-self: flex-start; }
     body.planner-active .card-sick-tag, body.planner-active .quick-sick-btn { display: inline-block; }
-    .quick-sick-btn { display: none; border: none; background: #f1f5f9; border-radius: 4px; padding: 3px 5px; font-size: 0.75rem; cursor: pointer; }
+    .quick-sick-btn { display: none; border: none; background: #f1f5f9; border-radius: 4px; padding: 2px 4px; font-size: 0.72rem; cursor: pointer; line-height: 1; }
     .quick-sick-btn:hover { background: #fee2e2; }
-    .first-aider-icon { color: #dc2626; font-size: 1.3rem; font-weight: 900; line-height: 0.5; padding-right: 2px; }
+    .first-aider-icon { color: #dc2626; font-size: 1.2rem; font-weight: 900; line-height: 0.5; }
     .board-container { flex: 1; background: #fff; border-radius: 10px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: flex; flex-direction: column; overflow: hidden; }
     .board-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     .board-table th, .board-table td { border: 1px solid #e2e8f0; vertical-align: top; }
@@ -68,7 +68,7 @@
     .line-status-tag { font-size: 0.6rem; padding: 1px 3px; border-radius: 3px; background: #fecdd3; color: #9f1239; font-weight: 700; }
     .line-notes { font-size: 0.65rem; color: #475569; margin-top: 3px; background: #fff; padding: 3px; border-radius: 3px; border: 1px dashed #cbd5e1; white-space: pre-wrap; word-break: break-word; }
     .shift-header { background: #f1f5f9; font-weight: 700; font-size: 0.9rem; width: 92px; text-align: center; padding: 14px 4px; color: #334155; vertical-align: middle; }
-    body.planner-active .shift-header { width: 116px; padding: 10px 5px; }
+    body.planner-active .shift-header { width: 112px; padding: 10px 5px; }
     .shift-team-badge { display: inline-flex; align-items: center; justify-content: center; gap: 4px; margin-top: 5px; padding: 3px 6px; border-radius: 4px; background: #fff; border: 1px solid #cbd5e1; font-size: 0.72rem; font-weight: 700; color: #1e293b; }
     body.planner-active .shift-team-badge { display: none; }
     .shift-controls { display: none; flex-direction: column; gap: 5px; margin-top: 6px; }
@@ -77,7 +77,7 @@
     .shift-team-select { width: 100%; font-size: 0.72rem; font-weight: 700; padding: 4px 2px; border-radius: 4px; border: 1px solid var(--bayer-blue); background: #fff; cursor: pointer; }
     .shift-clear-btn { width: 100%; font-size: 0.68rem; font-weight: 600; padding: 4px; border-radius: 4px; border: 1px solid #cbd5e1; background: #fff; color: #64748b; cursor: pointer; }
     .shift-clear-btn:hover { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
-    .drop-zone { padding: 6px; min-height: 120px; display: flex; flex-direction: column; gap: 6px; background: #fafafa; }
+    .drop-zone { padding: 5px; min-height: 120px; display: flex; flex-direction: column; gap: 5px; background: #fafafa; }
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 100; padding: 12px; }
     .modal { background: #fff; padding: 24px; border-radius: 10px; width: 100%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); max-height: 90vh; overflow-y: auto; }
     .form-group { margin-bottom: 12px; position: relative; }
@@ -607,14 +607,25 @@
           if (poolSearchQuery && !fn.toLowerCase().includes(poolSearchQuery) && !matchesLineIds(emp.mainLines,poolSearchQuery) && !matchesLineIds(emp.secLines,poolSearchQuery)) return;
         }
         let pts = [];
-        if (emp.lastLineId) { const l = lines.find(x => x.id === emp.lastLineId); if (l) pts.push(`<span style="color:#0284c7; font-weight:700;">📌 Platz: ${l.name.replace(/Linie\s*/i,'')}</span>`); }
+        if (emp.lastLineId) { const l = lines.find(x => x.id === emp.lastLineId); if (l) pts.push(`<span style="color:#0284c7; font-weight:700; white-space:nowrap;">📌 ${l.name.replace(/Linie\s*/i,'')}</span>`); }
         if (emp.mainLines?.length) { const m = emp.mainLines.map(id => lines.find(x => x.id===id)?.name.replace(/Linie\s*/i,'')).filter(Boolean).join(", "); if (m) pts.push(`<b>Prio:</b> ${m}`); }
         if (emp.secLines?.length) { const s = emp.secLines.map(id => lines.find(x => x.id===id)?.name.replace(/Linie\s*/i,'')).filter(Boolean).join(", "); if (s) pts.push(`<span style="color:#94a3b8;">Sek:</span> ${s}`); }
         const sl = sickLeaves.find(s => s.empId === emp.id && s.startDate <= today && s.endDate >= today);
         const card = document.createElement("div");
         card.className = `employee-card ${emp.team}`; card.setAttribute("data-id", emp.id);
-        card.innerHTML = `<div style="display:flex; flex-direction:column; gap:1px; overflow:hidden; flex:1;"><span class="card-name">${fn}</span><span class="card-role">${emp.role}</span>${pts.length?`<div class="card-lines-info">${pts.join(" | ")}</div>`:''}${sl?`<span class="card-sick-tag">🏥 Bis ${formatDateDe(sl.endDate)}</span>`:''}</div><div style="display:flex; align-items:center; gap:4px;"><button class="quick-sick-btn" onclick="openInboxModal('${emp.id}')" title="Krank / Abwesend eintragen">🏥</button>${emp.ersthelfer?'<span class="first-aider-icon">+</span>':''}</div>`;
-        if ($(emp.zone)) $(emp.zone).appendChild(card);
+        card.innerHTML = `
+          <div class="card-name">${fn}</div>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:4px;">
+            <span class="card-role">${emp.role}</span>
+            <div style="display:flex; align-items:center; gap:3px;">
+              <button class="quick-sick-btn" onclick="openInboxModal('${emp.id}')" title="Krank / Abwesend eintragen">🏥</button>
+              ${emp.ersthelfer?'<span class="first-aider-icon" title="Ersthelfer">+</span>':''}
+            </div>
+          </div>
+          ${pts.length?`<div class="card-lines-info">${pts.join(" | ")}</div>`:''}
+          ${sl?`<span class="card-sick-tag">🏥 Bis ${formatDateDe(sl.endDate)}</span>`:''}
+        `;
+        if ($(emp.zone))$(emp.zone).appendChild(card);
       });
       if ($("pool")) $("poolCount").textContent = `(${$("pool").children.length})`;
     }
@@ -630,7 +641,7 @@
       })));
     }
 
-    function openLineEditModal(id) { const l = lines.find(x => x.id === id); if (!l) return; $("editLineId").value = l.id; $("lineEditTitle").textContent = `${l.name} bearbeiten`; $("editLinePrio").value = l.prio||""; $("editLineTag").value = l.tag||""; $("editLineNote").value = l.note||""; $("lineEditModal").style.display = "flex"; }
+    function openLineEditModal(id) { const l = lines.find(x => x.id === id); if (!l) return; $("editLineId").value = l.id; $("lineEditTitle").textContent = `${l.name} bearbeiten`; $("editLinePrio").value = l.prio\vert{}\vert{}""; $("editLineTag").value = l.tag||""; $("editLineNote").value = l.note\vert{}\vert{}""; $("lineEditModal").style.display = "flex"; }
     function saveLineDetails() { const l = lines.find(x => x.id === $("editLineId").value); if (l) { l.prio = $("editLinePrio").value; l.tag = $("editLineTag").value.trim(); l.note = $("editLineNote").value.trim(); saveToFirebase(); initBoard(); closeModal('lineEditModal'); } }
     function switchTab(t, idx) { document.querySelectorAll(".tab-btn").forEach((b,i) => b.classList.toggle("active", i===idx)); document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active")); $(t).classList.add("active"); if (t==='tabBackups') renderBackups(); }
 
