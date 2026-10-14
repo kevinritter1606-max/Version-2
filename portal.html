@@ -67,7 +67,6 @@
     .form-control:focus { outline: none; border-color: var(--bayer-blue); background: #fff; }
     textarea.form-control { resize: vertical; min-height: 85px; }
 
-    /* Suchvorschläge beim Tippen */
     .suggestions-box {
       display: none;
       position: absolute;
@@ -306,6 +305,14 @@
       return `${parts[2]}.${parts[1]}.${parts[0]}`;
     }
 
+    function extractLineIdFromZone(zone) {
+      if (!zone || zone === "pool" || zone === "absent") return null;
+      const parts = zone.split("_");
+      if (parts.length < 2) return null;
+      parts.pop();
+      return parts.join("_");
+    }
+
     window.addEventListener("DOMContentLoaded", () => {
       const today = getTodayIso();
       document.getElementById("sickStartDate").value = today;
@@ -429,7 +436,6 @@
       document.getElementById("loginView").style.display = "none";
       document.getElementById("logoutBtn").style.display = "inline-block";
 
-      // Prüfen, ob Erst-Anmeldung oder Passwort vom Planer zurückgesetzt wurde
       if (emp.mustChangePw || emp.password === "1234") {
         document.getElementById("portalView").style.display = "none";
         document.getElementById("changePasswordView").style.display = "block";
@@ -512,10 +518,15 @@
           </div>
         `;
       } else if (!emp.zone || emp.zone === "pool") {
+        let lastLineHint = "";
+        if (emp.lastLineId) {
+          const lastL = lines.find(l => l.id === emp.lastLineId);
+          if (lastL) lastLineHint = `<div style="font-size:0.8rem; margin-top:3px;">📌 Deine zuletzt gespeicherte Linie: <b>${lastL.name}</b></div>`;
+        }
         statusBox.className = "status-box status-pool";
         statusBox.innerHTML = `
-          <div style="font-size:1.05rem;">⏳ Noch keiner Linie fest zugeteilt (Pool)</div>
-          <div style="font-size:0.83rem; font-weight:normal;">Du befindest dich aktuell im verfügbaren Pool und wirst vom Planer eingeteilt.</div>
+          <div style="font-size:1.05rem;">🏖️ Status: Schichtfrei / Pool</div>
+          <div style="font-size:0.83rem; font-weight:normal;">Du hast heute Schichtfrei (oder wartest im Pool auf Einteilung).${lastLineHint}</div>
         `;
       } else {
         const parts = emp.zone.split("_");
@@ -610,7 +621,9 @@
 
       sickLeaves.push(newSickLeave);
 
-      if (startDate <= today && endDate >= today) {
+      if (startDate <= today && endDate >= today && emp.zone !== "absent") {
+        const currentLine = extractLineIdFromZone(emp.zone);
+        if (currentLine) emp.lastLineId = currentLine;
         emp.zone = "absent";
       }
 
