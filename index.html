@@ -625,7 +625,7 @@
           ${pts.length?`<div class="card-lines-info">${pts.join(" | ")}</div>`:''}
           ${sl?`<span class="card-sick-tag">🏥 Bis ${formatDateDe(sl.endDate)}</span>`:''}
         `;
-        if ($(emp.zone))$(emp.zone).appendChild(card);
+        if ($(emp.zone)) $(emp.zone).appendChild(card);
       });
       if ($("pool")) $("poolCount").textContent = `(${$("pool").children.length})`;
     }
@@ -641,7 +641,7 @@
       })));
     }
 
-    function openLineEditModal(id) { const l = lines.find(x => x.id === id); if (!l) return; $("editLineId").value = l.id; $("lineEditTitle").textContent = `${l.name} bearbeiten`; $("editLinePrio").value = l.prio\vert{}\vert{}""; $("editLineTag").value = l.tag||""; $("editLineNote").value = l.note\vert{}\vert{}""; $("lineEditModal").style.display = "flex"; }
+    function openLineEditModal(id) { const l = lines.find(x => x.id === id); if (!l) return; $("editLineId").value = l.id; $("lineEditTitle").textContent = `${l.name} bearbeiten`; $("editLinePrio").value = l.prio||""; $("editLineTag").value = l.tag||""; $("editLineNote").value = l.note||""; $("lineEditModal").style.display = "flex"; }
     function saveLineDetails() { const l = lines.find(x => x.id === $("editLineId").value); if (l) { l.prio = $("editLinePrio").value; l.tag = $("editLineTag").value.trim(); l.note = $("editLineNote").value.trim(); saveToFirebase(); initBoard(); closeModal('lineEditModal'); } }
     function switchTab(t, idx) { document.querySelectorAll(".tab-btn").forEach((b,i) => b.classList.toggle("active", i===idx)); document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active")); $(t).classList.add("active"); if (t==='tabBackups') renderBackups(); }
 
