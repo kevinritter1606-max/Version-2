@@ -5,36 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Schicht- und Linienplanung</title>
 
-  <!-- SortableJS für Drag & Drop -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-
-  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
   <style>
-    :root {
-      --bayer-blue: #0091df;
-      --bg-gray: #f4f6f9;
-    }
-
+    :root { --bayer-blue: #0091df; --bg-gray: #f4f6f9; }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
     body { background-color: var(--bg-gray); min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
 
     .brand-gradient { height: 6px; background: linear-gradient(90deg, #0091df 0%, #00bcff 50%, #89d329 100%); width: 100%; flex-shrink: 0; }
 
-    header {
-      background: #ffffff;
-      padding: 10px 24px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-      position: sticky;
-      top: 0;
-      z-index: 50;
-    }
-
+    header { background: #ffffff; padding: 10px 24px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 6px rgba(0,0,0,0.06); position: sticky; top: 0; z-index: 50; }
     .header-left { display: flex; align-items: center; gap: 16px; }
     .bayer-logo-btn { width: 64px; height: 64px; cursor: pointer; transition: 0.2s; }
     .bayer-logo-btn:hover { transform: scale(1.05); }
@@ -42,42 +24,17 @@
 
     .header-title h1 { font-size: 1.45rem; font-weight: 700; color: var(--bayer-blue); margin: 0; }
 
-    .status-badge {
-      display: none; 
-      font-size: 0.75rem;
-      padding: 3px 8px;
-      border-radius: 999px;
-      font-weight: 600;
-      background: #dcfce7; 
-      color: #166534;
-      margin-top: 2px;
-    }
+    .status-badge { display: none; font-size: 0.75rem; padding: 3px 8px; border-radius: 999px; font-weight: 600; background: #dcfce7; color: #166534; margin-top: 2px; }
     body.planner-active .status-badge { display: inline-block; }
 
     .header-actions { display: flex; gap: 8px; align-items: center; }
-
     .btn { padding: 8px 14px; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; position: relative; }
     .btn-primary { background: var(--bayer-blue); color: #fff; }
     .btn-primary:hover { background: #0077b6; }
     .btn-outline { border-color: #cbd5e1; background: #fff; color: #475569; }
     .btn-outline:hover { background: #f8fafc; }
 
-    .inbox-badge {
-      position: absolute;
-      top: -6px;
-      right: -6px;
-      background: #dc2626;
-      color: #fff;
-      font-size: 0.72rem;
-      font-weight: 800;
-      min-width: 20px;
-      height: 20px;
-      padding: 0 5px;
-      border-radius: 999px;
-      display: none;
-      align-items: center;
-      justify-content: center;
-    }
+    .inbox-badge { position: absolute; top: -6px; right: -6px; background: #dc2626; color: #fff; font-size: 0.72rem; font-weight: 800; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; display: none; align-items: center; justify-content: center; }
 
     main { padding: 16px; display: flex; gap: 16px; flex: 1; width: 100%; }
 
@@ -98,77 +55,25 @@
     .search-input { width: 100%; padding: 6px 26px 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.8rem; background: #f8fafc; }
     .search-clear { display: none; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #64748b; font-weight: bold; font-size: 1rem; }
 
-    /* Mitarbeiter Kärtchen optimiert */
-    .employee-card {
-      background: #fff;
-      padding: 6px 8px;
-      border-radius: 6px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
-      display: flex;
-      flex-direction: column;
-      border-left: 5px solid #94a3b8;
-      user-select: none;
-      gap: 3px;
-    }
+    /* Mitarbeiter Kärtchen */
+    .employee-card { background: #fff; padding: 6px 8px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); display: flex; flex-direction: column; border-left: 5px solid #94a3b8; user-select: none; gap: 3px; }
     body.planner-active .employee-card { cursor: grab; }
 
-    .card-name { 
-      font-size: 0.8rem; 
-      font-weight: 700; 
-      color: #1e293b; 
-      line-height: 1.15; 
-      word-break: break-word; 
-    }
+    .card-name { font-size: 0.8rem; font-weight: 700; color: #1e293b; line-height: 1.15; word-break: break-word; }
+    .card-role { font-size: 0.68rem; padding: 2px 5px; background: #f1f5f9; border-radius: 4px; color: #475569; font-weight: 600; }
     
-    .card-role { 
-      font-size: 0.68rem; 
-      padding: 2px 5px; 
-      background: #f1f5f9; 
-      border-radius: 4px; 
-      color: #475569; 
-      font-weight: 600; 
-    }
-    
-    .card-lines-info {
-      display: none;
-      font-size: 0.65rem;
-      color: #64748b;
-      margin-top: 1px;
-      line-height: 1.25;
-      word-break: normal;
-      overflow-wrap: break-word;
-    }
+    .card-lines-info { display: none; font-size: 0.65rem; color: #64748b; margin-top: 1px; line-height: 1.25; word-break: normal; overflow-wrap: break-word; }
     body.planner-active .card-lines-info { display: block; }
 
-    .card-sick-tag {
-      display: none;
-      font-size: 0.63rem;
-      color: #b91c1c;
-      background: #fee2e2;
-      padding: 1px 5px;
-      border-radius: 4px;
-      font-weight: 700;
-      margin-top: 1px;
-      align-self: flex-start;
-    }
+    .card-sick-tag { display: none; font-size: 0.63rem; color: #b91c1c; background: #fee2e2; padding: 1px 5px; border-radius: 4px; font-weight: 700; margin-top: 1px; align-self: flex-start; }
     body.planner-active .card-sick-tag { display: inline-block; }
 
-    .quick-sick-btn {
-      display: none;
-      border: none;
-      background: #f1f5f9;
-      border-radius: 4px;
-      padding: 2px 4px;
-      font-size: 0.72rem;
-      cursor: pointer;
-      line-height: 1;
-    }
+    .quick-sick-btn { display: none; border: none; background: #f1f5f9; border-radius: 4px; padding: 2px 4px; font-size: 0.72rem; cursor: pointer; line-height: 1; }
     .quick-sick-btn:hover { background: #fee2e2; }
     body.planner-active .quick-sick-btn { display: inline-block; }
 
     .first-aider-icon { color: #dc2626; font-size: 1.2rem; font-weight: 900; line-height: 0.5; }
 
-    /* Board */
     .board-container { flex: 1; background: #fff; border-radius: 10px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: flex; flex-direction: column; overflow: hidden; }
     .board-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     .board-table th, .board-table td { border: 1px solid #e2e8f0; vertical-align: top; }
@@ -185,24 +90,10 @@
     .line-status-tag { font-size: 0.6rem; padding: 1px 3px; border-radius: 3px; background: #fecdd3; color: #9f1239; font-weight: 700; }
     .line-notes { font-size: 0.65rem; color: #475569; margin-top: 3px; background: #ffffff; padding: 3px; border-radius: 3px; border: 1px dashed #cbd5e1; white-space: pre-wrap; word-break: break-word; }
 
-    /* Schicht Header */
     .shift-header { background: #f1f5f9; font-weight: 700; font-size: 0.9rem; width: 92px; text-align: center; padding: 14px 4px; color: #334155; vertical-align: middle; }
     body.planner-active .shift-header { width: 116px; padding: 10px 5px; }
 
-    .shift-team-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 4px;
-      margin-top: 5px;
-      padding: 3px 6px;
-      border-radius: 4px;
-      background: #ffffff;
-      border: 1px solid #cbd5e1;
-      font-size: 0.72rem;
-      font-weight: 700;
-      color: #1e293b;
-    }
+    .shift-team-badge { display: inline-flex; align-items: center; justify-content: center; gap: 4px; margin-top: 5px; padding: 3px 6px; border-radius: 4px; background: #ffffff; border: 1px solid #cbd5e1; font-size: 0.72rem; font-weight: 700; color: #1e293b; }
     body.planner-active .shift-team-badge { display: none; }
 
     .shift-controls { display: none; flex-direction: column; gap: 5px; margin-top: 6px; }
@@ -215,7 +106,6 @@
 
     .drop-zone { padding: 5px; min-height: 120px; display: flex; flex-direction: column; gap: 5px; background: #fafafa; }
 
-    /* Modals */
     .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 100; padding: 12px; }
     .modal { background: #fff; padding: 24px; border-radius: 10px; width: 100%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); max-height: 90vh; overflow-y: auto; }
     .form-group { margin-bottom: 12px; position: relative; }
@@ -224,7 +114,6 @@
     textarea.form-control { resize: vertical; min-height: 70px; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 
-    /* Suchvorschläge Postfach */
     .suggestions-box { display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 8px 20px rgba(0,0,0,0.12); max-height: 160px; overflow-y: auto; z-index: 60; margin-top: 2px; }
     .suggestion-item { padding: 8px 10px; font-size: 0.88rem; cursor: pointer; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
     .suggestion-item:hover { background: #f0f9ff; color: var(--bayer-blue); }
@@ -258,10 +147,7 @@
       </div>
     </div>
     <div class="header-actions">
-      <button class="btn btn-outline admin-element" onclick="openInboxModal()">
-        📬 Postfach & Krank
-        <span id="inboxBadge" class="inbox-badge">0</span>
-      </button>
+      <button class="btn btn-outline admin-element" onclick="openInboxModal()">📬 Postfach & Krank <span id="inboxBadge" class="inbox-badge">0</span></button>
       <button class="btn btn-outline admin-element" onclick="openSettingsModal()">⚙️ Einstellungen</button>
       <button class="btn btn-outline admin-element" onclick="logoutPlanner()">Abmelden</button>
     </div>
@@ -404,9 +290,12 @@
             <div class="form-group" style="flex:1;"><label>Fokus Team</label><select id="newEmpTeam" class="form-control"></select></div>
             <div class="form-group" style="flex:1;"><label>Rolle</label><select id="newEmpRole" class="form-control"></select></div>
           </div>
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
-            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-              <input type="checkbox" id="newEmpFirstAider"> Ist Ersthelfer <span style="color:#dc2626; font-weight:900;">+</span>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px; flex-wrap:wrap; gap:8px;">
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+              <input type="checkbox" id="newEmpFirstAider"> Ersthelfer <span style="color:#dc2626; font-weight:900;">+</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;" title="Mitarbeiter wird vom Team-Rotieren ausgeschlossen">
+              <input type="checkbox" id="newEmpNoRotation"> ⚓ Fix (Rotiert nicht)
             </label>
             <span style="font-size:0.75rem; color:#64748b;">🔑 Start-PIN: <b>1234</b></span>
           </div>
@@ -561,6 +450,16 @@
       initBoard();
     }
 
+    // Funktion um den Pin zu löschen
+    window.deletePin = function(id) {
+      const emp = employees.find(e => e.id === id);
+      if (emp) {
+        delete emp.lastLineId;
+        saveToFirebase();
+        renderEmployees();
+      }
+    };
+
     db.collection("shiftplan").doc("live_board").onSnapshot((doc) => {
       if (doc.exists) {
         const d = doc.data();
@@ -581,6 +480,7 @@
             if (!e.secLines) e.secLines = [];
             if (!e.password) e.password = "1234";
             if (e.mustChangePw === undefined) e.mustChangePw = (e.password === "1234");
+            if (e.noRotation === undefined) e.noRotation = false; // Fix-Status absichern
             
             if (e.zone && e.zone.endsWith("_frei")) {
               const lId = extractLineIdFromZone(e.zone);
@@ -658,6 +558,7 @@
       const today = getTodayIso();
 
       employees.forEach(emp => {
+        if (emp.noRotation) return; // Fixierte MA ignorieren
         const cLine = extractLineIdFromZone(emp.zone);
         const cShift = extractShiftIdFromZone(emp.zone);
         if (cLine && (!emp.lastLineId || (cShift && shiftRotation[cShift] === emp.team))) {
@@ -673,6 +574,8 @@
       };
 
       employees.forEach(emp => {
+        if (emp.noRotation) return; // Fixierte MA werden nicht bewegt
+        
         const isCurrentlySick = sickLeaves.some(sl => sl.empId === emp.id && sl.startDate <= today && sl.endDate >= today);
         if (emp.zone === "absent" || isCurrentlySick) return;
 
@@ -710,6 +613,8 @@
       const today = getTodayIso();
 
       employees.forEach(emp => {
+        if (emp.noRotation) return; // Fixierte MA werden nicht bewegt
+
         const isCurrentlySick = sickLeaves.some(sl => sl.empId === emp.id && sl.startDate <= today && sl.endDate >= today);
         if (emp.zone === "absent" || isCurrentlySick) return;
 
@@ -787,9 +692,9 @@
           const hasOtherActive = sickLeaves.some(sl => sl.id !== exp.id && sl.empId === exp.empId && sl.startDate <= today && sl.endDate >= today);
           if (emp && emp.zone === "absent" && !hasOtherActive) {
             const lineId = getPredeterminedLineForEmp(emp);
-            if (emp.team === shiftRotation.frueh && lineId) emp.zone = `${lineId}_frueh`;
-            else if (emp.team === shiftRotation.spaet && lineId) emp.zone = `${lineId}_spaet`;
-            else if (emp.team === shiftRotation.nacht && lineId) emp.zone = `${lineId}_nacht`;
+            if (emp.team === shiftRotation.frueh && lineId && !emp.noRotation) emp.zone = `${lineId}_frueh`;
+            else if (emp.team === shiftRotation.spaet && lineId && !emp.noRotation) emp.zone = `${lineId}_spaet`;
+            else if (emp.team === shiftRotation.nacht && lineId && !emp.noRotation) emp.zone = `${lineId}_nacht`;
             else emp.zone = "pool";
           }
         });
@@ -1038,9 +943,9 @@
         const emp = employees.find(e => e.id === sl.empId);
         if (emp && emp.zone === "absent") {
           const lineId = getPredeterminedLineForEmp(emp);
-          if (emp.team === shiftRotation.frueh && lineId) emp.zone = `${lineId}_frueh`;
-          else if (emp.team === shiftRotation.spaet && lineId) emp.zone = `${lineId}_spaet`;
-          else if (emp.team === shiftRotation.nacht && lineId) emp.zone = `${lineId}_nacht`;
+          if (emp.team === shiftRotation.frueh && lineId && !emp.noRotation) emp.zone = `${lineId}_frueh`;
+          else if (emp.team === shiftRotation.spaet && lineId && !emp.noRotation) emp.zone = `${lineId}_spaet`;
+          else if (emp.team === shiftRotation.nacht && lineId && !emp.noRotation) emp.zone = `${lineId}_nacht`;
           else emp.zone = "pool";
         }
       }
@@ -1325,12 +1230,13 @@
         card.setAttribute("data-id", emp.id);
         
         let firstAiderHtml = emp.ersthelfer ? '<span class="first-aider-icon" title="Ersthelfer">+</span>' : '';
-        
+        let fixBadgeHtml = emp.noRotation ? '<span class="card-role" style="background:#fef08a; color:#854d0e;" title="Fixiert: Rotiert nicht mit dem Team">⚓ Fix</span>' : '';
+
         let parts = [];
         if (emp.lastLineId) {
           const lastL = lines.find(x => x.id === emp.lastLineId);
           if (lastL) {
-            parts.push(`<span style="color:#0284c7; font-weight:700; white-space:nowrap;">📌 ${lastL.name.replace(/Linie\s*/i, '')}</span>`);
+            parts.push(`<span style="color:#0284c7; font-weight:700; white-space:nowrap; display:flex; align-items:center; gap:4px;">📌 ${lastL.name.replace(/Linie\s*/i, '')} <span onclick="event.stopPropagation(); deletePin('${emp.id}')" style="cursor:pointer; color:#ef4444; font-size:0.75rem; padding:0 3px;" title="Pin löschen">✖</span></span>`);
           }
         }
         if (emp.mainLines && emp.mainLines.length > 0) {
@@ -1356,7 +1262,10 @@
         card.innerHTML = `
           <div class="card-name">${fullName}</div>
           <div style="display:flex; justify-content:space-between; align-items:center; gap:4px;">
-            <span class="card-role">${emp.role}</span>
+            <div style="display:flex; gap:4px; align-items:center;">
+              <span class="card-role">${emp.role}</span>
+              ${fixBadgeHtml}
+            </div>
             <div style="display:flex; align-items:center; gap:3px;">
               <button class="quick-sick-btn" onclick="openInboxModal('${emp.id}')" title="Krank / Abwesend eintragen">🏥</button>
               ${firstAiderHtml}
@@ -1542,6 +1451,7 @@
       empC.innerHTML = "";
       employees.forEach(e => {
         let firstAiderMark = e.ersthelfer ? ' <span style="color:#dc2626; font-weight:900; font-size:1.1rem; line-height:0.5;">+</span>' : '';
+        let fixBadgeHtml = e.noRotation ? ' <span style="font-size:0.65rem; background:#fef08a; color:#854d0e; padding:1px 4px; border-radius:3px; font-weight:700;">⚓ Fix</span>' : '';
         const fullName = `${e.firstName || ''} ${e.lastName || ''}`.trim();
         
         const isDefaultPw = (e.mustChangePw || !e.password || e.password === "1234");
@@ -1552,7 +1462,7 @@
         empC.innerHTML += `
           <div class="item-row">
             <div style="flex:1; overflow:hidden;">
-              <b>${fullName}</b> <small>(${e.role})${firstAiderMark}</small>
+              <b>${fullName}</b> <small>(${e.role})${firstAiderMark}${fixBadgeHtml}</small>
               <div style="margin-top:2px;">${pwStatusHtml}</div>
             </div>
             <div style="display:flex; gap:5px; flex-wrap:wrap; justify-content:flex-end;">
@@ -1674,6 +1584,7 @@
       const team = document.getElementById("newEmpTeam").value;
       const role = document.getElementById("newEmpRole").value;
       const isFirstAider = document.getElementById("newEmpFirstAider").checked;
+      const isNoRotation = document.getElementById("newEmpNoRotation").checked;
       
       const mainLines = [];
       document.querySelectorAll(".main-line-chk:checked").forEach(chk => mainLines.push(chk.value));
@@ -1691,6 +1602,7 @@
           emp.team = team;
           emp.role = role;
           emp.ersthelfer = isFirstAider;
+          emp.noRotation = isNoRotation;
           emp.mainLines = mainLines;
           emp.secLines = secLines;
           if (!emp.lastLineId && mainLines.length > 0) {
@@ -1707,6 +1619,7 @@
           password: "1234",
           mustChangePw: true,
           ersthelfer: isFirstAider, 
+          noRotation: isNoRotation,
           mainLines: mainLines, 
           secLines: secLines, 
           lastLineId: mainLines.length > 0 ? mainLines[0] : null,
@@ -1730,6 +1643,7 @@
       document.getElementById("newEmpTeam").value = emp.team || Object.keys(teamsConfig).sort()[0];
       document.getElementById("newEmpRole").value = emp.role;
       document.getElementById("newEmpFirstAider").checked = !!emp.ersthelfer;
+      document.getElementById("newEmpNoRotation").checked = !!emp.noRotation;
 
       renderLineCheckboxes(emp.mainLines || [], emp.secLines || []);
       
@@ -1742,6 +1656,7 @@
       document.getElementById("newEmpFirstName").value = "";
       document.getElementById("newEmpLastName").value = "";
       document.getElementById("newEmpFirstAider").checked = false;
+      document.getElementById("newEmpNoRotation").checked = false;
       renderLineCheckboxes([], []);
       document.getElementById("btnSaveEmp").textContent = "Hinzufügen";
       document.getElementById("btnCancelEditEmp").style.display = "none";
