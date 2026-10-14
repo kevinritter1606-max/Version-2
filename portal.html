@@ -105,7 +105,6 @@
         </div>
         <div class="form-group"><label>Begleitschreiben / Begründung</label><textarea id="sickReason" class="form-control" placeholder="z.B. Grippe, Arzttermin, AU folgt..."></textarea></div>
         
-        <!-- NEU: Absende-Button mit ID für die Lade-Animation -->
         <button id="sickSubmitBtn" class="btn btn-primary" style="background:#dc2626; border-color:#dc2626;" onclick="submitSickLeave()">Krankmeldung jetzt absenden</button>
         
         <div id="mySickLeavesHistory" style="margin-top:16px;"></div>
@@ -195,9 +194,8 @@
         sb.className = "status-box status-absent";
         sb.innerHTML = `<div style="font-size:1.05rem;">🛑 Status: Abwesend / Krank gemeldet</div><div style="font-size:0.83rem; font-weight:normal;">${actSick ? `Bis einschließlich <b>${formatDateDe(actSick.endDate)}</b> als abwesend eingetragen.` : `Heute als abwesend eingetragen.`}</div>`;
       } else if (!emp.zone || emp.zone === "pool") {
-        const lObj = emp.lastLineId ? lines.find(l => l.id === emp.lastLineId) : null;
         sb.className = "status-box status-pool";
-        sb.innerHTML = `<div style="font-size:1.05rem;">🏖️ Status: Schichtfrei / Pool</div><div style="font-size:0.83rem; font-weight:normal;">Du hast heute Schichtfrei (oder wartest auf Einteilung).${lObj ? `<div style="margin-top:3px;">📌 Dein fester Platz: <b>${lObj.name}</b></div>` : ''}</div>`;
+        sb.innerHTML = `<div style="font-size:1.05rem;">🏖️ Status: Schichtfrei / Pool</div><div style="font-size:0.83rem; font-weight:normal;">Du hast heute Schichtfrei (oder wartest auf Einteilung).</div>`;
       } else {
         const shId = emp.zone.split("_").pop(), lObj = lines.find(l => l.id === extractLineId(emp.zone));
         sb.className = "status-box status-assigned";
@@ -210,7 +208,6 @@
       $("mySickLeavesHistory").innerHTML = !myL.length ? "" : `<div style="font-size:0.82rem; font-weight:700; margin-bottom:6px;">Aktive / gemeldete Zeiträume:</div>` + myL.map(s => `<div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:6px; padding:8px 10px; font-size:0.8rem; margin-bottom:6px;"><b>📅 ${formatDateDe(s.startDate)} bis ${formatDateDe(s.endDate)}</b> <span style="color:#16a34a; font-weight:600;">(✓ Aktiv)</span>${s.reason ? `<div style="color:#64748b; margin-top:2px;">Notiz: ${s.reason}</div>` : ''}</div>`).join("");
     }
 
-    // NEUE, ABGESICHERTE KRANKMELDEN-FUNKTION
     function submitSickLeave() {
       const emp = employees.find(e => e.id === loggedInEmpId); if (!emp) return;
       const sD = $("sickStartDate").value, eD = $("sickEndDate").value, r = $("sickReason").value.trim(), today = getTodayIso();
@@ -226,24 +223,20 @@
         return;
       }
 
-      // 1. OFFLINE-CHECK
       if (!navigator.onLine) {
         errBanner.textContent = "⚠️ Keine Internetverbindung! Bitte überprüfe dein Netz und versuche es gleich nochmal.";
         errBanner.style.display = "block";
         return;
       }
 
-      // 2. BUTTON SPERREN & ANIMIEREN
       const btn = $("sickSubmitBtn");
       const originalText = btn.textContent;
       btn.textContent = "Wird sicher an den Planer gesendet... ⏳";
       btn.disabled = true;
       btn.style.opacity = "0.7";
 
-      // 3. DATEN VORBEREITEN
       const newSickLeave = { id: "sl_"+Date.now(), empId: emp.id, empName: fullName(emp), startDate: sD, endDate: eD, reason: r, createdAt: new Date().toLocaleString('de-DE'), readByPlanner: false };
       
-      // Temporäre Kopien für den sicheren Upload
       const updatedSickLeaves = [...sickLeaves, newSickLeave];
       const updatedEmployees = employees.map(e => {
         if (e.id === emp.id && sD <= today && eD >= today && e.zone !== "absent") {
@@ -253,25 +246,21 @@
         return e;
       });
 
-      // 4. ABSENDEN MIT ERFOLGSKONTROLLE
       db.collection("shiftplan").doc("live_board").set({ 
         ...rawDocData, 
         employees: updatedEmployees, 
         sickLeaves: updatedSickLeaves 
       })
       .then(() => {
-        // GEHT NUR HIER REIN, WENN DAS INTERNET ZU 100% BESTÄTIGT HAT
         $("sickReason").value = ""; 
         succBanner.innerHTML = `✅ Deine Krankmeldung vom <b>${formatDateDe(sD)}</b> bis <b>${formatDateDe(eD)}</b> wurde erfolgreich übermittelt!`; 
         succBanner.style.display = "block";
       })
       .catch((error) => {
-        // FALLS DER SERVER EINEN FEHLER MELDET
         errBanner.textContent = "❌ Fehler beim Senden an den Server. Bitte lade die Seite neu und versuche es erneut.";
         errBanner.style.display = "block";
       })
       .finally(() => {
-        // EGAL OB ERFOLG ODER FEHLER: BUTTON WIEDER FREIGEBEN
         btn.textContent = originalText;
         btn.disabled = false;
         btn.style.opacity = "1";
