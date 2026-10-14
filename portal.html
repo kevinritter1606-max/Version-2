@@ -241,4 +241,312 @@
     db.collection("shiftplan").doc("live_board").onSnapshot((doc) => {
       if (doc.exists) {
         rawDocData = doc.data();
-        lines = rawDocData
+        lines = rawDocData.lines || [];
+        sickLeaves = rawDocData.sickLeaves || [];
+        employees = (rawDocData.employees || []).map(e => {
+          if (!e.firstName && e.name) {
+            const parts = e.name.split(" ");
+            e.firstName = parts[0] || "";
+            e.lastName = parts.slice(1).join(" ") || "";
+          }
+          if (!e.password) e.password = "1234";
+          if (e.mustChangePw === undefined) {
+            e.mustChangePw = (e.password === "1234");
+          }
+          return e;
+        });
+
+        if (loggedInEmpId) {
+          const emp = employees.find(e => e.id === loggedInEmpId);
+          if (emp) {
+            routeAuthenticatedEmp(emp);
+          } else {
+            logoutEmp();
+          }
+        }
+      }
+    });
+
+    function onNameInput(val) {
+      selectedLoginEmpId = null;
+      const box = document.getElementById("loginSuggestions");
+      const query = val.trim().toLowerCase();
+
+      if (query.length < 1) {
+        box.style.display = "none";
+        return;
+      }
+
+      const matches = employees.filter(e => {
+        const full = `${e.firstName || ''} ${e.lastName || ''}`.trim().toLowerCase();
+        const rev = `${e.lastName || ''} ${e.firstName || ''}`.trim().toLowerCase();
+        return full.includes(query) || rev.includes(query);
+      });
+
+      if (matches.length === 0) {
+        box.style.display = "none";
+        return;
+      }
+
+      box.innerHTML = "";
+      matches.forEach(e => {
+        const fullName = `${e.firstName || ''} ${e.lastName || ''}`.trim();
+        const item = document.createElement("div");
+        item.className = "suggestion-item";
+        item.innerHTML = `<span><b>${fullName}</b></span><small style="color:#64748b;">${e.role}</small>`;
+        item.onclick = () => selectLoginEmp(e.id, fullName);
+        box.appendChild(item);
+      });
+      box.style.display = "block";
+    }
+
+    function selectLoginEmp(id, fullName) {
+      selectedLoginEmpId = id;
+      document.getElementById("loginEmpInput").value = fullName;
+      document.getElementById("loginSuggestions").style.display = "none";
+      document.getElementById("loginPassword").focus();
+    }
+
+    function loginEmp() {
+      const typedName = document.getElementById("loginEmpInput").value.trim().toLowerCase();
+      const pass = document.getElementById("loginPassword").value.trim();
+      const errBox = document.getElementById("loginError");
+
+      let emp = null;
+      if (selectedLoginEmpId) {
+        emp = employees.find(e => e.id === selectedLoginEmpId);
+      }
+      if (!emp && typedName) {
+        emp = employees.find(e => {
+          const full = `${e.firstName || ''} ${e.lastName || ''}`.trim().toLowerCase();
+          const rev = `${e.lastName || ''} ${e.firstName || ''}`.trim().toLowerCase();
+          return full === typedName || rev === typedName;
+        });
+        if (!emp) {
+          const partialMatches = employees.filter(e => {
+            const full = `${e.firstName || ''} ${e.lastName || ''}`.trim().toLowerCase();
+            return full.includes(typedName);
+          });
+          if (partialMatches.length === 1) emp = partialMatches[0];
+        }
+      }
+
+      if (!emp || (emp.password || "1234") !== pass) {
+        errBox.style.display = "block";
+        return;
+      }
+
+      errBox.style.display = "none";
+      loggedInEmpId = emp.id;
+      localStorage.setItem("portal_emp_id", emp.id);
+      document.getElementById("loginPassword").value = "";
+      document.getElementById("sickSuccessBanner").style.display = "none";
+      routeAuthenticatedEmp(emp);
+    }
+
+    function routeAuthenticatedEmp(emp) {
+      document.getElementById("loginView").style.display = "none";
+      document.getElementById("logoutBtn").style.display = "inline-block";
+
+      if (emp.mustChangePw || emp.password === "1234") {
+        document.getElementById("portalView").style.display = "none";
+        document.getElementById("changePasswordView").style.display = "block";
+        document.getElementById("cpEmpName").textContent = `${emp.firstName || ''} ${emp.lastName || ''}`.trim();
+      } else {
+        document.getElementById("changePasswordView").style.display = "none";
+        showPortalFor(emp);
+      }
+    }
+
+    function saveNewPassword() {
+      const p1 = document.getElementById("newPasswordInput").value.trim();
+      const p2 = document.getElementById("newPasswordConfirm").value.trim();
+      const err = document.getElementById("cpError");
+
+      if (p1.length < 4) {
+        err.textContent = "Das neue Passwort muss mindestens 4 Zeichen lang sein!";
+        err.style.display = "block";
+        return;
+      }
+      if (p1 === "1234") {
+        err.textContent = "Bitte wähle ein anderes Passwort als die Standard-PIN 1234!";
+        err.style.display = "block";
+        return;
+      }
+      if (p1 !== p2) {
+        err.textContent = "Die beiden Passwörter stimmen nicht überein!";
+        err.style.display = "block";
+        return;
+      }
+
+      const emp = employees.find(e => e.id === loggedInEmpId);
+      if (!emp) return;
+
+      err.style.display = "none";
+      emp.password = p1;
+      emp.mustChangePw = false;
+
+      db.collection("shiftplan").doc("live_board").set({
+        ...rawDocData,
+        employees: employees
+      }).then(() => {
+        document.getElementById("newPasswordInput").value = "";
+        document.getElementById("newPasswordConfirm").value = "";
+        routeAuthenticatedEmp(emp);
+      });
+    }
+
+    function logoutEmp() {
+      loggedInEmpId = null;
+      selectedLoginEmpId = null;
+      localStorage.removeItem("portal_emp_id");
+      document.getElementById("loginEmpInput").value = "";
+      document.getElementById("portalView").style.display = "none";
+      document.getElementById("changePasswordView").style.display = "none";
+      document.getElementById("logoutBtn").style.display = "none";
+      document.getElementById("loginView").style.display = "block";
+    }
+
+    function showPortalFor(emp) {
+      document.getElementById("portalView").style.display = "block";
+
+      const fullName = `${emp.firstName || ''} ${emp.lastName || ''}`.trim();
+      document.getElementById("empWelcomeName").textContent = fullName;
+      document.getElementById("empRoleBadge").textContent = emp.role + (emp.ersthelfer ? " (+ Ersthelfer)" : "");
+
+      const statusBox = document.getElementById("empCurrentStatus");
+      const today = getTodayIso();
+      const activeSick = sickLeaves.find(sl => sl.empId === emp.id && sl.startDate <= today && sl.endDate >= today);
+
+      if (emp.zone === "absent" || activeSick) {
+        statusBox.className = "status-box status-absent";
+        statusBox.innerHTML = `
+          <div style="font-size:1.05rem;">🛑 Status: Abwesend / Krank gemeldet</div>
+          <div style="font-size:0.83rem; font-weight:normal;">
+            ${activeSick ? `Du bist aktuell bis einschließlich <b>${formatDateDe(activeSick.endDate)}</b> als abwesend/krank eingetragen.` : `Du bist heute im Schichtplan als abwesend (Urlaub / Krank) eingetragen.`}
+          </div>
+        `;
+      } else if (!emp.zone || emp.zone === "pool") {
+        let lastLineHint = "";
+        if (emp.lastLineId) {
+          const lastL = lines.find(l => l.id === emp.lastLineId);
+          if (lastL) lastLineHint = `<div style="font-size:0.8rem; margin-top:3px;">📌 Dein fester Linienplatz: <b>${lastL.name}</b></div>`;
+        }
+        statusBox.className = "status-box status-pool";
+        statusBox.innerHTML = `
+          <div style="font-size:1.05rem;">🏖️ Status: Schichtfrei / Pool</div>
+          <div style="font-size:0.83rem; font-weight:normal;">Du hast heute Schichtfrei (oder wartest im Pool auf Einteilung).${lastLineHint}</div>
+        `;
+      } else {
+        const parts = emp.zone.split("_");
+        const shiftId = parts.pop();
+        const lineId = parts.join("_");
+        const lineObj = lines.find(l => l.id === lineId);
+        const lineName = lineObj ? lineObj.name : lineId;
+        const shiftName = shiftsMap[shiftId] || shiftId;
+
+        statusBox.className = "status-box status-assigned";
+        statusBox.innerHTML = `
+          <div style="font-size:0.82rem; text-transform:uppercase; letter-spacing:0.5px;">Heute eingeteilt an:</div>
+          <div style="font-size:1.35rem; font-weight:800;">✅ ${lineName} – ${shiftName}</div>
+          ${lineObj && lineObj.note ? `<div style="font-size:0.8rem; font-weight:normal; margin-top:4px;">📌 Linien-Info: ${lineObj.note}</div>` : ''}
+        `;
+      }
+
+      const prioContainer = document.getElementById("empPrioLines");
+      const secContainer = document.getElementById("empSecLines");
+      prioContainer.innerHTML = "";
+      secContainer.innerHTML = "";
+
+      const mainList = (emp.mainLines || []).map(id => lines.find(l => l.id === id)).filter(Boolean);
+      const secList = (emp.secLines || []).map(id => lines.find(l => l.id === id)).filter(Boolean);
+
+      if (mainList.length === 0) {
+        prioContainer.innerHTML = `<span style="font-size:0.82rem; color:#94a3b8;">Keine Stammlinie hinterlegt</span>`;
+      } else {
+        mainList.forEach(l => {
+          prioContainer.innerHTML += `<span class="line-badge badge-prio">${l.name}</span>`;
+        });
+      }
+
+      if (secList.length === 0) {
+        secContainer.innerHTML = `<span style="font-size:0.82rem; color:#94a3b8;">Keine Sekundärlinie hinterlegt</span>`;
+      } else {
+        secList.forEach(l => {
+          secContainer.innerHTML += `<span class="line-badge badge-sec">${l.name}</span>`;
+        });
+      }
+
+      const myLeaves = sickLeaves.filter(sl => sl.empId === emp.id && sl.endDate >= today);
+      const histContainer = document.getElementById("mySickLeavesHistory");
+      if (myLeaves.length === 0) {
+        histContainer.innerHTML = "";
+      } else {
+        histContainer.innerHTML = `<div style="font-size:0.82rem; font-weight:700; color:#475569; margin-bottom:6px;">Aktive / gemeldete Zeiträume:</div>`;
+        myLeaves.forEach(sl => {
+          histContainer.innerHTML += `
+            <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:6px; padding:8px 10px; font-size:0.8rem; margin-bottom:6px;">
+              <b>📅 ${formatDateDe(sl.startDate)} bis ${formatDateDe(sl.endDate)}</b>
+              <span style="color:#16a34a; font-weight:600; margin-left:6px;">(✓ Im System aktiv)</span>
+              ${sl.reason ? `<div style="color:#64748b; margin-top:2px;">Notiz: ${sl.reason}</div>` : ''}
+            </div>
+          `;
+        });
+      }
+    }
+
+    function submitSickLeave() {
+      if (!loggedInEmpId) return;
+      const emp = employees.find(e => e.id === loggedInEmpId);
+      if (!emp) return;
+
+      const startDate = document.getElementById("sickStartDate").value;
+      const endDate = document.getElementById("sickEndDate").value;
+      const reason = document.getElementById("sickReason").value.trim();
+
+      if (!startDate || !endDate) {
+        alert("Bitte wähle ein Start- und Enddatum aus!");
+        return;
+      }
+      if (endDate < startDate) {
+        alert("Das Enddatum darf nicht vor dem Startdatum liegen!");
+        return;
+      }
+
+      const fullName = `${emp.firstName || ''} ${emp.lastName || ''}`.trim();
+      const nowStr = new Date().toLocaleString('de-DE');
+      const today = getTodayIso();
+
+      const newSickLeave = {
+        id: "sl_" + Date.now(),
+        empId: emp.id,
+        empName: fullName,
+        startDate: startDate,
+        endDate: endDate,
+        reason: reason,
+        createdAt: nowStr,
+        readByPlanner: false
+      };
+
+      sickLeaves.push(newSickLeave);
+
+      if (startDate <= today && endDate >= today && emp.zone !== "absent") {
+        const currentLine = extractLineIdFromZone(emp.zone);
+        if (currentLine) emp.lastLineId = currentLine;
+        emp.zone = "absent";
+      }
+
+      db.collection("shiftplan").doc("live_board").set({
+        ...rawDocData,
+        employees: employees,
+        sickLeaves: sickLeaves
+      }).then(() => {
+        document.getElementById("sickReason").value = "";
+        const banner = document.getElementById("sickSuccessBanner");
+        banner.innerHTML = `✅ Deine Krankmeldung vom <b>${formatDateDe(startDate)}</b> bis <b>${formatDateDe(endDate)}</b> wurde erfolgreich an den Planer weitergeleitet!`;
+        banner.style.display = "block";
+      });
+    }
+  </script>
+</body>
+</html>
