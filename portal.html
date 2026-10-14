@@ -4,210 +4,241 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mitarbeiter-Portal | Schichtplanung</title>
+
+  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
   <style>
-    :root { --bayer-blue: #0091df; --bg-gray: #f4f6f9; }
+    :root {
+      --bayer-blue: #0091df;
+      --bg-gray: #f4f6f9;
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
-    body { background: var(--bg-gray); min-height: 100vh; display: flex; flex-direction: column; color: #1e293b; }
+    body { background-color: var(--bg-gray); min-height: 100vh; display: flex; flex-direction: column; color: #1e293b; }
+
     .brand-gradient { height: 6px; background: linear-gradient(90deg, #0091df 0%, #00bcff 50%, #89d329 100%); width: 100%; }
+
     header { background: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
     .header-left { display: flex; align-items: center; gap: 12px; }
     .header-left img { width: 48px; height: 48px; object-fit: contain; }
     .header-title h1 { font-size: 1.2rem; color: var(--bayer-blue); font-weight: 700; }
     .header-title span { font-size: 0.75rem; color: #64748b; }
-    .container { width: 100%; max-width: 520px; margin: 24px auto; padding: 0 16px 40px; flex: 1; }
+
+    .container { width: 100%; max-width: 520px; margin: 24px auto; padding: 0 16px 40px 16px; flex: 1; }
+
     .card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; margin-bottom: 16px; }
     .card h2 { font-size: 1.05rem; color: #0f172a; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+
     .form-group { margin-bottom: 14px; position: relative; }
     .form-group label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #475569; }
     .form-control { width: 100%; padding: 11px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; background: #f8fafc; }
     .form-control:focus { outline: none; border-color: var(--bayer-blue); background: #fff; }
     textarea.form-control { resize: vertical; min-height: 85px; }
+
     .suggestions-box { display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.12); max-height: 190px; overflow-y: auto; z-index: 50; margin-top: 4px; }
-    .suggestion-item { padding: 10px 12px; font-size: 0.92rem; cursor: pointer; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; }
+    .suggestion-item { padding: 10px 12px; font-size: 0.92rem; cursor: pointer; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
     .suggestion-item:hover { background: #f0f9ff; color: var(--bayer-blue); }
-    .btn { padding: 11px 18px; border-radius: 8px; font-size: 0.95rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; width: 100%; }
+
+    .btn { padding: 11px 18px; border-radius: 8px; font-size: 0.95rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; width: 100%; transition: 0.15s; }
     .btn-primary { background: var(--bayer-blue); color: #fff; }
+    .btn-primary:hover { background: #0077b6; }
     .btn-outline { border-color: #cbd5e1; background: #fff; color: #475569; width: auto; padding: 7px 12px; font-size: 0.85rem; }
+
     .status-box { padding: 16px; border-radius: 10px; font-weight: 600; display: flex; flex-direction: column; gap: 4px; }
     .status-assigned { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
     .status-pool { background: #e0f2fe; color: #075985; border: 1px solid #bae6fd; }
     .status-absent { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+
     .line-badge-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
     .line-badge { padding: 5px 10px; border-radius: 6px; font-size: 0.82rem; font-weight: 600; }
     .badge-prio { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; font-weight: 700; }
     .badge-sec { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
-    .success-banner { display: none; background: #dcfce7; color: #166534; border: 1px solid #86efac; padding: 14px; border-radius: 8px; margin-bottom: 14px; font-size: 0.9rem; font-weight: 600; }
+
+    .success-banner { display: none; background: #dcfce7; color: #166534; border: 1px solid #86efac; padding: 14px; border-radius: 8px; margin-bottom: 14px; font-size: 0.9rem; font-weight: 600; line-height: 1.4; }
     .error-msg { display: none; background: #fee2e2; color: #b91c1c; padding: 10px; border-radius: 6px; font-size: 0.85rem; margin-bottom: 12px; text-align: center; font-weight: 600; }
   </style>
 </head>
 <body>
+
   <div class="brand-gradient"></div>
+
   <header>
     <div class="header-left">
       <img src="logo.png" alt="Logo" onerror="this.style.display='none'">
-      <div class="header-title"><h1>Mitarbeiter-Portal</h1><span>Persönliche Schicht- & Linienübersicht</span></div>
+      <div class="header-title">
+        <h1>Mitarbeiter-Portal</h1>
+        <span>Persönliche Schicht- & Linienübersicht</span>
+      </div>
     </div>
     <button id="logoutBtn" class="btn btn-outline" style="display:none;" onclick="logoutEmp()">Abmelden</button>
   </header>
 
   <div class="container">
+    <!-- Login -->
     <div id="loginView" class="card">
-      <h2 style="color:var(--bayer-blue); justify-content:center; margin-bottom:16px;">🔐 Mitarbeiter-Anmeldung</h2>
+      <h2 style="color: var(--bayer-blue); justify-content: center; margin-bottom: 16px;">🔐 Mitarbeiter-Anmeldung</h2>
       <div id="loginError" class="error-msg">Name oder Passwort nicht korrekt!</div>
+      
       <div class="form-group" id="nameSearchGroup">
         <label>Dein Name</label>
-        <input type="text" id="loginEmpInput" class="form-control" placeholder="Vor- und Nachname eingeben..." autocomplete="off" oninput="onNameInput(this.value)" onkeydown="if(event.key==='Enter') $('loginPassword').focus()">
+        <input type="text" id="loginEmpInput" class="form-control" placeholder="Vor- und Nachname eingeben..." autocomplete="off" oninput="onNameInput(this.value)" onkeydown="if(event.key==='Enter') document.getElementById('loginPassword').focus()">
         <div id="loginSuggestions" class="suggestions-box"></div>
       </div>
+
       <div class="form-group">
         <label>Passwort / PIN (Erst-Login: 1234)</label>
         <input type="password" id="loginPassword" class="form-control" placeholder="Passwort eingeben" onkeydown="if(event.key==='Enter') loginEmp()">
       </div>
+
       <button class="btn btn-primary" onclick="loginEmp()">Anmelden</button>
     </div>
 
+    <!-- Passwort ändern -->
     <div id="changePasswordView" class="card" style="display:none;">
-      <h2 style="color:var(--bayer-blue); margin-bottom:8px;">🔒 Eigenes Passwort festlegen</h2>
-      <p style="font-size:0.85rem; color:#64748b; margin-bottom:16px;">Hallo <b id="cpEmpName"></b>! Bitte vergib jetzt ein persönliches Passwort (mind. 4 Zeichen) für deine zukünftigen Anmeldungen.</p>
+      <h2 style="color: var(--bayer-blue); margin-bottom: 8px;">🔒 Eigenes Passwort festlegen</h2>
+      <p style="font-size:0.85rem; color:#64748b; margin-bottom:16px; line-height:1.4;">
+        Hallo <b id="cpEmpName"></b>! Bitte vergib jetzt ein eigenes, persönliches Passwort (oder eine eigene PIN) für deine zukünftigen Anmeldungen. Der Planer kann dieses Passwort nicht einsehen.
+      </p>
+
       <div id="cpError" class="error-msg"></div>
-      <div class="form-group"><label>Neues Passwort / PIN</label><input type="password" id="newPasswordInput" class="form-control" placeholder="Neues Passwort eingeben"></div>
-      <div class="form-group"><label>Neues Passwort wiederholen</label><input type="password" id="newPasswordConfirm" class="form-control" placeholder="Passwort bestätigen" onkeydown="if(event.key==='Enter') saveNewPassword()"></div>
-      <button class="btn btn-primary" onclick="saveNewPassword()">Passwort speichern & weiter</button>
+
+      <div class="form-group">
+        <label>Neues Passwort / PIN (mind. 4 Zeichen)</label>
+        <input type="password" id="newPasswordInput" class="form-control" placeholder="Neues Passwort eingeben">
+      </div>
+
+      <div class="form-group">
+        <label>Neues Passwort wiederholen</label>
+        <input type="password" id="newPasswordConfirm" class="form-control" placeholder="Neues Passwort bestätigen" onkeydown="if(event.key==='Enter') saveNewPassword()">
+      </div>
+
+      <button class="btn btn-primary" onclick="saveNewPassword()">Passwort speichern & weiter zum Portal</button>
     </div>
 
+    <!-- Portal Dashboard -->
     <div id="portalView" style="display:none;">
+      
       <div class="card">
         <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div><div style="font-size:0.8rem; color:#64748b;">Angemeldet als</div><div id="empWelcomeName" style="font-size:1.3rem; font-weight:700;"></div></div>
-          <span id="empRoleBadge" style="background:#f1f5f9; padding:5px 10px; border-radius:6px; font-size:0.82rem; font-weight:700;"></span>
+          <div>
+            <div style="font-size:0.8rem; color:#64748b;">Angemeldet als</div>
+            <div id="empWelcomeName" style="font-size:1.3rem; font-weight:700; color:#0f172a;"></div>
+          </div>
+          <span id="empRoleBadge" style="background:#f1f5f9; padding:5px 10px; border-radius:6px; font-size:0.82rem; font-weight:700; color:#334155;"></span>
         </div>
       </div>
-      <div class="card"><h2>📍 Meine heutige Einteilung</h2><div id="empCurrentStatus" class="status-box status-pool"></div></div>
+
+      <div class="card">
+        <h2>📍 Meine heutige Einteilung</h2>
+        <div id="empCurrentStatus" class="status-box status-pool"></div>
+      </div>
+
       <div class="card">
         <h2>⚙️ Meine Linien-Qualifikationen</h2>
-        <div style="margin-bottom:12px;"><div style="font-size:0.82rem; font-weight:600; color:#475569;">Meine Stammlinien (Prio-Linien):</div><div id="empPrioLines" class="line-badge-list"></div></div>
-        <div><div style="font-size:0.82rem; font-weight:600; color:#475569;">Weitere Linien (Sek-Linien):</div><div id="empSecLines" class="line-badge-list"></div></div>
+        <div style="margin-bottom: 12px;">
+          <div style="font-size:0.82rem; font-weight:600; color:#475569;">Meine Stammlinien (Prio-Linien):</div>
+          <div id="empPrioLines" class="line-badge-list"></div>
+        </div>
+        <div>
+          <div style="font-size:0.82rem; font-weight:600; color:#475569;">Weitere Linien, die ich beherrsche (Sek-Linien):</div>
+          <div id="empSecLines" class="line-badge-list"></div>
+        </div>
       </div>
+
       <div class="card">
         <h2>🏥 Krankmeldung / Abwesenheit melden</h2>
+        <p style="font-size:0.83rem; color:#64748b; margin-bottom:14px; line-height:1.4;">
+          Hier kannst du dich direkt krankmelden. Du wirst für den angegebenen Zeitraum automatisch im Schichtplan als abwesend eingetragen.
+        </p>
+
         <div id="sickSuccessBanner" class="success-banner"></div>
+
         <div style="display:flex; gap:10px;">
-          <div class="form-group" style="flex:1;"><label>Von (Startdatum)</label><input type="date" id="sickStartDate" class="form-control"></div>
-          <div class="form-group" style="flex:1;"><label>Bis (Einschließlich)</label><input type="date" id="sickEndDate" class="form-control"></div>
+          <div class="form-group" style="flex:1;">
+            <label>Von (Startdatum)</label>
+            <input type="date" id="sickStartDate" class="form-control">
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label>Bis (Einschließlich)</label>
+            <input type="date" id="sickEndDate" class="form-control">
+          </div>
         </div>
-        <div class="form-group"><label>Begleitschreiben / Begründung</label><textarea id="sickReason" class="form-control" placeholder="z.B. Grippe, Arzttermin, AU folgt..."></textarea></div>
+
+        <div class="form-group">
+          <label>Begleitschreiben / Begründung / Hinweis</label>
+          <textarea id="sickReason" class="form-control" placeholder="z.B. Grippe, Arzttermin heute Vormittag, AU-Bescheinigung folgt..."></textarea>
+        </div>
+
         <button class="btn btn-primary" style="background:#dc2626;" onclick="submitSickLeave()">Krankmeldung jetzt absenden</button>
+
         <div id="mySickLeavesHistory" style="margin-top:16px;"></div>
       </div>
+
     </div>
   </div>
 
   <script>
-    const $ = id => document.getElementById(id);
-    firebase.initializeApp({
-      apiKey: "AIzaSyBPOYRYyUm5gA-j7YSAZl7EJoxedFhDTl4", authDomain: "schichtplan-bayer.firebaseapp.com",
-      projectId: "schichtplan-bayer", storageBucket: "schichtplan-bayer.firebasestorage.app",
-      messagingSenderId: "152929285194", appId: "1:152929285194:web:00b73aa6058a70aed3a2b3"
-    });
-    const db = firebase.firestore();
-    const shiftsMap = { frueh: "Frühschicht", spaet: "Spätschicht", nacht: "Nachtschicht" };
-    let lines = [], employees = [], sickLeaves = [], rawDocData = {}, loggedInEmpId = localStorage.getItem("portal_emp_id") || null, selectedLoginEmpId = null;
+    const firebaseConfig = {
+      apiKey: "AIzaSyBPOYRYyUm5gA-j7YSAZl7EJoxedFhDTl4",
+      authDomain: "schichtplan-bayer.firebaseapp.com",
+      projectId: "schichtplan-bayer",
+      storageBucket: "schichtplan-bayer.firebasestorage.app",
+      messagingSenderId: "152929285194",
+      appId: "1:152929285194:web:00b73aa6058a70aed3a2b3"
+    };
 
-    const getTodayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
-    const formatDateDe = s => s && s.includes("-") ? s.split("-").reverse().join(".") : (s || "");
-    const extractLineId = z => (!z || z === "pool" || z === "absent" || !z.includes("_")) ? null : z.split("_").slice(0,-1).join("_");
-    const fullName = e => `${e.firstName || ''} ${e.lastName || ''}`.trim();
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const shiftsMap = {
+      "frueh": "Frühschicht",
+      "spaet": "Spätschicht",
+      "nacht": "Nachtschicht"
+    };
+
+    let lines = [];
+    let employees = [];
+    let sickLeaves = [];
+    let rawDocData = {};
+    let loggedInEmpId = localStorage.getItem("portal_emp_id") || null;
+    let selectedLoginEmpId = null;
+
+    function getTodayIso() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    function formatDateDe(isoStr) {
+      if (!isoStr) return "";
+      const parts = isoStr.split("-");
+      if (parts.length !== 3) return isoStr;
+      return `${parts[2]}.${parts[1]}.${parts[0]}`;
+    }
+
+    function extractLineIdFromZone(zone) {
+      if (!zone || zone === "pool" || zone === "absent") return null;
+      const parts = zone.split("_");
+      if (parts.length < 2) return null;
+      parts.pop();
+      return parts.join("_");
+    }
 
     window.addEventListener("DOMContentLoaded", () => {
-      $("sickStartDate").value = $("sickEndDate").value = getTodayIso();
-      document.addEventListener("click", e => { if ($("nameSearchGroup") && !$("nameSearchGroup").contains(e.target)) $("loginSuggestions").style.display = "none"; });
-    });
+      const today = getTodayIso();
+      document.getElementById("sickStartDate").value = today;
+      document.getElementById("sickEndDate").value = today;
 
-    db.collection("shiftplan").doc("live_board").onSnapshot(doc => {
-      if (doc.exists) {
-        rawDocData = doc.data(); lines = rawDocData.lines || []; sickLeaves = rawDocData.sickLeaves || [];
-        employees = (rawDocData.employees || []).map(e => {
-          if (!e.firstName && e.name) { const p = e.name.split(" "); e.firstName = p[0]||""; e.lastName = p.slice(1).join(" ")||""; }
-          e.password = e.password || "1234"; if (e.mustChangePw === undefined) e.mustChangePw = (e.password === "1234");
-          return e;
-        });
-        if (loggedInEmpId) { const emp = employees.find(e => e.id === loggedInEmpId); emp ? routeAuthenticatedEmp(emp) : logoutEmp(); }
-      }
-    });
-
-    function onNameInput(val) {
-      selectedLoginEmpId = null; const box = $("loginSuggestions"), q = val.trim().toLowerCase();
-      if (!q) { box.style.display = "none"; return; }
-      const m = employees.filter(e => fullName(e).toLowerCase().includes(q) || `${e.lastName} ${e.firstName}`.toLowerCase().includes(q));
-      if (!m.length) { box.style.display = "none"; return; }
-      box.innerHTML = m.map(e => `<div class="suggestion-item" onclick="selectLoginEmp('${e.id}')"><span><b>${fullName(e)}</b></span><small style="color:#64748b;">${e.role}</small></div>`).join("");
-      box.style.display = "block";
-    }
-
-    function selectLoginEmp(id) { const e = employees.find(x => x.id === id); if (e) { selectedLoginEmpId = e.id; $("loginEmpInput").value = fullName(e); $("loginSuggestions").style.display = "none"; $("loginPassword").focus(); } }
-
-    function loginEmp() {
-      const q = $("loginEmpInput").value.trim().toLowerCase(), pass = $("loginPassword").value.trim();
-      let emp = selectedLoginEmpId ? employees.find(e => e.id === selectedLoginEmpId) : employees.find(e => fullName(e).toLowerCase() === q);
-      if (!emp && q) { const p = employees.filter(e => fullName(e).toLowerCase().includes(q)); if (p.length === 1) emp = p[0]; }
-      if (!emp || (emp.password || "1234") !== pass) { $("loginError").style.display = "block"; return; }
-      $("loginError").style.display = "none"; loggedInEmpId = emp.id; localStorage.setItem("portal_emp_id", emp.id);
-      $("loginPassword").value = ""; $("sickSuccessBanner").style.display = "none"; routeAuthenticatedEmp(emp);
-    }
-
-    function routeAuthenticatedEmp(emp) {
-      $("loginView").style.display = "none"; $("logoutBtn").style.display = "inline-block";
-      if (emp.mustChangePw || emp.password === "1234") { $("portalView").style.display = "none"; $("changePasswordView").style.display = "block"; $("cpEmpName").textContent = fullName(emp); }
-      else { $("changePasswordView").style.display = "none"; showPortalFor(emp); }
-    }
-
-    function saveNewPassword() {
-      const p1 = $("newPasswordInput").value.trim(), p2 = $("newPasswordConfirm").value.trim(), err = $("cpError");
-      if (p1.length < 4) { err.textContent = "Mindestens 4 Zeichen erforderlich!"; err.style.display = "block"; return; }
-      if (p1 === "1234") { err.textContent = "Bitte nicht die Standard-PIN 1234 verwenden!"; err.style.display = "block"; return; }
-      if (p1 !== p2) { err.textContent = "Passwörter stimmen nicht überein!"; err.style.display = "block"; return; }
-      const emp = employees.find(e => e.id === loggedInEmpId); if (!emp) return;
-      err.style.display = "none"; emp.password = p1; emp.mustChangePw = false;
-      db.collection("shiftplan").doc("live_board").set({ ...rawDocData, employees }).then(() => { $("newPasswordInput").value = $("newPasswordConfirm").value = ""; routeAuthenticatedEmp(emp); });
-    }
-
-    function logoutEmp() { loggedInEmpId = selectedLoginEmpId = null; localStorage.removeItem("portal_emp_id"); $("loginEmpInput").value = ""; $("portalView").style.display = $("changePasswordView").style.display = $("logoutBtn").style.display = "none"; $("loginView").style.display = "block"; }
-
-    function showPortalFor(emp) {
-      $("portalView").style.display = "block"; $("empWelcomeName").textContent = fullName(emp); $("empRoleBadge").textContent = emp.role + (emp.ersthelfer ? " (+ Ersthelfer)" : "");
-      const sb = $("empCurrentStatus"), today = getTodayIso(), actSick = sickLeaves.find(s => s.empId === emp.id && s.startDate <= today && s.endDate >= today);
-      if (emp.zone === "absent" || actSick) {
-        sb.className = "status-box status-absent";
-        sb.innerHTML = `<div style="font-size:1.05rem;">🛑 Status: Abwesend / Krank gemeldet</div><div style="font-size:0.83rem; font-weight:normal;">${actSick ? `Bis einschließlich <b>${formatDateDe(actSick.endDate)}</b> als abwesend eingetragen.` : `Heute als abwesend eingetragen.`}</div>`;
-      } else if (!emp.zone || emp.zone === "pool") {
-        const lObj = emp.lastLineId ? lines.find(l => l.id === emp.lastLineId) : null;
-        sb.className = "status-box status-pool";
-        sb.innerHTML = `<div style="font-size:1.05rem;">🏖️ Status: Schichtfrei / Pool</div><div style="font-size:0.83rem; font-weight:normal;">Du hast heute Schichtfrei (oder wartest im Pool auf Einteilung).${lObj ? `<div style="margin-top:3px;">📌 Dein fester Linienplatz: <b>${lObj.name}</b></div>` : ''}</div>`;
-      } else {
-        const shId = emp.zone.split("_").pop(), lObj = lines.find(l => l.id === extractLineId(emp.zone));
-        sb.className = "status-box status-assigned";
-        sb.innerHTML = `<div style="font-size:0.82rem; text-transform:uppercase;">Heute eingeteilt an:</div><div style="font-size:1.35rem; font-weight:800;">✅ ${lObj ? lObj.name : emp.zone} – ${shiftsMap[shId] || shId}</div>${lObj?.note ? `<div style="font-size:0.8rem; font-weight:normal; margin-top:4px;">📌 Linien-Info: ${lObj.note}</div>` : ''}`;
-      }
-      const mList = (emp.mainLines||[]).map(id => lines.find(l => l.id===id)).filter(Boolean), sList = (emp.secLines||[]).map(id => lines.find(l => l.id===id)).filter(Boolean);
-      $("empPrioLines").innerHTML = mList.length ? mList.map(l => `<span class="line-badge badge-prio">${l.name}</span>`).join("") : `<span style="font-size:0.82rem; color:#94a3b8;">Keine hinterlegt</span>`;
-      $("empSecLines").innerHTML = sList.length ? sList.map(l => `<span class="line-badge badge-sec">${l.name}</span>`).join("") : `<span style="font-size:0.82rem; color:#94a3b8;">Keine hinterlegt</span>`;
-      const myL = sickLeaves.filter(s => s.empId === emp.id && s.endDate >= today);
-      $("mySickLeavesHistory").innerHTML = !myL.length ? "" : `<div style="font-size:0.82rem; font-weight:700; margin-bottom:6px;">Aktive / gemeldete Zeiträume:</div>` + myL.map(s => `<div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:6px; padding:8px 10px; font-size:0.8rem; margin-bottom:6px;"><b>📅 ${formatDateDe(s.startDate)} bis ${formatDateDe(s.endDate)}</b> <span style="color:#16a34a; font-weight:600;">(✓ Aktiv)</span>${s.reason ? `<div style="color:#64748b; margin-top:2px;">Notiz: ${s.reason}</div>` : ''}</div>`).join("");
-    }
-
-    function submitSickLeave() {
-      const emp = employees.find(e => e.id === loggedInEmpId); if (!emp) return;
-      const sD = $("sickStartDate").value, eD = $("sickEndDate").value, r = $("sickReason").value.trim(), today = getTodayIso();
-      if (!sD || !eD || eD < sD) return alert("Bitte gültigen Zeitraum (Von - Bis) wählen!");
-      sickLeaves.push({ id: "sl_"+Date.now(), empId: emp.id, empName: fullName(emp), startDate: sD, endDate: eD, reason: r, createdAt: new Date().toLocaleString('de-DE'), readByPlanner: false });
-      if (sD <= today && eD >= today && emp.zone !== "absent") { const l = extractLineId(emp.zone); if (l) emp.lastLineId = l; emp.zone = "absent"; }
-      db.collection("shiftplan").doc("live_board").set({ ...rawDocData, employees, sickLeaves }).then(() => {
-        $("sickReason").value = ""; const b = $("sickSuccessBanner");
-        b.innerHTML = `✅ Deine Krankmeldung vom <b>${formatDateDe(sD)}</b> bis <b>${formatDateDe(eD)}</b> wurde erfolgreich übermittelt!`; b.style.display = "block";
+      document.addEventListener("click", (e) => {
+        const group = document.getElementById("nameSearchGroup");
+        if (group && !group.contains(e.target)) {
+          document.getElementById("loginSuggestions").style.display = "none";
+        }
       });
-    }
-  </script>
-</body>
-</html>
+    });
+
+    db.collection("shiftplan").doc("live_board").onSnapshot((doc) => {
+      if (doc.exists) {
+        rawDocData = doc.data();
+        lines = rawDocData
