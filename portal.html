@@ -253,6 +253,7 @@
           if (e.mustChangePw === undefined) {
             e.mustChangePw = (e.password === "1234");
           }
+          if (e.noRotation === undefined) e.noRotation = false;
           return e;
         });
 
@@ -412,7 +413,11 @@
 
       const fullName = `${emp.firstName || ''} ${emp.lastName || ''}`.trim();
       document.getElementById("empWelcomeName").textContent = fullName;
-      document.getElementById("empRoleBadge").textContent = emp.role + (emp.ersthelfer ? " (+ Ersthelfer)" : "");
+      
+      let badgeHtml = emp.role;
+      if (emp.ersthelfer) badgeHtml += " (+ Ersthelfer)";
+      if (emp.noRotation) badgeHtml += " ⚓ (Fix)";
+      document.getElementById("empRoleBadge").textContent = badgeHtml;
 
       const statusBox = document.getElementById("empCurrentStatus");
       const today = getTodayIso();
