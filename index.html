@@ -55,6 +55,7 @@
     .search-input { width: 100%; padding: 6px 26px 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.8rem; background: #f8fafc; }
     .search-clear { display: none; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #64748b; font-weight: bold; font-size: 1rem; }
 
+    /* Mitarbeiter Kärtchen */
     .employee-card { background: #fff; padding: 6px 8px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); display: flex; flex-direction: column; border-left: 5px solid #94a3b8; user-select: none; gap: 3px; }
     body.planner-active .employee-card { cursor: grab; }
 
@@ -286,7 +287,7 @@
             <div class="form-group" style="flex:1;"><label>Nachname</label><input type="text" id="newEmpLastName" class="form-control"></div>
           </div>
           <div style="display:flex; gap:12px;">
-            <div class="form-group" style="flex:1;"><label>Fokus Team</label><select id="newEmpTeam" class="form-control"></select></div>
+            <div class="form-group" style="flex:1;"><label>Team</label><select id="newEmpTeam" class="form-control"></select></div>
             <div class="form-group" style="flex:1;"><label>Rolle</label><select id="newEmpRole" class="form-control"></select></div>
           </div>
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px; flex-wrap:wrap; gap:8px;">
@@ -404,6 +405,11 @@
       return parts.join("_");
     }
 
+    function extractShiftIdFromZone(zone) {
+      if (!zone || zone === "pool" || zone === "absent") return null;
+      return zone.split("_").pop();
+    }
+
     function getPredeterminedLineForEmp(emp) {
       if (emp.lastLineId && lines.some(l => l.id === emp.lastLineId)) {
         return emp.lastLineId;
@@ -482,11 +488,13 @@
               e.zone = "pool";
               memoryUpdated = true;
             }
-            // PIN SICHERUNG BEIM LADEN (Kein Bringschichtler-Schutz mehr!)
             const currentLineId = extractLineIdFromZone(e.zone);
-            if (currentLineId && e.lastLineId !== currentLineId) {
-              e.lastLineId = currentLineId;
-              memoryUpdated = true;
+            const currentShiftId = extractShiftIdFromZone(e.zone);
+            if (currentLineId && (!e.lastLineId || (currentShiftId && shiftRotation[currentShiftId] === e.team))) {
+              if (e.lastLineId !== currentLineId) {
+                e.lastLineId = currentLineId;
+                memoryUpdated = true;
+              }
             }
             return e;
           });
@@ -552,7 +560,8 @@
       employees.forEach(emp => {
         if (emp.noRotation) return;
         const cLine = extractLineIdFromZone(emp.zone);
-        if (cLine) {
+        const cShift = extractShiftIdFromZone(emp.zone);
+        if (cLine && (!emp.lastLineId || (cShift && shiftRotation[cShift] === emp.team))) {
           emp.lastLineId = cLine;
         }
       });
@@ -643,7 +652,7 @@
 
       inShift.forEach(emp => {
         const lineId = extractLineIdFromZone(emp.zone);
-        if (lineId) {
+        if (lineId && (!emp.lastLineId || shiftRotation[shiftId] === emp.team)) {
           emp.lastLineId = lineId;
         }
         emp.zone = "pool";
@@ -661,7 +670,8 @@
 
       onBoard.forEach(emp => {
         const lineId = extractLineIdFromZone(emp.zone);
-        if (lineId) {
+        const shiftId = extractShiftIdFromZone(emp.zone);
+        if (lineId && (!emp.lastLineId || (shiftId && shiftRotation[shiftId] === emp.team))) {
           emp.lastLineId = lineId;
         }
         emp.zone = "pool";
@@ -1226,7 +1236,6 @@
         if (emp.lastLineId) {
           const lastL = lines.find(x => x.id === emp.lastLineId);
           if (lastL) {
-            // Löschen Button (rotes X) immer anzeigen, wenn man im Planer-Modus ist und die Karte im Pool liegt
             const delBtn = (emp.zone === "pool") ? `<span onclick="event.stopPropagation(); deletePin('${emp.id}')" style="cursor:pointer; color:#ef4444; font-size:0.75rem; padding:0 3px;" title="Pin löschen">✖</span>` : "";
             parts.push(`<span style="color:#0284c7; font-weight:700; white-space:nowrap; display:flex; align-items:center; gap:2px;">📌 ${lastL.name.replace(/Linie\s*/i, '')} ${delBtn}</span>`);
           }
@@ -1293,8 +1302,8 @@
             if (emp) {
               emp.zone = newZone;
               const newLineId = extractLineIdFromZone(newZone);
-              // IMMER den neuen Platz merken, wenn ein MA auf eine Linie gezogen wird!
-              if (newLineId) {
+              const newShiftId = extractShiftIdFromZone(newZone);
+              if (newLineId && (!emp.lastLineId || (newShiftId && shiftRotation[newShiftId] === emp.team))) {
                 emp.lastLineId = newLineId;
               }
               saveToFirebase();
