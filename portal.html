@@ -3,286 +3,103 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Schicht- und Linienplanung</title>
-  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+  <title>Mitarbeiter-Portal | Schichtplanung</title>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   <style>
     :root { --bayer-blue: #0091df; --bg-gray: #f4f6f9; }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
-    body { background: var(--bg-gray); min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
-    .brand-gradient { height: 6px; background: linear-gradient(90deg, #0091df 0%, #00bcff 50%, #89d329 100%); width: 100%; flex-shrink: 0; }
-    header { background: #fff; padding: 10px 24px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 6px rgba(0,0,0,0.06); position: sticky; top: 0; z-index: 50; }
-    .header-left { display: flex; align-items: center; gap: 16px; }
-    .bayer-logo-btn { width: 64px; height: 64px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
-    .bayer-logo-btn:hover { transform: scale(1.05); }
-    .bayer-logo-btn img { width: 100%; height: 100%; object-fit: contain; }
-    .header-title { display: flex; flex-direction: column; gap: 2px; }
-    .header-title h1 { font-size: 1.45rem; font-weight: 700; color: var(--bayer-blue); }
-    .status-badge { display: none; font-size: 0.75rem; padding: 3px 8px; border-radius: 999px; font-weight: 600; align-self: flex-start; background: #dcfce7; color: #166534; }
-    body.planner-active .status-badge { display: inline-block; }
-    .header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .btn { padding: 8px 14px; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; position: relative; }
-    .btn-primary { background: var(--bayer-blue); color: #fff; }
-    .btn-primary:hover { background: #0077b6; }
-    .btn-outline { border-color: #cbd5e1; background: #fff; color: #475569; }
-    .btn-outline:hover { background: #f8fafc; }
-    .inbox-badge { position: absolute; top: -6px; right: -6px; background: #dc2626; color: #fff; font-size: 0.72rem; font-weight: 800; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; display: none; align-items: center; justify-content: center; }
-    main { padding: 16px; display: flex; gap: 16px; flex: 1; width: 100%; }
-    .sidebar { width: 280px; flex-shrink: 0; display: none; flex-direction: column; gap: 12px; }
-    body.planner-active .sidebar { display: flex; }
-    .panel { background: #fff; border-radius: 10px; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; display: flex; flex-direction: column; max-height: 42vh; }
-    .panel h2 { font-size: 0.9rem; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; color: #1e293b; gap: 4px; flex-wrap: wrap; }
-    .card-list { flex: 1; overflow-y: auto; min-height: 80px; padding: 6px; background: #f8fafc; border-radius: 6px; border: 1px dashed #cbd5e1; display: flex; flex-direction: column; gap: 6px; }
-    .team-filter-box { display: none; background: #fff; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 0.78rem; }
-    body.planner-active .team-filter-box { display: block; }
-    .team-filter-options { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; }
-    .filter-quick-links { font-size: 0.72rem; color: #94a3b8; }
-    .filter-quick-links span { cursor: pointer; color: var(--bayer-blue); font-weight: 600; }
-    .search-wrapper { position: relative; margin-bottom: 8px; }
-    .search-input { width: 100%; padding: 6px 26px 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.8rem; background: #f8fafc; }
-    .search-clear { display: none; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #64748b; font-weight: bold; font-size: 1rem; }
-    .employee-card { background: #fff; padding: 7px 9px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); display: flex; justify-content: space-between; align-items: center; border-left: 5px solid #94a3b8; user-select: none; gap: 6px; }
-    body.planner-active .employee-card { cursor: grab; }
-    .card-name { font-size: 0.82rem; font-weight: 600; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .card-role { font-size: 0.68rem; padding: 2px 4px; background: #f1f5f9; border-radius: 4px; color: #475569; font-weight: 600; align-self: flex-start; }
-    .card-lines-info { display: none; font-size: 0.63rem; color: #64748b; margin-top: 2px; line-height: 1.1; word-break: break-all; }
-    body.planner-active .card-lines-info { display: block; }
-    .card-sick-tag { display: none; font-size: 0.63rem; color: #b91c1c; background: #fee2e2; padding: 1px 5px; border-radius: 4px; font-weight: 700; margin-top: 2px; align-self: flex-start; }
-    body.planner-active .card-sick-tag, body.planner-active .quick-sick-btn { display: inline-block; }
-    .quick-sick-btn { display: none; border: none; background: #f1f5f9; border-radius: 4px; padding: 3px 5px; font-size: 0.75rem; cursor: pointer; }
-    .quick-sick-btn:hover { background: #fee2e2; }
-    .first-aider-icon { color: #dc2626; font-size: 1.3rem; font-weight: 900; line-height: 0.5; padding-right: 2px; }
-    .board-container { flex: 1; background: #fff; border-radius: 10px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: flex; flex-direction: column; overflow: hidden; }
-    .board-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    .board-table th, .board-table td { border: 1px solid #e2e8f0; vertical-align: top; }
-    .line-header { background: #f8fafc; padding: 10px 4px; text-align: center; position: relative; }
-    body.planner-active .line-header { cursor: pointer; }
-    body.planner-active .line-header:hover { background: #f1f5f9; }
-    body.planner-active .line-header::after { content: "✏️"; position: absolute; top: 4px; right: 4px; font-size: 0.6rem; opacity: 0.5; }
-    .line-title { font-size: 0.85rem; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .badge-container { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; margin-top: 2px; }
-    .line-prio { font-size: 0.6rem; padding: 1px 3px; border-radius: 3px; background: #e2e8f0; font-weight: 700; color: #334155; }
-    .line-prio.prio-high { background: #fee2e2; color: #b91c1c; }
-    .line-prio.prio-mid { background: #fef3c7; color: #b45309; }
-    .line-status-tag { font-size: 0.6rem; padding: 1px 3px; border-radius: 3px; background: #fecdd3; color: #9f1239; font-weight: 700; }
-    .line-notes { font-size: 0.65rem; color: #475569; margin-top: 3px; background: #fff; padding: 3px; border-radius: 3px; border: 1px dashed #cbd5e1; white-space: pre-wrap; word-break: break-word; }
-    .shift-header { background: #f1f5f9; font-weight: 700; font-size: 0.9rem; width: 92px; text-align: center; padding: 14px 4px; color: #334155; vertical-align: middle; }
-    body.planner-active .shift-header { width: 116px; padding: 10px 5px; }
-    .shift-team-badge { display: inline-flex; align-items: center; justify-content: center; gap: 4px; margin-top: 5px; padding: 3px 6px; border-radius: 4px; background: #fff; border: 1px solid #cbd5e1; font-size: 0.72rem; font-weight: 700; color: #1e293b; }
-    body.planner-active .shift-team-badge { display: none; }
-    .shift-controls { display: none; flex-direction: column; gap: 5px; margin-top: 6px; }
-    body.planner-active .shift-controls { display: flex; }
-    .shift-rotate-btn { width: 100%; font-size: 0.72rem; font-weight: 700; padding: 5px 4px; border-radius: 4px; border: none; background: var(--bayer-blue); color: #fff; cursor: pointer; }
-    .shift-team-select { width: 100%; font-size: 0.72rem; font-weight: 700; padding: 4px 2px; border-radius: 4px; border: 1px solid var(--bayer-blue); background: #fff; cursor: pointer; }
-    .shift-clear-btn { width: 100%; font-size: 0.68rem; font-weight: 600; padding: 4px; border-radius: 4px; border: 1px solid #cbd5e1; background: #fff; color: #64748b; cursor: pointer; }
-    .shift-clear-btn:hover { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
-    .drop-zone { padding: 6px; min-height: 120px; display: flex; flex-direction: column; gap: 6px; background: #fafafa; }
-    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 100; padding: 12px; }
-    .modal { background: #fff; padding: 24px; border-radius: 10px; width: 100%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); max-height: 90vh; overflow-y: auto; }
-    .form-group { margin-bottom: 12px; position: relative; }
-    .form-group label { display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; color: #475569; }
-    .form-control { width: 100%; padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.92rem; }
-    textarea.form-control { resize: vertical; min-height: 70px; }
-    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
-    .suggestions-box { display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 8px 20px rgba(0,0,0,0.12); max-height: 160px; overflow-y: auto; z-index: 60; margin-top: 2px; }
-    .suggestion-item { padding: 8px 10px; font-size: 0.88rem; cursor: pointer; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; }
+    body { background: var(--bg-gray); min-height: 100vh; display: flex; flex-direction: column; color: #1e293b; }
+    .brand-gradient { height: 6px; background: linear-gradient(90deg, #0091df 0%, #00bcff 50%, #89d329 100%); width: 100%; }
+    header { background: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .header-left img { width: 48px; height: 48px; object-fit: contain; }
+    .header-title h1 { font-size: 1.2rem; color: var(--bayer-blue); font-weight: 700; }
+    .header-title span { font-size: 0.75rem; color: #64748b; }
+    .container { width: 100%; max-width: 520px; margin: 24px auto; padding: 0 16px 40px; flex: 1; }
+    .card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; margin-bottom: 16px; }
+    .card h2 { font-size: 1.05rem; color: #0f172a; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .form-group { margin-bottom: 14px; position: relative; }
+    .form-group label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #475569; }
+    .form-control { width: 100%; padding: 11px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; background: #f8fafc; }
+    .form-control:focus { outline: none; border-color: var(--bayer-blue); background: #fff; }
+    textarea.form-control { resize: vertical; min-height: 85px; }
+    .suggestions-box { display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.12); max-height: 190px; overflow-y: auto; z-index: 50; margin-top: 4px; }
+    .suggestion-item { padding: 10px 12px; font-size: 0.92rem; cursor: pointer; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; }
     .suggestion-item:hover { background: #f0f9ff; color: var(--bayer-blue); }
-    .tabs { display: flex; gap: 6px; border-bottom: 2px solid #e2e8f0; margin-bottom: 16px; overflow-x: auto; }
-    .tab-btn { padding: 8px 12px; background: none; border: none; border-bottom: 2px solid transparent; font-weight: 600; cursor: pointer; color: #64748b; margin-bottom: -2px; font-size: 0.9rem; white-space: nowrap; }
-    .tab-btn.active { color: var(--bayer-blue); border-bottom-color: var(--bayer-blue); }
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
-    .item-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid #f1f5f9; font-size: 0.95rem; gap: 8px; }
-    .sick-card { background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid var(--bayer-blue); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
-    .sick-card.unread { background: #fff1f2; border-color: #fecdd3; border-left: 4px solid #dc2626; }
-    .admin-element { display: none; }
-    body.planner-active .admin-element { display: inline-flex; }
+    .btn { padding: 11px 18px; border-radius: 8px; font-size: 0.95rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; width: 100%; }
+    .btn-primary { background: var(--bayer-blue); color: #fff; }
+    .btn-outline { border-color: #cbd5e1; background: #fff; color: #475569; width: auto; padding: 7px 12px; font-size: 0.85rem; }
+    .status-box { padding: 16px; border-radius: 10px; font-weight: 600; display: flex; flex-direction: column; gap: 4px; }
+    .status-assigned { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .status-pool { background: #e0f2fe; color: #075985; border: 1px solid #bae6fd; }
+    .status-absent { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+    .line-badge-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .line-badge { padding: 5px 10px; border-radius: 6px; font-size: 0.82rem; font-weight: 600; }
+    .badge-prio { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; font-weight: 700; }
+    .badge-sec { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+    .success-banner { display: none; background: #dcfce7; color: #166534; border: 1px solid #86efac; padding: 14px; border-radius: 8px; margin-bottom: 14px; font-size: 0.9rem; font-weight: 600; }
+    .error-msg { display: none; background: #fee2e2; color: #b91c1c; padding: 10px; border-radius: 6px; font-size: 0.85rem; margin-bottom: 12px; text-align: center; font-weight: 600; }
   </style>
 </head>
 <body>
   <div class="brand-gradient"></div>
   <header>
     <div class="header-left">
-      <div class="bayer-logo-btn" onclick="handleLogoClick()" title="Planer-Zugang"><img src="logo.png" alt="Bayer Logo"></div>
-      <div class="header-title"><h1>Schicht- und Linienübersicht</h1><span class="status-badge">Planer-Modus aktiv</span></div>
+      <img src="logo.png" alt="Logo" onerror="this.style.display='none'">
+      <div class="header-title"><h1>Mitarbeiter-Portal</h1><span>Persönliche Schicht- & Linienübersicht</span></div>
     </div>
-    <div class="header-actions">
-      <button class="btn btn-outline admin-element" onclick="openInboxModal()">📬 Postfach & Krank<span id="inboxBadge" class="inbox-badge">0</span></button>
-      <button class="btn btn-outline admin-element" onclick="openSettingsModal()">⚙️ Einstellungen</button>
-      <button class="btn btn-outline admin-element" onclick="logoutPlanner()">Abmelden</button>
-    </div>
+    <button id="logoutBtn" class="btn btn-outline" style="display:none;" onclick="logoutEmp()">Abmelden</button>
   </header>
 
-  <main>
-    <aside class="sidebar">
-      <div class="team-filter-box">
-        <div class="search-wrapper">
-          <input type="text" id="poolSearchInput" class="search-input" placeholder="🔍 Name oder Linie (z.B. 37)..." oninput="updatePoolSearch(this.value)">
-          <span id="clearSearchBtn" class="search-clear" onclick="updatePoolSearch('')">&times;</span>
-        </div>
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <span style="font-weight:700;">Pool-Teams</span>
-          <div class="filter-quick-links"><span onclick="toggleAllTeamFilters(true)">Alle</span> / <span onclick="toggleAllTeamFilters(false)">Keine</span></div>
-        </div>
-        <div id="teamFilterContainer" class="team-filter-options"></div>
-        <div style="border-top:1px dashed #cbd5e1; margin:7px 0 5px;"></div>
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <span style="font-weight:700;">Pool-Rollen</span>
-          <div class="filter-quick-links"><span onclick="toggleAllRoleFilters(true)">Alle</span> / <span onclick="toggleAllRoleFilters(false)">Keine</span></div>
-        </div>
-        <div id="roleFilterContainer" class="team-filter-options"></div>
+  <div class="container">
+    <div id="loginView" class="card">
+      <h2 style="color:var(--bayer-blue); justify-content:center; margin-bottom:16px;">🔐 Mitarbeiter-Anmeldung</h2>
+      <div id="loginError" class="error-msg">Name oder Passwort nicht korrekt!</div>
+      <div class="form-group" id="nameSearchGroup">
+        <label>Dein Name</label>
+        <input type="text" id="loginEmpInput" class="form-control" placeholder="Vor- und Nachname eingeben..." autocomplete="off" oninput="onNameInput(this.value)" onkeydown="if(event.key==='Enter') $('loginPassword').focus()">
+        <div id="loginSuggestions" class="suggestions-box"></div>
       </div>
-      <div class="panel">
-        <h2>
-          <span>Pool <span id="poolCount" style="font-size:0.82rem; color:#64748b;">(0)</span></span>
-          <select id="freiTeamSelect" onchange="assignTeamToShift('frei', this.value)" style="font-size:0.72rem; padding:2px 4px; border-radius:4px; border:1px solid #cbd5e1; font-weight:700;"></select>
-        </h2>
-        <div id="pool" class="card-list drop-zone" data-zone="pool"></div>
-      </div>
-      <div class="panel">
-        <h2><span>Abwesend (Urlaub / Krank)</span><button class="btn btn-outline" style="padding:2px 7px; font-size:0.72rem;" onclick="openInboxModal()">+ Zeitraum</button></h2>
-        <div id="absent" class="card-list drop-zone" data-zone="absent" style="background:#fff1f2;"></div>
-      </div>
-    </aside>
-    <section class="board-container">
-      <table class="board-table">
-        <thead><tr id="headerRow"><th class="shift-header">Schicht</th></tr></thead>
-        <tbody id="matrixBody"></tbody>
-      </table>
-    </section>
-  </main>
-
-  <!-- PIN Modal -->
-  <div id="pinModal" class="modal-overlay">
-    <div class="modal" style="max-width:350px; text-align:center;">
-      <h3 style="color:var(--bayer-blue); margin-bottom:12px;">Planer-Freischaltung</h3>
-      <input type="password" id="pinInput" class="form-control" placeholder="****" style="text-align:center; font-size:1.5rem; letter-spacing:6px;" onkeydown="if(event.key==='Enter') verifyPin()">
-      <div class="modal-actions" style="justify-content:center;">
-        <button class="btn btn-outline" onclick="closeModal('pinModal')">Abbrechen</button>
-        <button class="btn btn-primary" onclick="verifyPin()">Anmelden</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Postfach Modal -->
-  <div id="inboxModal" class="modal-overlay">
-    <div class="modal" style="max-width:600px;">
-      <h3 style="display:flex; justify-content:space-between; color:var(--bayer-blue); margin-bottom:14px;">
-        <span>📬 Postfach & Abwesenheiten</span>
-        <button onclick="closeModal('inboxModal')" style="border:none; background:none; font-size:1.5rem; cursor:pointer;">&times;</button>
-      </h3>
-      <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:14px; margin-bottom:18px;">
-        <h4 style="font-size:0.9rem; margin-bottom:10px;">➕ Mitarbeiter manuell krank / abwesend melden (Von – Bis)</h4>
-        <div class="form-group" id="manualSickSearchGroup">
-          <label>Mitarbeiter (Name eintippen)</label>
-          <input type="text" id="manualSickEmpInput" class="form-control" placeholder="🔍 Vor- oder Nachname tippen..." autocomplete="off" oninput="onManualSickNameInput(this.value)">
-          <div id="manualSickSuggestions" class="suggestions-box"></div>
-        </div>
-        <div style="display:flex; gap:10px;">
-          <div class="form-group" style="flex:1;"><label>Von (Startdatum)</label><input type="date" id="manualSickStart" class="form-control"></div>
-          <div class="form-group" style="flex:1;"><label>Bis (Einschließlich)</label><input type="date" id="manualSickEnd" class="form-control"></div>
-        </div>
-        <div class="form-group"><label>Grund / Notiz (optional)</label><input type="text" id="manualSickReason" class="form-control" placeholder="z.B. Telefonisch krankgemeldet / Urlaub / Kur"></div>
-        <button class="btn btn-primary" style="width:100%;" onclick="addManualSickLeave()">Abwesenheit speichern & automatisch einteilen</button>
-      </div>
-      <div style="margin-bottom:18px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-          <h4 style="font-size:0.92rem; color:#dc2626;">🔔 Neue Portal-Nachrichten (Ungelesen)</h4>
-          <button id="btnMarkAllRead" class="btn btn-outline" style="padding:4px 10px; font-size:0.75rem; display:none;" onclick="markAllSickLeavesRead()">Alle gelesen</button>
-        </div>
-        <div id="unreadSickList"></div>
-      </div>
-      <div style="border-top:2px solid #e2e8f0; padding-top:14px;">
-        <h4 style="font-size:0.92rem; margin-bottom:6px;">📋 Aktuelle & geplante Abwesenheiten</h4>
-        <div id="activeSickList"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Linie bearbeiten Modal -->
-  <div id="lineEditModal" class="modal-overlay">
-    <div class="modal" style="max-width:450px;">
-      <h3 id="lineEditTitle" style="color:var(--bayer-blue); margin-bottom:16px;">Linie bearbeiten</h3>
-      <input type="hidden" id="editLineId">
       <div class="form-group">
-        <label>Priorität</label>
-        <select id="editLinePrio" class="form-control">
-          <option value="">Keine Priorität</option>
-          <option value="PRIO 1">PRIO 1</option><option value="PRIO 2">PRIO 2</option><option value="PRIO 3">PRIO 3</option>
-          <option value="PRIO 4">PRIO 4</option><option value="PRIO 5">PRIO 5</option><option value="PRIO 6">PRIO 6</option><option value="PRIO 7">PRIO 7</option>
-        </select>
+        <label>Passwort / PIN (Erst-Login: 1234)</label>
+        <input type="password" id="loginPassword" class="form-control" placeholder="Passwort eingeben" onkeydown="if(event.key==='Enter') loginEmp()">
       </div>
-      <div class="form-group"><label>Status / Tag (z. B. Wartung!, Pack 3)</label><input type="text" id="editLineTag" class="form-control"></div>
-      <div class="form-group"><label>Stückzahlen & Notiz</label><textarea id="editLineNote" class="form-control"></textarea></div>
-      <div class="modal-actions">
-        <button class="btn btn-outline" onclick="closeModal('lineEditModal')">Abbrechen</button>
-        <button class="btn btn-primary" onclick="saveLineDetails()">Speichern</button>
-      </div>
+      <button class="btn btn-primary" onclick="loginEmp()">Anmelden</button>
     </div>
-  </div>
 
-  <!-- Einstellungen Modal -->
-  <div id="settingsModal" class="modal-overlay">
-    <div class="modal" style="max-width:600px;">
-      <h3 style="display:flex; justify-content:space-between; color:var(--bayer-blue); margin-bottom:16px;">
-        Verwaltung <button onclick="closeModal('settingsModal')" style="border:none; background:none; font-size:1.5rem; cursor:pointer;">&times;</button>
-      </h3>
-      <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab('tabEmployees',0)">Mitarbeiter</button>
-        <button class="tab-btn" onclick="switchTab('tabRoles',1)">Rollen</button>
-        <button class="tab-btn" onclick="switchTab('tabLines',2)">Linien</button>
-        <button class="tab-btn" onclick="switchTab('tabTeams',3)">Teams & Farben</button>
-        <button class="tab-btn" onclick="switchTab('tabBackups',4)">Backups</button>
-      </div>
-      <div id="tabEmployees" class="tab-content active">
-        <div style="background:#f8fafc; padding:16px; border-radius:8px; margin-bottom:16px; border:1px solid #e2e8f0; max-height:58vh; overflow-y:auto;">
-          <input type="hidden" id="editEmpId">
-          <div style="display:flex; gap:12px;">
-            <div class="form-group" style="flex:1;"><label>Vorname</label><input type="text" id="newEmpFirstName" class="form-control" placeholder="Vorname"></div>
-            <div class="form-group" style="flex:1;"><label>Nachname</label><input type="text" id="newEmpLastName" class="form-control" placeholder="Nachname"></div>
-          </div>
-          <div style="display:flex; gap:12px;">
-            <div class="form-group" style="flex:1;"><label>Fokus Team</label><select id="newEmpTeam" class="form-control"></select></div>
-            <div class="form-group" style="flex:1;"><label>Rolle</label><select id="newEmpRole" class="form-control"></select></div>
-          </div>
-          <div style="display:flex; justify-content:space-between; align-items:center; margin:4px 0 8px;">
-            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.92rem;">
-              <input type="checkbox" id="newEmpFirstAider" style="width:18px; height:18px;"> Ist Ersthelfer <span style="color:#dc2626; font-weight:900; font-size:1.4rem;">+</span>
-            </label>
-            <span style="font-size:0.75rem; color:#64748b;">🔑 Start-PIN: <b>1234</b></span>
-          </div>
-          <div class="form-group"><label>Prio-Linien:</label><div id="mainLinesCheckboxes" style="display:flex; flex-wrap:wrap; gap:8px; background:#fff; padding:8px; border:1px solid #cbd5e1; border-radius:6px;"></div></div>
-          <div class="form-group"><label>Sek-Linien:</label><div id="secLinesCheckboxes" style="display:flex; flex-wrap:wrap; gap:8px; background:#fff; padding:8px; border:1px solid #cbd5e1; border-radius:6px;"></div></div>
-          <div style="display:flex; gap:10px; margin-top:12px;">
-            <button id="btnSaveEmp" class="btn btn-primary" style="flex:1;" onclick="saveEmployee()">Hinzufügen</button>
-            <button id="btnCancelEditEmp" class="btn btn-outline" style="display:none;" onclick="resetEmpForm()">Abbrechen</button>
-          </div>
+    <div id="changePasswordView" class="card" style="display:none;">
+      <h2 style="color:var(--bayer-blue); margin-bottom:8px;">🔒 Eigenes Passwort festlegen</h2>
+      <p style="font-size:0.85rem; color:#64748b; margin-bottom:16px;">Hallo <b id="cpEmpName"></b>! Bitte vergib jetzt ein persönliches Passwort (mind. 4 Zeichen) für deine zukünftigen Anmeldungen.</p>
+      <div id="cpError" class="error-msg"></div>
+      <div class="form-group"><label>Neues Passwort / PIN</label><input type="password" id="newPasswordInput" class="form-control" placeholder="Neues Passwort eingeben"></div>
+      <div class="form-group"><label>Neues Passwort wiederholen</label><input type="password" id="newPasswordConfirm" class="form-control" placeholder="Passwort bestätigen" onkeydown="if(event.key==='Enter') saveNewPassword()"></div>
+      <button class="btn btn-primary" onclick="saveNewPassword()">Passwort speichern & weiter</button>
+    </div>
+
+    <div id="portalView" style="display:none;">
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div><div style="font-size:0.8rem; color:#64748b;">Angemeldet als</div><div id="empWelcomeName" style="font-size:1.3rem; font-weight:700;"></div></div>
+          <span id="empRoleBadge" style="background:#f1f5f9; padding:5px 10px; border-radius:6px; font-size:0.82rem; font-weight:700;"></span>
         </div>
-        <div id="employeeList" style="max-height:200px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
       </div>
-      <div id="tabRoles" class="tab-content">
-        <div style="display:flex; gap:10px; margin-bottom:16px;"><input type="text" id="newRoleName" class="form-control" placeholder="Neue Rolle"><button class="btn btn-primary" onclick="addRole()">Hinzufügen</button></div>
-        <div id="roleList" style="max-height:250px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
+      <div class="card"><h2>📍 Meine heutige Einteilung</h2><div id="empCurrentStatus" class="status-box status-pool"></div></div>
+      <div class="card">
+        <h2>⚙️ Meine Linien-Qualifikationen</h2>
+        <div style="margin-bottom:12px;"><div style="font-size:0.82rem; font-weight:600; color:#475569;">Meine Stammlinien (Prio-Linien):</div><div id="empPrioLines" class="line-badge-list"></div></div>
+        <div><div style="font-size:0.82rem; font-weight:600; color:#475569;">Weitere Linien (Sek-Linien):</div><div id="empSecLines" class="line-badge-list"></div></div>
       </div>
-      <div id="tabLines" class="tab-content">
-        <div style="display:flex; gap:10px; margin-bottom:16px;"><input type="text" id="newLineName" class="form-control" placeholder="Neue Linie (z.B. Linie 40)"><button class="btn btn-primary" onclick="addLine()">Hinzufügen</button></div>
-        <div id="lineSettingsList" style="max-height:250px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
-      </div>
-      <div id="tabTeams" class="tab-content">
-        <div style="background:#f8fafc; padding:14px; border-radius:8px; margin-bottom:16px; border:1px solid #e2e8f0;">
-          <label style="font-size:0.85rem; font-weight:600; margin-bottom:6px; display:block;">Neues Team hinzufügen</label>
-          <div style="display:flex; gap:10px; align-items:center;">
-            <input type="color" id="newTeamColor" value="#3b82f6" style="width:40px; height:38px; border:none; cursor:pointer; background:none;">
-            <input type="text" id="newTeamName" class="form-control" placeholder="Team-Name (z.B. Team 5)">
-            <button class="btn btn-primary" onclick="addTeam()">Hinzufügen</button>
-          </div>
+      <div class="card">
+        <h2>🏥 Krankmeldung / Abwesenheit melden</h2>
+        <div id="sickSuccessBanner" class="success-banner"></div>
+        <div style="display:flex; gap:10px;">
+          <div class="form-group" style="flex:1;"><label>Von (Startdatum)</label><input type="date" id="sickStartDate" class="form-control"></div>
+          <div class="form-group" style="flex:1;"><label>Bis (Einschließlich)</label><input type="date" id="sickEndDate" class="form-control"></div>
         </div>
-        <div id="teamSettingsList" style="max-height:220px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
-      </div>
-      <div id="tabBackups" class="tab-content">
-        <p style="font-size:0.9rem; color:#64748b; margin-bottom:14px;">Automatische Tagessicherung (letzte 7 Tage):</p>
-        <div id="backupList" style="max-height:250px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px; padding:10px;">Lade Backups...</div>
+        <div class="form-group"><label>Begleitschreiben / Begründung</label><textarea id="sickReason" class="form-control" placeholder="z.B. Grippe, Arzttermin, AU folgt..."></textarea></div>
+        <button class="btn btn-primary" style="background:#dc2626;" onclick="submitSickLeave()">Krankmeldung jetzt absenden</button>
+        <div id="mySickLeavesHistory" style="margin-top:16px;"></div>
       </div>
     </div>
   </div>
@@ -295,379 +112,102 @@
       messagingSenderId: "152929285194", appId: "1:152929285194:web:00b73aa6058a70aed3a2b3"
     });
     const db = firebase.firestore();
-    const shifts = [{ id: "frueh", name: "Früh" }, { id: "spaet", name: "Spät" }, { id: "nacht", name: "Nacht" }];
-    let shiftRotation = { frueh: "team-1", spaet: "team-2", nacht: "team-3", frei: "team-4" };
-    let lines = ["32","33","34","09","22","39","36","37","38","54"].map(n => ({ id: "L"+n, name: "Linie "+n, prio: "", tag: "", note: "" }));
-    let roles = ["Bediener", "LOP", "TL", "Schichtexperte", "Waschraumoperator"], employees = [], sickLeaves = [];
-    let teamsConfig = { "team-1": { name: "Team 1", color: "#0091df" }, "team-2": { name: "Team 2", color: "#f59e0b" }, "team-3": { name: "Team 3", color: "#10b981" }, "team-4": { name: "Team 4", color: "#f43f5e" } };
-    let activeTeamFilters = {}, activeRoleFilters = {}, poolSearchQuery = "", selectedManualSickEmpId = null, isPlanner = false, sortableInstances = [], backupDoneToday = false;
+    const shiftsMap = { frueh: "Frühschicht", spaet: "Spätschicht", nacht: "Nachtschicht" };
+    let lines = [], employees = [], sickLeaves = [], rawDocData = {}, loggedInEmpId = localStorage.getItem("portal_emp_id") || null, selectedLoginEmpId = null;
 
     const getTodayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
     const formatDateDe = s => s && s.includes("-") ? s.split("-").reverse().join(".") : (s || "");
-    const getSortedTeamKeys = () => Object.keys(teamsConfig).sort();
     const extractLineId = z => (!z || z === "pool" || z === "absent" || !z.includes("_")) ? null : z.split("_").slice(0,-1).join("_");
-    const extractShiftId = z => (!z || z === "pool" || z === "absent" || !z.includes("_")) ? null : z.split("_").pop();
     const fullName = e => `${e.firstName || ''} ${e.lastName || ''}`.trim();
 
-    function getPredeterminedLineForEmp(emp) {
-      if (emp.lastLineId && lines.some(l => l.id === emp.lastLineId)) return emp.lastLineId;
-      if (emp.mainLines?.length && lines.some(l => l.id === emp.mainLines[0])) return (emp.lastLineId = emp.mainLines[0]);
-      return null;
-    }
-
-    window.addEventListener("DOMContentLoaded", () => document.addEventListener("click", e => {
-      if ($("manualSickSearchGroup") && !$("manualSickSearchGroup").contains(e.target)) $("manualSickSuggestions").style.display = "none";
-    }));
-    setInterval(() => { if (!isPlanner) window.location.reload(); }, 3600000);
-
-    function handleLogoClick() { if (!isPlanner) { $("pinModal").style.display = "flex"; $("pinInput").value = ""; $("pinInput").focus(); } }
-    function verifyPin() { if ($("pinInput").value === "1234") { isPlanner = true; closeModal("pinModal"); document.body.classList.add("planner-active"); initBoard(); } else alert("Falsche PIN!"); }
-    function logoutPlanner() { isPlanner = false; document.body.classList.remove("planner-active"); initBoard(); }
-    function closeModal(id) { $(id).style.display = "none"; if (id === "settingsModal") resetEmpForm(); }
-    function openSettingsModal() { $("settingsModal").style.display = "flex"; renderSettingsLists(); }
+    window.addEventListener("DOMContentLoaded", () => {
+      $("sickStartDate").value = $("sickEndDate").value = getTodayIso();
+      document.addEventListener("click", e => { if ($("nameSearchGroup") && !$("nameSearchGroup").contains(e.target)) $("loginSuggestions").style.display = "none"; });
+    });
 
     db.collection("shiftplan").doc("live_board").onSnapshot(doc => {
       if (doc.exists) {
-        const d = doc.data();
-        if (d.lines) lines = d.lines;
-        if (d.roles) roles = d.roles;
-        sickLeaves = d.sickLeaves || [];
-        if (d.shiftRotation) shiftRotation = d.shiftRotation;
-        let memUpd = false;
-        if (d.employees) {
-          employees = d.employees.map(e => {
-            if (!e.firstName && e.name) { const p = e.name.split(" "); e.firstName = p[0]||""; e.lastName = p.slice(1).join(" ")||""; }
-            e.mainLines = e.mainLines || []; e.secLines = e.secLines || []; e.password = e.password || "1234";
-            if (e.mustChangePw === undefined) e.mustChangePw = (e.password === "1234");
-            if (e.zone?.endsWith("_frei")) { const lId = extractLineId(e.zone); if (lId) e.lastLineId = lId; e.zone = "pool"; memUpd = true; }
-            const cLine = extractLineId(e.zone), cShift = extractShiftId(e.zone);
-            if (cLine && (!e.lastLineId || (cShift && shiftRotation[cShift] === e.team)) && e.lastLineId !== cLine) { e.lastLineId = cLine; memUpd = true; }
-            return e;
-          });
-        }
-        if (d.teamsConfig) {
-          teamsConfig = d.teamsConfig;
-          for (const k of Object.keys(teamsConfig)) {
-            const cl = teamsConfig[k].name.replace(/\s*\((Blau|Gelb|Grün|Rot)\)/i, '');
-            if (cl !== teamsConfig[k].name) { teamsConfig[k].name = cl; memUpd = true; }
-          }
-        }
-        getSortedTeamKeys().forEach(k => { if (activeTeamFilters[k] === undefined) activeTeamFilters[k] = true; });
-        roles.forEach(r => { if (activeRoleFilters[r] === undefined) activeRoleFilters[r] = true; });
-        if (processSickLeavesAutomation() || memUpd) saveToFirebase();
-        applyTeamStyles(); updateTeamDropdowns(); renderTeamFilterCheckboxes(); renderRoleFilterCheckboxes(); updateInboxBadge();
-        if ($("inboxModal").style.display === "flex") renderInboxModal();
-        if ($("settingsModal").style.display === "flex") renderSettingsLists();
-        if (!backupDoneToday) createDailyBackup(d);
-      } else saveToFirebase();
-      initBoard();
+        rawDocData = doc.data(); lines = rawDocData.lines || []; sickLeaves = rawDocData.sickLeaves || [];
+        employees = (rawDocData.employees || []).map(e => {
+          if (!e.firstName && e.name) { const p = e.name.split(" "); e.firstName = p[0]||""; e.lastName = p.slice(1).join(" ")||""; }
+          e.password = e.password || "1234"; if (e.mustChangePw === undefined) e.mustChangePw = (e.password === "1234");
+          return e;
+        });
+        if (loggedInEmpId) { const emp = employees.find(e => e.id === loggedInEmpId); emp ? routeAuthenticatedEmp(emp) : logoutEmp(); }
+      }
     });
 
-    function saveToFirebase() { db.collection("shiftplan").doc("live_board").set({ lines, roles, employees, teamsConfig, sickLeaves, shiftRotation }); }
-
-    function rotateAllShifts() {
-      const { frueh: oF, spaet: oS, nacht: oN, frei: oFr } = shiftRotation;
-      if (!confirm(`Teams jetzt weiterrotieren?\n\n• ${teamsConfig[oF]?.name}: Früh ➔ Spät\n• ${teamsConfig[oS]?.name}: Spät ➔ Nacht\n• ${teamsConfig[oN]?.name}: Nacht ➔ Frei (Pool)\n• ${teamsConfig[oFr]?.name}: Frei (Pool) ➔ Früh`)) return;
-      const today = getTodayIso();
-      employees.forEach(e => {
-        const cL = extractLineId(e.zone), cS = extractShiftId(e.zone);
-        if (cL && (!e.lastLineId || (cS && shiftRotation[cS] === e.team))) e.lastLineId = cL;
-      });
-      shiftRotation = { frueh: oFr, spaet: oF, nacht: oS, frei: oN };
-      employees.forEach(e => {
-        if (e.zone === "absent" || sickLeaves.some(s => s.empId === e.id && s.startDate <= today && s.endDate >= today)) return;
-        const lId = getPredeterminedLineForEmp(e);
-        if (e.team === shiftRotation.frueh) e.zone = lId ? `${lId}_frueh` : "pool";
-        else if (e.team === shiftRotation.spaet) e.zone = lId ? `${lId}_spaet` : "pool";
-        else if (e.team === shiftRotation.nacht) e.zone = lId ? `${lId}_nacht` : "pool";
-        else if (e.team === shiftRotation.frei) e.zone = "pool";
-      });
-      saveToFirebase(); initBoard();
-    }
-
-    function assignTeamToShift(slot, newTeam) {
-      if (!newTeam) return;
-      const oldTeam = shiftRotation[slot];
-      ["frueh","spaet","nacht","frei"].forEach(k => { if (k !== slot && shiftRotation[k] === newTeam) shiftRotation[k] = oldTeam; });
-      shiftRotation[slot] = newTeam;
-      const today = getTodayIso();
-      employees.forEach(e => {
-        if (e.team !== newTeam || e.zone === "absent" || sickLeaves.some(s => s.empId === e.id && s.startDate <= today && s.endDate >= today)) return;
-        if (slot === "frei") { const l = extractLineId(e.zone); if (l) e.lastLineId = l; e.zone = "pool"; }
-        else { const l = getPredeterminedLineForEmp(e); e.zone = l ? `${l}_${slot}` : "pool"; }
-      });
-      saveToFirebase(); initBoard();
-    }
-
-    function clearShiftRow(shiftId, shiftName) {
-      const list = employees.filter(e => e.zone?.endsWith(`_${shiftId}`));
-      if (!list.length || !confirm(`${shiftName}-Schicht (${list.length} Mitarbeiter) in den Pool leeren?`)) return;
-      list.forEach(e => { const l = extractLineId(e.zone); if (l && (!e.lastLineId || shiftRotation[shiftId] === e.team)) e.lastLineId = l; e.zone = "pool"; });
-      saveToFirebase(); initBoard();
-    }
-
-    function clearEntireBoard() {
-      const list = employees.filter(e => e.zone && e.zone !== "pool" && e.zone !== "absent");
-      if (!list.length || !confirm(`Alle 3 Schichten (${list.length} Mitarbeiter) komplett in den Pool leeren?`)) return;
-      list.forEach(e => { const l = extractLineId(e.zone), s = extractShiftId(e.zone); if (l && (!e.lastLineId || (s && shiftRotation[s] === e.team))) e.lastLineId = l; e.zone = "pool"; });
-      saveToFirebase(); initBoard();
-    }
-
-    function returnEmpFromSick(emp) {
-      const l = getPredeterminedLineForEmp(emp);
-      if (emp.team === shiftRotation.frueh && l) emp.zone = `${l}_frueh`;
-      else if (emp.team === shiftRotation.spaet && l) emp.zone = `${l}_spaet`;
-      else if (emp.team === shiftRotation.nacht && l) emp.zone = `${l}_nacht`;
-      else emp.zone = "pool";
-    }
-
-    function processSickLeavesAutomation() {
-      const today = getTodayIso(); let chg = false;
-      const exp = sickLeaves.filter(s => s.endDate < today);
-      if (exp.length) {
-        exp.forEach(x => {
-          const emp = employees.find(e => e.id === x.empId);
-          if (emp && emp.zone === "absent" && !sickLeaves.some(s => s.id !== x.id && s.empId === x.empId && s.startDate <= today && s.endDate >= today)) returnEmpFromSick(emp);
-        });
-        sickLeaves = sickLeaves.filter(s => s.endDate >= today); chg = true;
-      }
-      sickLeaves.forEach(s => {
-        if (s.startDate <= today && s.endDate >= today) {
-          const emp = employees.find(e => e.id === s.empId);
-          if (emp && emp.zone !== "absent") { const l = extractLineId(emp.zone); if (l) emp.lastLineId = l; emp.zone = "absent"; chg = true; }
-        }
-      });
-      return chg;
-    }
-
-    function updateInboxBadge() {
-      const c = sickLeaves.filter(s => !s.readByPlanner).length;
-      $("inboxBadge").textContent = c; $("inboxBadge").style.display = c > 0 ? "inline-flex" : "none";
-    }
-
-    function onManualSickNameInput(val) {
-      selectedManualSickEmpId = null;
-      const box = $("manualSickSuggestions"), q = val.trim().toLowerCase();
+    function onNameInput(val) {
+      selectedLoginEmpId = null; const box = $("loginSuggestions"), q = val.trim().toLowerCase();
       if (!q) { box.style.display = "none"; return; }
       const m = employees.filter(e => fullName(e).toLowerCase().includes(q) || `${e.lastName} ${e.firstName}`.toLowerCase().includes(q));
       if (!m.length) { box.style.display = "none"; return; }
-      box.innerHTML = m.map(e => `<div class="suggestion-item" onclick="selectManualSickEmp('${e.id}')"><span><b>${fullName(e)}</b></span><small style="color:#64748b;">${e.role}</small></div>`).join("");
+      box.innerHTML = m.map(e => `<div class="suggestion-item" onclick="selectLoginEmp('${e.id}')"><span><b>${fullName(e)}</b></span><small style="color:#64748b;">${e.role}</small></div>`).join("");
       box.style.display = "block";
     }
 
-    function selectManualSickEmp(id) {
-      const e = employees.find(x => x.id === id);
-      if (e) { selectedManualSickEmpId = e.id; $("manualSickEmpInput").value = fullName(e); $("manualSickSuggestions").style.display = "none"; }
-    }
+    function selectLoginEmp(id) { const e = employees.find(x => x.id === id); if (e) { selectedLoginEmpId = e.id; $("loginEmpInput").value = fullName(e); $("loginSuggestions").style.display = "none"; $("loginPassword").focus(); } }
 
-    function openInboxModal(preId = null) {
-      $("inboxModal").style.display = "flex"; $("manualSickSuggestions").style.display = "none";
-      const emp = preId ? employees.find(e => e.id === preId) : null;
-      selectedManualSickEmpId = emp ? emp.id : null; $("manualSickEmpInput").value = emp ? fullName(emp) : "";
-      const today = getTodayIso();
-      if (!$("manualSickStart").value) $("manualSickStart").value = today;
-      if (!$("manualSickEnd").value) $("manualSickEnd").value = today;
-      renderInboxModal();
-    }
-
-    function addManualSickLeave() {
-      const q = $("manualSickEmpInput").value.trim().toLowerCase(), sD = $("manualSickStart").value, eD = $("manualSickEnd").value, r = $("manualSickReason").value.trim();
-      let emp = selectedManualSickEmpId ? employees.find(e => e.id === selectedManualSickEmpId) : employees.find(e => fullName(e).toLowerCase() === q);
+    function loginEmp() {
+      const q = $("loginEmpInput").value.trim().toLowerCase(), pass = $("loginPassword").value.trim();
+      let emp = selectedLoginEmpId ? employees.find(e => e.id === selectedLoginEmpId) : employees.find(e => fullName(e).toLowerCase() === q);
       if (!emp && q) { const p = employees.filter(e => fullName(e).toLowerCase().includes(q)); if (p.length === 1) emp = p[0]; }
-      if (!emp) return alert("Bitte gültigen Mitarbeiternamen eingeben!");
+      if (!emp || (emp.password || "1234") !== pass) { $("loginError").style.display = "block"; return; }
+      $("loginError").style.display = "none"; loggedInEmpId = emp.id; localStorage.setItem("portal_emp_id", emp.id);
+      $("loginPassword").value = ""; $("sickSuccessBanner").style.display = "none"; routeAuthenticatedEmp(emp);
+    }
+
+    function routeAuthenticatedEmp(emp) {
+      $("loginView").style.display = "none"; $("logoutBtn").style.display = "inline-block";
+      if (emp.mustChangePw || emp.password === "1234") { $("portalView").style.display = "none"; $("changePasswordView").style.display = "block"; $("cpEmpName").textContent = fullName(emp); }
+      else { $("changePasswordView").style.display = "none"; showPortalFor(emp); }
+    }
+
+    function saveNewPassword() {
+      const p1 = $("newPasswordInput").value.trim(), p2 = $("newPasswordConfirm").value.trim(), err = $("cpError");
+      if (p1.length < 4) { err.textContent = "Mindestens 4 Zeichen erforderlich!"; err.style.display = "block"; return; }
+      if (p1 === "1234") { err.textContent = "Bitte nicht die Standard-PIN 1234 verwenden!"; err.style.display = "block"; return; }
+      if (p1 !== p2) { err.textContent = "Passwörter stimmen nicht überein!"; err.style.display = "block"; return; }
+      const emp = employees.find(e => e.id === loggedInEmpId); if (!emp) return;
+      err.style.display = "none"; emp.password = p1; emp.mustChangePw = false;
+      db.collection("shiftplan").doc("live_board").set({ ...rawDocData, employees }).then(() => { $("newPasswordInput").value = $("newPasswordConfirm").value = ""; routeAuthenticatedEmp(emp); });
+    }
+
+    function logoutEmp() { loggedInEmpId = selectedLoginEmpId = null; localStorage.removeItem("portal_emp_id"); $("loginEmpInput").value = ""; $("portalView").style.display = $("changePasswordView").style.display = $("logoutBtn").style.display = "none"; $("loginView").style.display = "block"; }
+
+    function showPortalFor(emp) {
+      $("portalView").style.display = "block"; $("empWelcomeName").textContent = fullName(emp); $("empRoleBadge").textContent = emp.role + (emp.ersthelfer ? " (+ Ersthelfer)" : "");
+      const sb = $("empCurrentStatus"), today = getTodayIso(), actSick = sickLeaves.find(s => s.empId === emp.id && s.startDate <= today && s.endDate >= today);
+      if (emp.zone === "absent" || actSick) {
+        sb.className = "status-box status-absent";
+        sb.innerHTML = `<div style="font-size:1.05rem;">🛑 Status: Abwesend / Krank gemeldet</div><div style="font-size:0.83rem; font-weight:normal;">${actSick ? `Bis einschließlich <b>${formatDateDe(actSick.endDate)}</b> als abwesend eingetragen.` : `Heute als abwesend eingetragen.`}</div>`;
+      } else if (!emp.zone || emp.zone === "pool") {
+        const lObj = emp.lastLineId ? lines.find(l => l.id === emp.lastLineId) : null;
+        sb.className = "status-box status-pool";
+        sb.innerHTML = `<div style="font-size:1.05rem;">🏖️ Status: Schichtfrei / Pool</div><div style="font-size:0.83rem; font-weight:normal;">Du hast heute Schichtfrei (oder wartest im Pool auf Einteilung).${lObj ? `<div style="margin-top:3px;">📌 Dein fester Linienplatz: <b>${lObj.name}</b></div>` : ''}</div>`;
+      } else {
+        const shId = emp.zone.split("_").pop(), lObj = lines.find(l => l.id === extractLineId(emp.zone));
+        sb.className = "status-box status-assigned";
+        sb.innerHTML = `<div style="font-size:0.82rem; text-transform:uppercase;">Heute eingeteilt an:</div><div style="font-size:1.35rem; font-weight:800;">✅ ${lObj ? lObj.name : emp.zone} – ${shiftsMap[shId] || shId}</div>${lObj?.note ? `<div style="font-size:0.8rem; font-weight:normal; margin-top:4px;">📌 Linien-Info: ${lObj.note}</div>` : ''}`;
+      }
+      const mList = (emp.mainLines||[]).map(id => lines.find(l => l.id===id)).filter(Boolean), sList = (emp.secLines||[]).map(id => lines.find(l => l.id===id)).filter(Boolean);
+      $("empPrioLines").innerHTML = mList.length ? mList.map(l => `<span class="line-badge badge-prio">${l.name}</span>`).join("") : `<span style="font-size:0.82rem; color:#94a3b8;">Keine hinterlegt</span>`;
+      $("empSecLines").innerHTML = sList.length ? sList.map(l => `<span class="line-badge badge-sec">${l.name}</span>`).join("") : `<span style="font-size:0.82rem; color:#94a3b8;">Keine hinterlegt</span>`;
+      const myL = sickLeaves.filter(s => s.empId === emp.id && s.endDate >= today);
+      $("mySickLeavesHistory").innerHTML = !myL.length ? "" : `<div style="font-size:0.82rem; font-weight:700; margin-bottom:6px;">Aktive / gemeldete Zeiträume:</div>` + myL.map(s => `<div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:6px; padding:8px 10px; font-size:0.8rem; margin-bottom:6px;"><b>📅 ${formatDateDe(s.startDate)} bis ${formatDateDe(s.endDate)}</b> <span style="color:#16a34a; font-weight:600;">(✓ Aktiv)</span>${s.reason ? `<div style="color:#64748b; margin-top:2px;">Notiz: ${s.reason}</div>` : ''}</div>`).join("");
+    }
+
+    function submitSickLeave() {
+      const emp = employees.find(e => e.id === loggedInEmpId); if (!emp) return;
+      const sD = $("sickStartDate").value, eD = $("sickEndDate").value, r = $("sickReason").value.trim(), today = getTodayIso();
       if (!sD || !eD || eD < sD) return alert("Bitte gültigen Zeitraum (Von - Bis) wählen!");
-      const today = getTodayIso();
-      sickLeaves.push({ id: "sl_"+Date.now(), empId: emp.id, empName: fullName(emp), startDate: sD, endDate: eD, reason: r || "Vom Planer eingetragen", createdAt: new Date().toLocaleString('de-DE'), readByPlanner: true });
+      sickLeaves.push({ id: "sl_"+Date.now(), empId: emp.id, empName: fullName(emp), startDate: sD, endDate: eD, reason: r, createdAt: new Date().toLocaleString('de-DE'), readByPlanner: false });
       if (sD <= today && eD >= today && emp.zone !== "absent") { const l = extractLineId(emp.zone); if (l) emp.lastLineId = l; emp.zone = "absent"; }
-      selectedManualSickEmpId = null; $("manualSickEmpInput").value = ""; $("manualSickReason").value = "";
-      saveToFirebase(); renderInboxModal(); renderEmployees();
-    }
-
-    function renderInboxModal() {
-      const today = getTodayIso(), unread = sickLeaves.filter(s => !s.readByPlanner);
-      $("btnMarkAllRead").style.display = unread.length ? "inline-block" : "none";
-      $("unreadSickList").innerHTML = !unread.length ? `<div style="color:#64748b; font-size:0.83rem; padding:8px; background:#f8fafc; border-radius:6px;">Keine neuen Nachrichten.</div>` : unread.map(s => `
-        <div class="sick-card unread"><div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
-          <div><div style="font-weight:700; color:#9f1239;">${s.empName}</div><div style="font-size:0.82rem; font-weight:600; margin-top:2px;">📅 ${formatDateDe(s.startDate)} bis ${formatDateDe(s.endDate)}</div>
-          <div style="font-size:0.82rem; margin-top:6px; background:#fff; padding:6px 8px; border-radius:4px; border:1px solid #fecdd3;"><b>Begleitschreiben:</b> ${s.reason || '<i>Keine Notiz</i>'}</div></div>
-          <button class="btn btn-primary" style="padding:5px 10px; font-size:0.78rem;" onclick="markSickLeaveRead('${s.id}')">✓ Gelesen</button>
-        </div></div>`).join("");
-      const sorted = [...sickLeaves].sort((a,b) => a.startDate.localeCompare(b.startDate));
-      $("activeSickList").innerHTML = !sorted.length ? `<div style="color:#64748b; font-size:0.83rem; padding:8px; background:#f8fafc; border-radius:6px;">Keine aktiven Zeiträume.</div>` : sorted.map(s => {
-        const cur = s.startDate <= today && s.endDate >= today;
-        const bdg = cur ? `<span style="background:#fee2e2; color:#b91c1c; font-size:0.7rem; padding:2px 6px; border-radius:4px; font-weight:700;">AKTUELL ABWESEND</span>` : `<span style="background:#fef3c7; color:#b45309; font-size:0.7rem; padding:2px 6px; border-radius:4px; font-weight:700;">AB ${formatDateDe(s.startDate)}</span>`;
-        return `<div class="sick-card"><div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-          <div><div style="display:flex; align-items:center; gap:8px;"><span style="font-weight:700;">${s.empName}</span>${bdg}</div>
-          <div style="font-size:0.8rem; margin-top:3px;">Zeitraum: <b>${formatDateDe(s.startDate)}</b> bis <b>${formatDateDe(s.endDate)}</b></div>
-          ${s.reason ? `<div style="font-size:0.78rem; color:#475569; margin-top:2px;">💬 "${s.reason}"</div>` : ''}</div>
-          <button class="btn btn-outline" style="padding:4px 8px; font-size:0.75rem; color:#ef4444;" onclick="deleteSickLeave('${s.id}')">Beenden</button>
-        </div></div>`;
-      }).join("");
-    }
-
-    function markSickLeaveRead(id) { const s = sickLeaves.find(x => x.id === id); if (s) { s.readByPlanner = true; saveToFirebase(); renderInboxModal(); updateInboxBadge(); } }
-    function markAllSickLeavesRead() { sickLeaves.forEach(s => s.readByPlanner = true); saveToFirebase(); renderInboxModal(); updateInboxBadge(); }
-    function deleteSickLeave(id) {
-      if (!confirm("Abwesenheit beenden?")) return;
-      const s = sickLeaves.find(x => x.id === id);
-      if (s) { const emp = employees.find(e => e.id === s.empId); if (emp && emp.zone === "absent") returnEmpFromSick(emp); }
-      sickLeaves = sickLeaves.filter(x => x.id !== id); saveToFirebase(); renderInboxModal(); updateInboxBadge(); renderEmployees();
-    }
-
-    function applyTeamStyles() {
-      let st = $("dynamicTeamStyles") || document.createElement("style"); st.id = "dynamicTeamStyles";
-      st.textContent = getSortedTeamKeys().map(k => `.employee-card.${k} { border-left-color: ${teamsConfig[k].color} !important; }`).join("\n");
-      if (!$("dynamicTeamStyles")) document.head.appendChild(st);
-    }
-
-    function updateTeamDropdowns() {
-      if ($("newEmpTeam")) $("newEmpTeam").innerHTML = getSortedTeamKeys().map(k => `<option value="${k}">${teamsConfig[k].name}</option>`).join("");
-      if ($("freiTeamSelect")) $("freiTeamSelect").innerHTML = getSortedTeamKeys().map(k => `<option value="${k}" ${shiftRotation.frei===k?'selected':''}>🏖️ Frei: ${teamsConfig[k].name}</option>`).join("");
-    }
-
-    function updatePoolSearch(val) {
-      poolSearchQuery = val.trim().toLowerCase();
-      if ($("poolSearchInput").value !== val) $("poolSearchInput").value = val;
-      $("clearSearchBtn").style.display = poolSearchQuery ? "block" : "none";
-      renderEmployees();
-    }
-
-    function matchesLineIds(ids, q) {
-      if (!ids?.length || !q) return false;
-      const cl = q.replace(/^linie\s*/i, '').trim(), nz = cl.replace(/^0+/, '');
-      return cl && ids.some(id => { const l = lines.find(x => x.id === id); if (!l) return false; const sn = l.name.replace(/Linie\s*/i, '').trim().toLowerCase(); return sn.startsWith(cl) || (nz && sn.replace(/^0+/, '').startsWith(nz)); });
-    }
-
-    function renderTeamFilterCheckboxes() {
-      if ($("teamFilterContainer")) $("teamFilterContainer").innerHTML = getSortedTeamKeys().map(k => `<label style="display:flex; align-items:center; gap:4px; cursor:pointer; font-size:0.75rem;"><input type="checkbox" ${activeTeamFilters[k]!==false?'checked':''} onchange="activeTeamFilters['${k}']=this.checked; renderEmployees();"><span style="color:${teamsConfig[k].color}; font-weight:700;">■</span> ${teamsConfig[k].name}</label>`).join("");
-    }
-    function toggleAllTeamFilters(st) { getSortedTeamKeys().forEach(k => activeTeamFilters[k] = st); renderTeamFilterCheckboxes(); renderEmployees(); }
-
-    function renderRoleFilterCheckboxes() {
-      if ($("roleFilterContainer")) $("roleFilterContainer").innerHTML = roles.map((r,i) => `<label style="display:flex; align-items:center; gap:4px; cursor:pointer; font-size:0.75rem;"><input type="checkbox" ${activeRoleFilters[r]!==false?'checked':''} onchange="activeRoleFilters[roles[${i}]]=this.checked; renderEmployees();">${r}</label>`).join("");
-    }
-    function toggleAllRoleFilters(st) { roles.forEach(r => activeRoleFilters[r] = st); renderRoleFilterCheckboxes(); renderEmployees(); }
-
-    function renderLineCheckboxes(m = [], s = []) {
-      const build = (cls, sel) => lines.map(l => `<label style="font-size:0.8rem; display:flex; align-items:center; gap:4px; cursor:pointer; background:#f1f5f9; padding:3px 6px; border-radius:4px;"><input type="checkbox" value="${l.id}" class="${cls}" ${sel.includes(l.id)?'checked':''}> ${l.name.replace(/Linie\s*/i,'')}</label>`).join("");
-      if ($("mainLinesCheckboxes")) $("mainLinesCheckboxes").innerHTML = build("main-line-chk", m);
-      if ($("secLinesCheckboxes")) $("secLinesCheckboxes").innerHTML = build("sec-line-chk", s);
-    }
-
-    function createDailyBackup(d) {
-      const iso = getTodayIso();
-      db.collection("shiftplan_backups").doc(iso).get().then(s => {
-        if (!s.exists) db.collection("shiftplan_backups").doc(iso).set({ date: iso, displayDate: new Date().toLocaleDateString('de-DE'), lines: d.lines||[], roles: d.roles||[], employees: d.employees||[], teamsConfig: d.teamsConfig||teamsConfig, sickLeaves: d.sickLeaves||[], shiftRotation: d.shiftRotation||shiftRotation }).then(() => {
-          db.collection("shiftplan_backups").orderBy("date","desc").get().then(sn => { let c=0; sn.forEach(doc => { if (++c > 7) doc.ref.delete(); }); });
-        });
-        backupDoneToday = true;
+      db.collection("shiftplan").doc("live_board").set({ ...rawDocData, employees, sickLeaves }).then(() => {
+        $("sickReason").value = ""; const b = $("sickSuccessBanner");
+        b.innerHTML = `✅ Deine Krankmeldung vom <b>${formatDateDe(sD)}</b> bis <b>${formatDateDe(eD)}</b> wurde erfolgreich übermittelt!`; b.style.display = "block";
       });
     }
-
-    function renderBackups() {
-      $("backupList").innerHTML = "Lade Backups...";
-      db.collection("shiftplan_backups").orderBy("date","desc").get().then(sn => {
-        $("backupList").innerHTML = sn.empty ? "Noch keine Backups vorhanden." : "";
-        sn.forEach(doc => { const b = doc.data(); $("backupList").innerHTML += `<div class="item-row"><span>Stand vom <b>${b.displayDate}</b></span><button class="btn btn-outline" style="padding:4px 10px; color:var(--bayer-blue);" onclick="restoreBackup('${doc.id}')">Wiederherstellen</button></div>`; });
-      });
-    }
-
-    function restoreBackup(id) {
-      if (!confirm("Diesen Stand wirklich wiederherstellen?")) return;
-      db.collection("shiftplan_backups").doc(id).get().then(s => { if (s.exists) { const b = s.data(); db.collection("shiftplan").doc("live_board").set({ lines: b.lines, roles: b.roles, employees: b.employees, teamsConfig: b.teamsConfig||teamsConfig, sickLeaves: b.sickLeaves||[], shiftRotation: b.shiftRotation||shiftRotation }); closeModal('settingsModal'); } });
-    }
-
-    function initBoard() {
-      $("headerRow").innerHTML = `<th class="shift-header"><div>Schicht</div><div class="shift-controls"><button class="shift-rotate-btn" onclick="rotateAllShifts()">🔄 Rotieren</button><button class="shift-clear-btn" onclick="clearEntireBoard()">🧹 Alle leeren</button></div></th>` + lines.map(l => {
-        const pc = l.prio?.match(/1|2/) ? "prio-high" : (l.prio?.match(/3|4/) ? "prio-mid" : "");
-        return `<th class="line-header" ${isPlanner?`onclick="openLineEditModal('${l.id}')"`:''}><div class="line-title">${l.name}</div><div class="badge-container">${l.prio?`<span class="line-prio ${pc}">${l.prio}</span>`:''}${l.tag?`<span class="line-status-tag">${l.tag}</span>`:''}</div>${l.note?`<div class="line-notes">${l.note}</div>`:''}</th>`;
-      }).join("");
-
-      const keys = getSortedTeamKeys();
-      $("matrixBody").innerHTML = shifts.map(sh => {
-        const tk = shiftRotation[sh.id] || keys[0], tm = teamsConfig[tk] || { name: "Team", color: "#0091df" };
-        const opts = keys.map(k => `<option value="${k}" ${k===tk?'selected':''}>${teamsConfig[k].name}</option>`).join("");
-        return `<tr><th class="shift-header"><div>${sh.name}</div><div class="shift-team-badge"><span style="color:${tm.color};">■</span> ${tm.name}</div><div class="shift-controls"><select class="shift-team-select" onchange="assignTeamToShift('${sh.id}',this.value)">${opts}</select><button class="shift-clear-btn" onclick="clearShiftRow('${sh.id}','${sh.name}')">🧹 Leeren</button></div></th>` + lines.map(l => `<td><div id="${l.id}_${sh.id}" class="card-list drop-zone" data-zone="${l.id}_${sh.id}"></div></td>`).join("") + `</tr>`;
-      }).join("");
-
-      renderEmployees(); initDragAndDrop();
-      if ($("newEmpRole")) $("newEmpRole").innerHTML = roles.map(r => `<option value="${r}">${r}</option>`).join("");
-      updateTeamDropdowns(); renderTeamFilterCheckboxes(); renderRoleFilterCheckboxes(); applyTeamStyles(); renderLineCheckboxes(); updateInboxBadge();
-    }
-
-    function renderEmployees() {
-      document.querySelectorAll(".drop-zone").forEach(el => el.innerHTML = "");
-      const today = getTodayIso(), list = [...employees];
-      if (isPlanner && poolSearchQuery) list.sort((a,b) => (a.zone!=="pool"||b.zone!=="pool") ? 0 : (matchesLineIds(b.mainLines,poolSearchQuery)?2:matchesLineIds(b.secLines,poolSearchQuery)?1:0) - (matchesLineIds(a.mainLines,poolSearchQuery)?2:matchesLineIds(a.secLines,poolSearchQuery)?1:0));
-
-      list.forEach(emp => {
-        const fn = fullName(emp);
-        if (isPlanner && emp.zone === "pool") {
-          if (activeTeamFilters[emp.team] === false || activeRoleFilters[emp.role] === false) return;
-          if (poolSearchQuery && !fn.toLowerCase().includes(poolSearchQuery) && !matchesLineIds(emp.mainLines,poolSearchQuery) && !matchesLineIds(emp.secLines,poolSearchQuery)) return;
-        }
-        let pts = [];
-        if (emp.lastLineId) { const l = lines.find(x => x.id === emp.lastLineId); if (l) pts.push(`<span style="color:#0284c7; font-weight:700;">📌 Platz: ${l.name.replace(/Linie\s*/i,'')}</span>`); }
-        if (emp.mainLines?.length) { const m = emp.mainLines.map(id => lines.find(x => x.id===id)?.name.replace(/Linie\s*/i,'')).filter(Boolean).join(", "); if (m) pts.push(`<b>Prio:</b> ${m}`); }
-        if (emp.secLines?.length) { const s = emp.secLines.map(id => lines.find(x => x.id===id)?.name.replace(/Linie\s*/i,'')).filter(Boolean).join(", "); if (s) pts.push(`<span style="color:#94a3b8;">Sek:</span> ${s}`); }
-        const sl = sickLeaves.find(s => s.empId === emp.id && s.startDate <= today && s.endDate >= today);
-        const card = document.createElement("div");
-        card.className = `employee-card ${emp.team}`; card.setAttribute("data-id", emp.id);
-        card.innerHTML = `<div style="display:flex; flex-direction:column; gap:1px; overflow:hidden; flex:1;"><span class="card-name">${fn}</span><span class="card-role">${emp.role}</span>${pts.length?`<div class="card-lines-info">${pts.join(" | ")}</div>`:''}${sl?`<span class="card-sick-tag">🏥 Bis ${formatDateDe(sl.endDate)}</span>`:''}</div><div style="display:flex; align-items:center; gap:4px;"><button class="quick-sick-btn" onclick="openInboxModal('${emp.id}')" title="Krank / Abwesend eintragen">🏥</button>${emp.ersthelfer?'<span class="first-aider-icon">+</span>':''}</div>`;
-        if ($(emp.zone)) $(emp.zone).appendChild(card);
-      });
-      if ($("pool")) $("poolCount").textContent = `(${$("pool").children.length})`;
-    }
-
-    function initDragAndDrop() {
-      sortableInstances.forEach(s => s.destroy()); sortableInstances = [];
-      document.querySelectorAll(".drop-zone").forEach(z => sortableInstances.push(new Sortable(z, {
-        group: "shared-shifts", animation: 150, disabled: !isPlanner,
-        onEnd: evt => {
-          const emp = employees.find(e => e.id === evt.item.getAttribute("data-id")), nz = evt.to.getAttribute("data-zone");
-          if (emp) { emp.zone = nz; const nl = extractLineId(nz), ns = extractShiftId(nz); if (nl && (!emp.lastLineId || (ns && shiftRotation[ns] === emp.team))) emp.lastLineId = nl; saveToFirebase(); renderEmployees(); }
-        }
-      })));
-    }
-
-    function openLineEditModal(id) { const l = lines.find(x => x.id === id); if (!l) return; $("editLineId").value = l.id; $("lineEditTitle").textContent = `${l.name} bearbeiten`; $("editLinePrio").value = l.prio||""; $("editLineTag").value = l.tag||""; $("editLineNote").value = l.note||""; $("lineEditModal").style.display = "flex"; }
-    function saveLineDetails() { const l = lines.find(x => x.id === $("editLineId").value); if (l) { l.prio = $("editLinePrio").value; l.tag = $("editLineTag").value.trim(); l.note = $("editLineNote").value.trim(); saveToFirebase(); initBoard(); closeModal('lineEditModal'); } }
-    function switchTab(t, idx) { document.querySelectorAll(".tab-btn").forEach((b,i) => b.classList.toggle("active", i===idx)); document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active")); $(t).classList.add("active"); if (t==='tabBackups') renderBackups(); }
-
-    function addTeam() { const n = $("newTeamName").value.trim(), c = $("newTeamColor").value; if (!n) return; const k = "team_"+Date.now(); teamsConfig[k] = { name: n, color: c }; activeTeamFilters[k] = true; $("newTeamName").value = ""; saveToFirebase(); initBoard(); renderSettingsLists(); }
-    function updateTeam(k) { const n = $(`teamNameInput_${k}`)?.value.trim(), c = $(`teamColorInput_${k}`)?.value; if (n && teamsConfig[k]) { teamsConfig[k] = { name: n, color: c }; saveToFirebase(); initBoard(); alert("Team aktualisiert!"); } }
-    function deleteTeam(k) { if (getSortedTeamKeys().length <= 1) return alert("Mindestens ein Team muss bleiben!"); if (!confirm("Team wirklich löschen?")) return; delete teamsConfig[k]; delete activeTeamFilters[k]; const fb = getSortedTeamKeys()[0]; employees.forEach(e => { if (e.team === k) e.team = fb; }); saveToFirebase(); initBoard(); renderSettingsLists(); }
-
-    function renderSettingsLists() {
-      $("roleList").innerHTML = roles.map((r,i) => `<div class="item-row"><span>${r}</span><button class="btn btn-outline" style="padding:4px 10px; color:#ef4444;" onclick="deleteRole(${i})">Löschen</button></div>`).join("");
-      $("employeeList").innerHTML = employees.map(e => {
-        const def = (e.mustChangePw || !e.password || e.password === "1234");
-        const pw = def ? `<span style="font-size:0.72rem; color:#d97706; background:#fef3c7; padding:2px 6px; border-radius:4px; font-weight:600;">⏳ Start-PIN: 1234</span>` : `<span style="font-size:0.72rem; color:#15803d; background:#dcfce7; padding:2px 6px; border-radius:4px; font-weight:600;">🔒 Eigenes Passwort</span>`;
-        return `<div class="item-row"><div style="flex:1;"><b>${fullName(e)}</b> <small>(${e.role})${e.ersthelfer?' <span style="color:#dc2626; font-weight:900;">+</span>':''}</small><div style="margin-top:2px;">${pw}</div></div><div style="display:flex; gap:5px;"><button class="btn btn-outline" style="padding:4px 8px; font-size:0.78rem; color:#0284c7;" onclick="resetEmpPassword('${e.id}')">🔄 PIN-Reset</button><button class="btn btn-outline" style="padding:4px 8px; font-size:0.78rem;" onclick="editEmployee('${e.id}')">Bearbeiten</button><button class="btn btn-outline" style="padding:4px 8px; font-size:0.78rem; color:#ef4444;" onclick="deleteEmployee('${e.id}')">Löschen</button></div></div>`;
-      }).join("");
-      $("lineSettingsList").innerHTML = lines.map((l,i) => `<div class="item-row"><span><b>${l.name}</b></span><div style="display:flex; gap:6px;"><button class="btn btn-outline" style="padding:2px 8px;" ${i===0?'disabled':''} onclick="moveLine(${i},-1)">▲</button><button class="btn btn-outline" style="padding:2px 8px;" ${i===lines.length-1?'disabled':''} onclick="moveLine(${i},1)">▼</button><button class="btn btn-outline" style="padding:4px 10px; color:#ef4444;" onclick="deleteLine('${l.id}')">Löschen</button></div></div>`).join("");
-      $("teamSettingsList").innerHTML = getSortedTeamKeys().map(k => `<div class="item-row"><input type="color" id="teamColorInput_${k}" value="${teamsConfig[k].color}" style="width:36px; height:32px; border:none; background:none;"><input type="text" id="teamNameInput_${k}" class="form-control" value="${teamsConfig[k].name}" style="flex:1; padding:6px 10px;"><button class="btn btn-outline" style="padding:6px 10px; color:var(--bayer-blue);" onclick="updateTeam('${k}')">Speichern</button><button class="btn btn-outline" style="padding:6px 10px; color:#ef4444;" onclick="deleteTeam('${k}')">Löschen</button></div>`).join("");
-    }
-
-    function resetEmpPassword(id) { const e = employees.find(x => x.id === id); if (e && confirm(`Passwort von "${fullName(e)}" auf 1234 zurücksetzen?`)) { e.password = "1234"; e.mustChangePw = true; saveToFirebase(); renderSettingsLists(); } }
-    function addLine() { const n = $("newLineName").value.trim(); if (n) { lines.push({ id: "L_"+Date.now(), name: n, prio: "", tag: "", note: "" }); $("newLineName").value = ""; saveToFirebase(); initBoard(); renderSettingsLists(); } }
-    function moveLine(i, d) { const ni = i + d; if (ni >= 0 && ni < lines.length) { lines.splice(ni, 0, lines.splice(i, 1)[0]); saveToFirebase(); initBoard(); renderSettingsLists(); } }
-    function deleteLine(id) { if (confirm("Linie wirklich löschen?")) { lines = lines.filter(l => l.id !== id); employees.forEach(e => { if (e.zone?.startsWith(id+"_")) e.zone = "pool"; if (e.lastLineId === id) delete e.lastLineId; }); saveToFirebase(); initBoard(); renderSettingsLists(); } }
-    function addRole() { const v = $("newRoleName").value.trim(); if (v && !roles.includes(v)) { roles.push(v); activeRoleFilters[v] = true; $("newRoleName").value = ""; saveToFirebase(); initBoard(); renderSettingsLists(); } }
-    function deleteRole(i) { delete activeRoleFilters[roles.splice(i, 1)[0]]; saveToFirebase(); initBoard(); renderSettingsLists(); }
-
-    function saveEmployee() {
-      const id = $("editEmpId").value, fN = $("newEmpFirstName").value.trim(), lN = $("newEmpLastName").value.trim(), tm = $("newEmpTeam").value, rl = $("newEmpRole").value, fa = $("newEmpFirstAider").checked;
-      const mL = [...document.querySelectorAll(".main-line-chk:checked")].map(c => c.value), sL = [...document.querySelectorAll(".sec-line-chk:checked")].map(c => c.value);
-      if (!fN || !lN || !rl) return;
-      if (id) { const e = employees.find(x => x.id === id); if (e) { Object.assign(e, { firstName: fN, lastName: lN, team: tm, role: rl, ersthelfer: fa, mainLines: mL, secLines: sL }); if (!e.lastLineId && mL.length) e.lastLineId = mL[0]; } }
-      else employees.push({ id: "e_"+Date.now(), firstName: fN, lastName: lN, team: tm, role: rl, password: "1234", mustChangePw: true, ersthelfer: fa, mainLines: mL, secLines: sL, lastLineId: mL[0]||null, zone: "pool" });
-      resetEmpForm(); saveToFirebase(); renderEmployees(); renderSettingsLists();
-    }
-
-    function editEmployee(id) { const e = employees.find(x => x.id === id); if (!e) return; $("editEmpId").value = e.id; $("newEmpFirstName").value = e.firstName||""; $("newEmpLastName").value = e.lastName\vert{}\vert{}""; $("newEmpTeam").value = e.team||getSortedTeamKeys()[0]; $("newEmpRole").value = e.role; $("newEmpFirstAider").checked = !!e.ersthelfer; renderLineCheckboxes(e.mainLines||[], e.secLines||[]); $("btnSaveEmp").textContent = "Aktualisieren"; $("btnCancelEditEmp").style.display = "inline-block"; }
-    function resetEmpForm() { $("editEmpId").value = ""; $("newEmpFirstName").value = ""; $("newEmpLastName").value = ""; $("newEmpFirstAider").checked = false; renderLineCheckboxes([], []); $("btnSaveEmp").textContent = "Hinzufügen"; $("btnCancelEditEmp").style.display = "none"; }
-    function deleteEmployee(id) { employees = employees.filter(e => e.id !== id); sickLeaves = sickLeaves.filter(s => s.empId !== id); saveToFirebase(); renderEmployees(); renderSettingsLists(); }
   </script>
 </body>
 </html>
