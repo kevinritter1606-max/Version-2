@@ -55,7 +55,6 @@
     .search-input { width: 100%; padding: 6px 26px 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.8rem; background: #f8fafc; }
     .search-clear { display: none; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #64748b; font-weight: bold; font-size: 1rem; }
 
-    /* Mitarbeiter Kärtchen */
     .employee-card { background: #fff; padding: 6px 8px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); display: flex; flex-direction: column; border-left: 5px solid #94a3b8; user-select: none; gap: 3px; }
     body.planner-active .employee-card { cursor: grab; }
 
@@ -302,7 +301,7 @@
           <div class="form-group"><label>Prio-Linien:</label><div id="mainLinesCheckboxes" style="display:flex; flex-wrap:wrap; gap:8px;"></div></div>
           <div class="form-group"><label>Sek-Linien:</label><div id="secLinesCheckboxes" style="display:flex; flex-wrap:wrap; gap:8px;"></div></div>
           <div style="display:flex; gap:10px; margin-top: 12px;">
-            <button id="btnSaveEmp" class="btn btn-primary" style="flex:1;" onclick="saveEmployee()">Hinzufügen</button>
+            <button id="btnSaveEmp" class="btn btn-primary" style="flex:1;" onclick="saveEmployee()">Hinzufügen / Speichern</button>
             <button id="btnCancelEditEmp" class="btn btn-outline" style="display:none;" onclick="resetEmpForm()">Abbrechen</button>
           </div>
         </div>
@@ -405,11 +404,6 @@
       return parts.join("_");
     }
 
-    function extractShiftIdFromZone(zone) {
-      if (!zone || zone === "pool" || zone === "absent") return null;
-      return zone.split("_").pop();
-    }
-
     function getPredeterminedLineForEmp(emp) {
       if (emp.lastLineId && lines.some(l => l.id === emp.lastLineId)) {
         return emp.lastLineId;
@@ -488,13 +482,11 @@
               e.zone = "pool";
               memoryUpdated = true;
             }
+            // PIN SICHERUNG BEIM LADEN (Kein Bringschichtler-Schutz mehr!)
             const currentLineId = extractLineIdFromZone(e.zone);
-            const currentShiftId = extractShiftIdFromZone(e.zone);
-            if (currentLineId && (!e.lastLineId || (currentShiftId && shiftRotation[currentShiftId] === e.team))) {
-              if (e.lastLineId !== currentLineId) {
-                e.lastLineId = currentLineId;
-                memoryUpdated = true;
-              }
+            if (currentLineId && e.lastLineId !== currentLineId) {
+              e.lastLineId = currentLineId;
+              memoryUpdated = true;
             }
             return e;
           });
@@ -560,8 +552,7 @@
       employees.forEach(emp => {
         if (emp.noRotation) return;
         const cLine = extractLineIdFromZone(emp.zone);
-        const cShift = extractShiftIdFromZone(emp.zone);
-        if (cLine && (!emp.lastLineId || (cShift && shiftRotation[cShift] === emp.team))) {
+        if (cLine) {
           emp.lastLineId = cLine;
         }
       });
@@ -652,7 +643,7 @@
 
       inShift.forEach(emp => {
         const lineId = extractLineIdFromZone(emp.zone);
-        if (lineId && (!emp.lastLineId || shiftRotation[shiftId] === emp.team)) {
+        if (lineId) {
           emp.lastLineId = lineId;
         }
         emp.zone = "pool";
@@ -670,8 +661,7 @@
 
       onBoard.forEach(emp => {
         const lineId = extractLineIdFromZone(emp.zone);
-        const shiftId = extractShiftIdFromZone(emp.zone);
-        if (lineId && (!emp.lastLineId || (shiftId && shiftRotation[shiftId] === emp.team))) {
+        if (lineId) {
           emp.lastLineId = lineId;
         }
         emp.zone = "pool";
@@ -1236,6 +1226,7 @@
         if (emp.lastLineId) {
           const lastL = lines.find(x => x.id === emp.lastLineId);
           if (lastL) {
+            // Löschen Button (rotes X) immer anzeigen, wenn man im Planer-Modus ist und die Karte im Pool liegt
             const delBtn = (emp.zone === "pool") ? `<span onclick="event.stopPropagation(); deletePin('${emp.id}')" style="cursor:pointer; color:#ef4444; font-size:0.75rem; padding:0 3px;" title="Pin löschen">✖</span>` : "";
             parts.push(`<span style="color:#0284c7; font-weight:700; white-space:nowrap; display:flex; align-items:center; gap:2px;">📌 ${lastL.name.replace(/Linie\s*/i, '')} ${delBtn}</span>`);
           }
@@ -1302,8 +1293,8 @@
             if (emp) {
               emp.zone = newZone;
               const newLineId = extractLineIdFromZone(newZone);
-              const newShiftId = extractShiftIdFromZone(newZone);
-              if (newLineId && (!emp.lastLineId || (newShiftId && shiftRotation[newShiftId] === emp.team))) {
+              // IMMER den neuen Platz merken, wenn ein MA auf eine Linie gezogen wird!
+              if (newLineId) {
                 emp.lastLineId = newLineId;
               }
               saveToFirebase();
@@ -1583,7 +1574,7 @@
       const firstName = document.getElementById("newEmpFirstName").value.trim();
       const lastName = document.getElementById("newEmpLastName").value.trim();
       const team = document.getElementById("newEmpTeam").value;
-      const role = document.getElementById("newEmpRole").value;
+      let role = document.getElementById("newEmpRole").value;
       const isFirstAider = document.getElementById("newEmpFirstAider").checked;
       const isNoRotation = document.getElementById("newEmpNoRotation").checked;
       
@@ -1593,7 +1584,19 @@
       const secLines = [];
       document.querySelectorAll(".sec-line-chk:checked").forEach(chk => secLines.push(chk.value));
 
-      if (!firstName || !lastName || !role) return;
+      if (!firstName && !lastName) {
+        alert("Bitte mindestens einen Vor- oder Nachnamen eingeben!");
+        return;
+      }
+      
+      if (!role) {
+        const emp = employees.find(e => e.id === idInput);
+        if (emp && emp.role) role = emp.role;
+        else {
+          alert("Bitte eine Rolle auswählen!");
+          return;
+        }
+      }
 
       if (idInput) {
         const emp = employees.find(e => e.id === idInput);
@@ -1641,8 +1644,23 @@
       document.getElementById("editEmpId").value = emp.id;
       document.getElementById("newEmpFirstName").value = emp.firstName || "";
       document.getElementById("newEmpLastName").value = emp.lastName || "";
-      document.getElementById("newEmpTeam").value = emp.team || Object.keys(teamsConfig).sort()[0];
-      document.getElementById("newEmpRole").value = emp.role;
+      
+      const teamSel = document.getElementById("newEmpTeam");
+      teamSel.value = emp.team || "";
+      if (!teamSel.value && Object.keys(teamsConfig).length > 0) {
+        teamSel.value = Object.keys(teamsConfig).sort()[0];
+      }
+
+      const roleSel = document.getElementById("newEmpRole");
+      roleSel.value = emp.role || "";
+      if (!roleSel.value && emp.role) {
+        const opt = document.createElement("option");
+        opt.value = emp.role;
+        opt.textContent = emp.role + " (Fehlt in der Liste)";
+        roleSel.appendChild(opt);
+        roleSel.value = emp.role;
+      }
+
       document.getElementById("newEmpFirstAider").checked = !!emp.ersthelfer;
       document.getElementById("newEmpNoRotation").checked = !!emp.noRotation;
 
@@ -1664,6 +1682,7 @@
     }
 
     function deleteEmployee(id) {
+      if (!confirm("Mitarbeiter wirklich löschen?")) return;
       employees = employees.filter(e => e.id !== id);
       sickLeaves = sickLeaves.filter(sl => sl.empId !== id);
       saveToFirebase();
