@@ -315,7 +315,67 @@
     .line-status-tag { font-size: 0.6rem; padding: 1px 3px; border-radius: 3px; background: #fecdd3; color: #9f1239; font-weight: 700; }
     .line-notes { font-size: 0.65rem; color: #475569; margin-top: 3px; background: #ffffff; padding: 3px; border-radius: 3px; border: 1px dashed #cbd5e1; white-space: pre-wrap; word-break: break-word; }
 
-    .shift-header { background: #f1f5f9; font-weight: 700; font-size: 0.9rem; width: 75px; text-align: center; padding: 15px 2px; color: #334155; vertical-align: middle; }
+    /* Schicht-Spalte + Rotation & Memory-Steuerung */
+    .shift-header { background: #f1f5f9; font-weight: 700; font-size: 0.9rem; width: 85px; text-align: center; padding: 14px 4px; color: #334155; vertical-align: middle; }
+    body.planner-active .shift-header { width: 114px; padding: 10px 5px; }
+
+    .shift-controls {
+      display: none;
+      flex-direction: column;
+      gap: 5px;
+      margin-top: 7px;
+    }
+    body.planner-active .shift-controls {
+      display: flex;
+    }
+
+    .shift-rotate-btn {
+      width: 100%;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 5px 4px;
+      border-radius: 4px;
+      border: none;
+      background: var(--bayer-blue);
+      color: #ffffff;
+      cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+      transition: 0.15s;
+    }
+    .shift-rotate-btn:hover {
+      background: #0077b6;
+    }
+
+    .shift-team-select {
+      width: 100%;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 4px 2px;
+      border-radius: 4px;
+      border: 1px solid var(--bayer-blue);
+      background: #fff;
+      color: var(--bayer-blue);
+      cursor: pointer;
+    }
+
+    .shift-clear-btn {
+      width: 100%;
+      font-size: 0.68rem;
+      font-weight: 600;
+      padding: 4px 4px;
+      border-radius: 4px;
+      border: 1px solid #cbd5e1;
+      background: #ffffff;
+      color: #64748b;
+      cursor: pointer;
+      transition: 0.15s;
+    }
+    .shift-clear-btn:hover {
+      background: #fee2e2;
+      color: #b91c1c;
+      border-color: #fca5a5;
+    }
+
     .drop-zone { padding: 6px; min-height: 120px; display: flex; flex-direction: column; gap: 6px; background: #fafafa; }
 
     /* Modals */
@@ -327,7 +387,6 @@
     textarea.form-control { resize: vertical; min-height: 70px; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 
-    /* Autocomplete Vorschläge im Postfach */
     .suggestions-box {
       display: none;
       position: absolute;
@@ -433,7 +492,7 @@
       </div>
 
       <div class="panel">
-        <h2>Verfügbarer Pool <span id="poolCount" style="font-size:0.85rem; color:#64748b;">(0)</span></h2>
+        <h2>Verfügbarer Pool (Frei) <span id="poolCount" style="font-size:0.85rem; color:#64748b;">(0)</span></h2>
         <div id="pool" class="card-list drop-zone" data-zone="pool"></div>
       </div>
       <div class="panel">
@@ -476,7 +535,6 @@
         <button onclick="closeModal('inboxModal')" style="border:none; background:none; font-size:1.5rem; cursor:pointer;">&times;</button>
       </h3>
 
-      <!-- Manuelle Eingabe für den Planer mit Namens-Suchfeld -->
       <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:14px; margin-bottom:18px;">
         <h4 style="font-size:0.9rem; color:#0f172a; margin-bottom:10px;">➕ Mitarbeiter manuell krank / abwesend melden (Von – Bis)</h4>
         <div class="form-group" id="manualSickSearchGroup">
@@ -501,7 +559,6 @@
         <button class="btn btn-primary" style="width:100%;" onclick="addManualSickLeave()">Abwesenheit speichern & automatisch einteilen</button>
       </div>
 
-      <!-- Ungelesene Portal-Meldungen -->
       <div style="margin-bottom: 18px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
           <h4 style="font-size:0.92rem; color:#dc2626;">🔔 Neue Portal-Nachrichten (Ungelesen)</h4>
@@ -510,11 +567,10 @@
         <div id="unreadSickList"></div>
       </div>
 
-      <!-- Aktive & geplante Krankmeldungen -->
       <div style="border-top: 2px solid #e2e8f0; padding-top: 14px;">
         <h4 style="font-size:0.92rem; color:#1e293b; margin-bottom: 6px;">📋 Aktuelle & geplante Abwesenheiten</h4>
         <p style="font-size:0.76rem; color:#64748b; margin-bottom: 10px;">
-          Im gültigen Zeitraum steht der Mitarbeiter automatisch im roten Feld „Abwesend“. Nach Ablauf des Bis-Datums wird der Eintrag gelöscht und der Mitarbeiter wandert zurück in den Pool.
+          Im gültigen Zeitraum steht der Mitarbeiter automatisch im roten Feld „Abwesend“. Nach Ablauf des Bis-Datums wird der Eintrag gelöscht und der Mitarbeiter wandert zurück in den Pool (seine letzte Linie bleibt im Memory gespeichert).
         </p>
         <div id="activeSickList"></div>
       </div>
@@ -540,7 +596,7 @@
         </select>
       </div>
       <div class="form-group">
-        <label>Status / Tag (z. B. Wartung!, Pack 4)</label>
+        <label>Status / Tag (z. B. Wartung!, Pack 3)</label>
         <input type="text" id="editLineTag" class="form-control">
       </div>
       <div class="form-group">
@@ -593,13 +649,11 @@
             <span style="font-size:0.75rem; color:#64748b;">🔑 Neue Mitarbeiter starten mit PIN <b>1234</b></span>
           </div>
 
-          <!-- Prio Linien Auswahl -->
           <div class="form-group" style="margin-top:8px;">
             <label>Prio-Linien:</label>
             <div id="mainLinesCheckboxes" style="display:flex; flex-wrap:wrap; gap:8px; background:#fff; padding:8px; border:1px solid #cbd5e1; border-radius:6px; max-height:90px; overflow-y:auto;"></div>
           </div>
 
-          <!-- Sekundär Linien Auswahl -->
           <div class="form-group" style="margin-top:8px;">
             <label>Sek-Linien:</label>
             <div id="secLinesCheckboxes" style="display:flex; flex-wrap:wrap; gap:8px; background:#fff; padding:8px; border:1px solid #cbd5e1; border-radius:6px; max-height:90px; overflow-y:auto;"></div>
@@ -739,6 +793,14 @@
       return Object.keys(teamsConfig).sort();
     }
 
+    function extractLineIdFromZone(zone) {
+      if (!zone || zone === "pool" || zone === "absent") return null;
+      const parts = zone.split("_");
+      if (parts.length < 2) return null;
+      parts.pop();
+      return parts.join("_");
+    }
+
     setInterval(() => {
       if (!isPlanner) {
         window.location.reload();
@@ -784,6 +846,7 @@
         if (d.roles) roles = d.roles;
         if (d.sickLeaves) sickLeaves = d.sickLeaves; else sickLeaves = [];
         if (d.employees) {
+          let memoryUpdated = false;
           employees = d.employees.map(e => {
             if (!e.firstName && e.name) {
               const parts = e.name.split(" ");
@@ -796,8 +859,20 @@
             if (e.mustChangePw === undefined) {
               e.mustChangePw = (e.password === "1234");
             }
+            if (e.zone && e.zone.endsWith("_frei")) {
+              const lId = extractLineIdFromZone(e.zone);
+              if (lId) e.lastLineId = lId;
+              e.zone = "pool";
+              memoryUpdated = true;
+            }
+            const currentLineId = extractLineIdFromZone(e.zone);
+            if (currentLineId && e.lastLineId !== currentLineId) {
+              e.lastLineId = currentLineId;
+              memoryUpdated = true;
+            }
             return e;
           });
+          if (memoryUpdated) saveToFirebase();
         }
         if (d.teamsConfig) {
           teamsConfig = d.teamsConfig;
@@ -845,6 +920,132 @@
       initBoard();
     });
 
+    // ROTATIONS-FUNKTION: Früh -> Spät, Spät -> Nacht, Nacht -> Frei (Pool), Frei (Pool) -> Früh (über Memory!)
+    function rotateAllShifts() {
+      if (!confirm("Schichten jetzt weiterrotieren?\n\n• Früh ➔ Spät\n• Spät ➔ Nacht\n• Nacht ➔ Frei (Pool)\n• Frei (Pool) ➔ Früh (auf gespeicherte Linie)")) return;
+
+      const today = getTodayIso();
+
+      employees.forEach(emp => {
+        // Kranke / abwesende Mitarbeiter bleiben im roten Feld "Abwesend"
+        const isCurrentlySick = sickLeaves.some(sl => sl.empId === emp.id && sl.startDate <= today && sl.endDate >= today);
+        if (emp.zone === "absent" || isCurrentlySick) return;
+
+        const currentZone = emp.zone || "pool";
+
+        if (currentZone.endsWith("_frueh")) {
+          const lineId = extractLineIdFromZone(currentZone);
+          if (lineId) {
+            emp.lastLineId = lineId;
+            emp.zone = `${lineId}_spaet`;
+          }
+        } else if (currentZone.endsWith("_spaet")) {
+          const lineId = extractLineIdFromZone(currentZone);
+          if (lineId) {
+            emp.lastLineId = lineId;
+            emp.zone = `${lineId}_nacht`;
+          }
+        } else if (currentZone.endsWith("_nacht")) {
+          const lineId = extractLineIdFromZone(currentZone);
+          if (lineId) emp.lastLineId = lineId;
+          emp.zone = "pool"; // Nacht geht ins Frei (Pool)
+        } else if (currentZone === "pool") {
+          // Frei (Pool) geht in Frühschicht auf die gespeicherte Memory-Linie (oder 1. Prio-Linie)
+          let targetLineId = emp.lastLineId;
+          if (!targetLineId || !lines.some(l => l.id === targetLineId)) {
+            if (emp.mainLines && emp.mainLines.length > 0 && lines.some(l => l.id === emp.mainLines[0])) {
+              targetLineId = emp.mainLines[0];
+              emp.lastLineId = targetLineId;
+            } else {
+              targetLineId = null;
+            }
+          }
+          if (targetLineId) {
+            emp.zone = `${targetLineId}_frueh`;
+          }
+        }
+      });
+
+      saveToFirebase();
+      initBoard();
+    }
+
+    // MEMORY-FUNKTION: Lädt ein Fokus-Team gezielt in eine Schicht (Früh / Spät / Nacht) auf deren letzte Linien
+    function loadTeamIntoShift(shiftId, teamKey) {
+      if (!teamKey) return;
+      const today = getTodayIso();
+      let movedCount = 0;
+      let noMemoryNames = [];
+
+      employees.forEach(emp => {
+        if (emp.team !== teamKey) return;
+
+        const isCurrentlySick = sickLeaves.some(sl => sl.empId === emp.id && sl.startDate <= today && sl.endDate >= today);
+        if (emp.zone === "absent" || isCurrentlySick) return;
+
+        const currentLine = extractLineIdFromZone(emp.zone);
+        if (currentLine) emp.lastLineId = currentLine;
+
+        let targetLineId = emp.lastLineId;
+        if (!targetLineId || !lines.some(l => l.id === targetLineId)) {
+          if (emp.mainLines && emp.mainLines.length > 0 && lines.some(l => l.id === emp.mainLines[0])) {
+            targetLineId = emp.mainLines[0];
+            emp.lastLineId = targetLineId;
+          } else {
+            targetLineId = null;
+          }
+        }
+
+        if (targetLineId) {
+          emp.zone = `${targetLineId}_${shiftId}`;
+          movedCount++;
+        } else {
+          noMemoryNames.push(`${emp.firstName || ''} ${emp.lastName || ''}`.trim());
+        }
+      });
+
+      saveToFirebase();
+      initBoard();
+
+      if (noMemoryNames.length > 0) {
+        alert(`${movedCount} Mitarbeiter wurden auf ihre letzten Linien eingeteilt.\n\nFolgende Mitarbeiter aus diesem Team hatten noch keine gespeicherte Linie und liegen im Pool:\n- ${noMemoryNames.join("\n- ")}`);
+      }
+    }
+
+    // LEEREN-FUNKTION: Räumt eine einzelne Schicht zurück in den Pool
+    function clearShiftRow(shiftId, shiftName) {
+      const inShift = employees.filter(e => e.zone && e.zone.endsWith(`_${shiftId}`));
+      if (inShift.length === 0) return;
+
+      if (!confirm(`Möchtest du die ${shiftName}-Schicht (${inShift.length} Mitarbeiter) wirklich leeren und in den Pool (Frei) verschieben?\n\n(Die letzte Linie jedes Mitarbeiters bleibt im Memory gespeichert!)`)) return;
+
+      inShift.forEach(emp => {
+        const lineId = extractLineIdFromZone(emp.zone);
+        if (lineId) emp.lastLineId = lineId;
+        emp.zone = "pool";
+      });
+
+      saveToFirebase();
+      initBoard();
+    }
+
+    // ALLE SCHICHTEN LEEREN
+    function clearEntireBoard() {
+      const onBoard = employees.filter(e => e.zone && e.zone !== "pool" && e.zone !== "absent");
+      if (onBoard.length === 0) return;
+
+      if (!confirm(`Möchtest du wirklich ALLE Schichten (Früh, Spät & Nacht) komplett leeren?\n\nAlle ${onBoard.length} eingeteilten Mitarbeiter wandern in den Pool – ihre letzten Linien bleiben im Memory gespeichert.`)) return;
+
+      onBoard.forEach(emp => {
+        const lineId = extractLineIdFromZone(emp.zone);
+        if (lineId) emp.lastLineId = lineId;
+        emp.zone = "pool";
+      });
+
+      saveToFirebase();
+      initBoard();
+    }
+
     function processSickLeavesAutomation() {
       const today = getTodayIso();
       let changed = false;
@@ -866,6 +1067,8 @@
         if (sl.startDate <= today && sl.endDate >= today) {
           const emp = employees.find(e => e.id === sl.empId);
           if (emp && emp.zone !== "absent") {
+            const currentLine = extractLineIdFromZone(emp.zone);
+            if (currentLine) emp.lastLineId = currentLine;
             emp.zone = "absent";
             changed = true;
           }
@@ -1012,7 +1215,9 @@
         readByPlanner: true
       });
 
-      if (startDate <= today && endDate >= today) {
+      if (startDate <= today && endDate >= today && emp.zone !== "absent") {
+        const currentLine = extractLineIdFromZone(emp.zone);
+        if (currentLine) emp.lastLineId = currentLine;
         emp.zone = "absent";
       }
 
@@ -1343,11 +1548,22 @@
       const matrixBody = document.getElementById("matrixBody");
       matrixBody.innerHTML = "";
 
+      const teamOptionsHtml = getSortedTeamKeys().map(k => `<option value="${k}">${teamsConfig[k].name}</option>`).join("");
+
       shifts.forEach(shift => {
         const tr = document.createElement("tr");
         const thShift = document.createElement("th");
         thShift.className = "shift-header";
-        thShift.textContent = shift.name;
+        thShift.innerHTML = `
+          <div>${shift.name}</div>
+          <div class="shift-controls">
+            <select class="shift-team-select" onchange="loadTeamIntoShift('${shift.id}', this.value); this.value='';" title="Fokus-Team auf letzte Linien in ${shift.name}-Schicht laden">
+              <option value="">📥 Team laden...</option>
+              ${teamOptionsHtml}
+            </select>
+            <button class="shift-clear-btn" onclick="clearShiftRow('${shift.id}', '${shift.name}')" title="${shift.name}-Schicht in den Pool leeren">🧹 Leeren</button>
+          </div>
+        `;
         tr.appendChild(thShift);
 
         lines.forEach(line => {
@@ -1373,7 +1589,15 @@
 
     function renderHeaderColumns() {
       const headerRow = document.getElementById("headerRow");
-      headerRow.innerHTML = '<th class="shift-header">Schicht</th>';
+      headerRow.innerHTML = `
+        <th class="shift-header">
+          <div>Schicht</div>
+          <div class="shift-controls">
+            <button class="shift-rotate-btn" onclick="rotateAllShifts()" title="Früh ➔ Spät | Spät ➔ Nacht | Nacht ➔ Frei (Pool) | Frei (Pool) ➔ Früh">🔄 Rotieren</button>
+            <button class="shift-clear-btn" onclick="clearEntireBoard()" title="Alle 3 Schichten komplett in den Pool leeren">🧹 Alle leeren</button>
+          </div>
+        </th>
+      `;
       lines.forEach(line => {
         const th = document.createElement("th");
         th.className = "line-header";
@@ -1429,24 +1653,29 @@
         
         let firstAiderHtml = emp.ersthelfer ? '<span class="first-aider-icon" title="Ersthelfer">+</span>' : '';
         
-        let linesInfoHtml = "";
-        if (emp.mainLines && emp.mainLines.length > 0 || emp.secLines && emp.secLines.length > 0) {
-          const mainNames = (emp.mainLines || []).map(id => {
-            const l = lines.find(x => x.id === id);
-            return l ? l.name.replace(/Linie\s*/i, '') : '';
-          }).filter(Boolean).join(", ");
-
-          const secNames = (emp.secLines || []).map(id => {
-            const l = lines.find(x => x.id === id);
-            return l ? l.name.replace(/Linie\s*/i, '') : '';
-          }).filter(Boolean).join(", ");
-
-          let parts = [];
-          if(mainNames) parts.push(`<b>Prio:</b> ${mainNames}`);
-          if(secNames) parts.push(`<span style="color:#94a3b8;">Sek:</span> ${secNames}`);
-          
-          linesInfoHtml = `<div class="card-lines-info">${parts.join(" | ")}</div>`;
+        let parts = [];
+        if (emp.lastLineId) {
+          const lastL = lines.find(x => x.id === emp.lastLineId);
+          if (lastL) {
+            parts.push(`<span style="color:#0284c7; font-weight:700;">📌 Letzte: ${lastL.name.replace(/Linie\s*/i, '')}</span>`);
+          }
         }
+        if (emp.mainLines && emp.mainLines.length > 0) {
+          const mainNames = emp.mainLines.map(id => {
+            const l = lines.find(x => x.id === id);
+            return l ? l.name.replace(/Linie\s*/i, '') : '';
+          }).filter(Boolean).join(", ");
+          if (mainNames) parts.push(`<b>Prio:</b> ${mainNames}`);
+        }
+        if (emp.secLines && emp.secLines.length > 0) {
+          const secNames = emp.secLines.map(id => {
+            const l = lines.find(x => x.id === id);
+            return l ? l.name.replace(/Linie\s*/i, '') : '';
+          }).filter(Boolean).join(", ");
+          if (secNames) parts.push(`<span style="color:#94a3b8;">Sek:</span> ${secNames}`);
+        }
+
+        let linesInfoHtml = parts.length > 0 ? `<div class="card-lines-info">${parts.join(" | ")}</div>` : "";
 
         const activeSl = sickLeaves.find(sl => sl.empId === emp.id && sl.startDate <= today && sl.endDate >= today);
         const sickHtml = activeSl ? `<span class="card-sick-tag">🏥 Bis ${formatDateDe(activeSl.endDate)}</span>` : '';
@@ -1489,7 +1718,12 @@
             const emp = employees.find(e => e.id === empId);
             if (emp) {
               emp.zone = newZone;
+              const newLineId = extractLineIdFromZone(newZone);
+              if (newLineId) {
+                emp.lastLineId = newLineId;
+              }
               saveToFirebase();
+              renderEmployees();
             }
           }
         });
@@ -1570,6 +1804,7 @@
       updateTeamDropdowns();
       renderTeamFilterCheckboxes();
       renderSettingsLists();
+      initBoard();
     }
 
     function updateTeam(key) {
@@ -1587,6 +1822,7 @@
         applyTeamStyles();
         updateTeamDropdowns();
         renderTeamFilterCheckboxes();
+        initBoard();
         alert("Team aktualisiert!");
       }
     }
@@ -1614,7 +1850,7 @@
       updateTeamDropdowns();
       renderTeamFilterCheckboxes();
       renderSettingsLists();
-      renderEmployees();
+      initBoard();
     }
 
     function renderSettingsLists() {
@@ -1630,7 +1866,6 @@
         let firstAiderMark = e.ersthelfer ? ' <span style="color:#dc2626; font-weight:900; font-size:1.1rem; line-height:0.5;">+</span>' : '';
         const fullName = `${e.firstName || ''} ${e.lastName || ''}`.trim();
         
-        // Status-Anzeige ohne das persönliche Passwort im Klartext zu verraten
         const isDefaultPw = (e.mustChangePw || !e.password || e.password === "1234");
         const pwStatusHtml = isDefaultPw
           ? `<span style="font-size:0.72rem; color:#d97706; background:#fef3c7; padding:2px 6px; border-radius:4px; font-weight:600; margin-left:4px;">⏳ Start-PIN: 1234</span>`
@@ -1722,6 +1957,9 @@
       employees.forEach(emp => {
         if (emp.zone && emp.zone.startsWith(id + "_")) {
           emp.zone = "pool";
+        }
+        if (emp.lastLineId === id) {
+          delete emp.lastLineId;
         }
       });
       
