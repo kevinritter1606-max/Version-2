@@ -479,7 +479,8 @@
         roles: rawDocData.roles || [],
         employees: employees,
         teamsConfig: rawDocData.teamsConfig || {},
-        sickLeaves: sickLeaves
+        sickLeaves: sickLeaves,
+        shiftRotation: rawDocData.shiftRotation || { frueh: "team-1", spaet: "team-2", nacht: "team-3", frei: "team-4" }
       }).then(() => {
         document.getElementById("newPasswordInput").value = "";
         document.getElementById("newPasswordConfirm").value = "";
@@ -521,7 +522,7 @@
         let lastLineHint = "";
         if (emp.lastLineId) {
           const lastL = lines.find(l => l.id === emp.lastLineId);
-          if (lastL) lastLineHint = `<div style="font-size:0.8rem; margin-top:3px;">📌 Deine zuletzt gespeicherte Linie: <b>${lastL.name}</b></div>`;
+          if (lastL) lastLineHint = `<div style="font-size:0.8rem; margin-top:3px;">📌 Dein fester Linienplatz: <b>${lastL.name}</b></div>`;
         }
         statusBox.className = "status-box status-pool";
         statusBox.innerHTML = `
@@ -632,7 +633,8 @@
         roles: rawDocData.roles || [],
         employees: employees,
         teamsConfig: rawDocData.teamsConfig || {},
-        sickLeaves: sickLeaves
+        sickLeaves: sickLeaves,
+        shiftRotation: rawDocData.shiftRotation || { frueh: "team-1", spaet: "team-2", nacht: "team-3", frei: "team-4" }
       }).then(() => {
         document.getElementById("sickReason").value = "";
         const banner = document.getElementById("sickSuccessBanner");
