@@ -49,10 +49,6 @@
     .card-sick-tag { display: none; font-size: 0.62rem; color: #b91c1c; background: #fee2e2; padding: 1px 5px; border-radius: 4px; font-weight: 700; margin-top: 1px; align-self: flex-start; }
     body.planner-active .card-sick-tag { display: inline-block; }
     .card-extra-tag { font-size: 0.62rem; color: #166534; background: #dcfce7; padding: 1px 5px; border-radius: 4px; font-weight: 700; margin-top: 1px; align-self: flex-start; }
-    
-    .card-fix-tag { display: none; font-size: 0.6rem; background: #fef08a; color: #854d0e; padding: 1px 4px; border-radius: 3px; font-weight: 700; }
-    body.planner-active .card-fix-tag { display: inline-block; }
-
     .quick-sick-btn { display: none; border: none; background: #f1f5f9; border-radius: 4px; padding: 2px 4px; font-size: 0.72rem; cursor: pointer; line-height: 1; }
     .quick-sick-btn:hover { background: #fee2e2; }
     body.planner-lvl-3 .quick-sick-btn { display: inline-block; }
@@ -283,7 +279,7 @@
         <button class="tab-btn active" onclick="switchTab('tabEmployees', 0)">Mitarbeiter & Rechte</button>
         <button class="tab-btn" onclick="switchTab('tabRoles', 1)">Rollen</button>
         <button class="tab-btn" onclick="switchTab('tabLines', 2)">Linien</button>
-        <button class="tab-btn" onclick="switchTab('tabTeams', 3)">Teams & Rotation</button>
+        <button class="tab-btn" onclick="switchTab('tabTeams', 3)">Teams</button>
         <button class="tab-btn" onclick="switchTab('tabHistory', 4)">Historie</button>
         <button class="tab-btn" onclick="switchTab('tabBackups', 5)">Backups</button>
       </div>
@@ -334,13 +330,10 @@
 
       <div id="tabTeams" class="tab-content">
         <div style="background:#f8fafc; padding:14px; border-radius:8px; margin-bottom:16px;">
-          <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:8px;">Neues Team hinzufügen (z.B. Team 5 / Tagschicht)</label>
-          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-            <input type="color" id="newTeamColor" value="#3b82f6" style="width:40px; height:38px; border:none; cursor:pointer;" title="Team-Farbe">
-            <input type="text" id="newTeamName" class="form-control" placeholder="Team-Name" style="flex:1; min-width:140px;">
-            <label style="display:flex; align-items:center; gap:5px; font-size:0.8rem; cursor:pointer;" title="Haken anlassen, wenn dieses Team an der automatischen Schichtrotation teilnehmen soll">
-              <input type="checkbox" id="newTeamRotates" checked> Am Rotieren teilnehmen
-            </label>
+          <label style="font-size:0.85rem; font-weight:600; display:block;">Neues Team</label>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <input type="color" id="newTeamColor" value="#3b82f6" style="width:40px; height:38px; border:none; cursor:pointer;">
+            <input type="text" id="newTeamName" class="form-control" placeholder="Team-Name">
             <button class="btn btn-primary" onclick="addTeam()">Hinzufügen</button>
           </div>
         </div>
@@ -373,12 +366,7 @@
     let lines = ["32","33","34","09","22","39","36","37","38","54"].map(n => ({ id: "L"+n, name: "Linie "+n, prio: "", tag: "", note: "" }));
     let roles = ["Bediener", "LOP", "TL", "Schichtexperte", "Waschraumoperator"];
     let employees = [], sickLeaves = [], leaveRequests = [], extraShifts = [], cachedHistoryData = [];
-    let teamsConfig = {
-      "team-1": { name: "Team 1", color: "#0091df", rotates: true },
-      "team-2": { name: "Team 2", color: "#f59e0b", rotates: true },
-      "team-3": { name: "Team 3", color: "#10b981", rotates: true },
-      "team-4": { name: "Team 4", color: "#f43f5e", rotates: true }
-    };
+    let teamsConfig = { "team-1": { name: "Team 1", color: "#0091df" }, "team-2": { name: "Team 2", color: "#f59e0b" }, "team-3": { name: "Team 3", color: "#10b981" }, "team-4": { name: "Team 4", color: "#f43f5e" } };
     let activeTeamFilters = {}, activeRoleFilters = {}, poolSearchQuery = "";
     let selectedManualSickEmpId = null, selectedLoginPlannerId = null;
     let isPlanner = false, plannerLevel = 0, currentPlannerName = "";
@@ -513,13 +501,7 @@
           return e;
         });
       }
-      if (d.teamsConfig) {
-        teamsConfig = {};
-        Object.keys(d.teamsConfig).forEach(k => {
-          const t = d.teamsConfig[k];
-          teamsConfig[k] = { name: t.name, color: t.color, rotates: t.rotates !== undefined ? t.rotates : true };
-        });
-      }
+      if (d.teamsConfig) teamsConfig = d.teamsConfig;
       Object.keys(teamsConfig).forEach(k => { if (activeTeamFilters[k] === undefined) activeTeamFilters[k] = true; });
       roles.forEach(r => { if (activeRoleFilters[r] === undefined) activeRoleFilters[r] = true; });
 
@@ -553,37 +535,15 @@
     }
 
     function rotateAllShifts() {
-      const keys = Object.keys(teamsConfig).sort();
-      const rotatingKeys = keys.filter(k => teamsConfig[k].rotates !== false);
-
-      if (rotatingKeys.length < 2) {
-        alert("Es sind weniger als 2 rotierende Teams aktiv. Bitte aktiviere bei mind. 2 Teams die Rotation in den Einstellungen.");
-        return;
-      }
-
       const oldF = shiftRotation.frueh, oldS = shiftRotation.spaet, oldN = shiftRotation.nacht, oldFr = shiftRotation.frei;
-      if (!confirm(`Teams rotieren?\n(Nicht-rotierende Teams wie Tagschichtler bleiben unverändert)`)) return;
-
+      if (!confirm(`Teams rotieren?\n\n• ${teamsConfig[oldF]?.name}: Früh ➔ Spät\n• ${teamsConfig[oldS]?.name}: Spät ➔ Nacht\n• ${teamsConfig[oldN]?.name}: Nacht ➔ Frei (Pool)\n• ${teamsConfig[oldFr]?.name}: Frei ➔ Früh`)) return;
       const today = getTodayIso();
       employees.forEach(emp => {
         if (emp.noRotation) return;
         const cL = extractLineIdFromZone(emp.zone), cS = extractShiftIdFromZone(emp.zone);
         if (cL && (!emp.lastLineId || (cS && shiftRotation[cS] === emp.team))) emp.lastLineId = cL;
       });
-
-      const getNextRotatingTeam = (curKey) => {
-        const idx = rotatingKeys.indexOf(curKey);
-        if (idx === -1) return rotatingKeys[0];
-        return rotatingKeys[(idx + 1) % rotatingKeys.length];
-      };
-
-      shiftRotation = {
-        frueh: rotatingKeys.includes(oldFr) ? oldFr : getNextRotatingTeam(oldFr),
-        spaet: rotatingKeys.includes(oldF) ? oldF : getNextRotatingTeam(oldF),
-        nacht: rotatingKeys.includes(oldS) ? oldS : getNextRotatingTeam(oldS),
-        frei: rotatingKeys.includes(oldN) ? oldN : getNextRotatingTeam(oldN)
-      };
-
+      shiftRotation = { frueh: oldFr, spaet: oldF, nacht: oldS, frei: oldN };
       employees.forEach(emp => {
         if (emp.noRotation) return;
         const isSick = sickLeaves.some(sl => sl.empId === emp.id && sl.startDate <= today && sl.endDate >= today);
@@ -593,7 +553,6 @@
         else if (emp.team === shiftRotation.nacht) { const l = getPredeterminedLineForEmp(emp); emp.zone = l ? `${l}_nacht` : "pool"; }
         else if (emp.team === shiftRotation.frei) emp.zone = "pool";
       });
-
       saveToFirebase(); initBoard();
     }
 
@@ -978,7 +937,7 @@
             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
               <div style="flex:1;">
                 <div style="font-weight:700; color:#0369a1;">🌴 Antrag (${lr.type}): ${lr.empName}</div>
-                <div style="font-size:0.65rem; color:#0369a1; margin-top:2px;">🕒 Eingereicht am: ${lr.createdAt || '-'}</div>
+                <div style="font-size:0.65rem; color:#0284c7; margin-top:2px;">🕒 Eingereicht am: ${lr.createdAt || '-'}</div>
                 <div style="font-size:0.84rem; font-weight:700; margin-top:4px;">📅 Gewünscht: ${formatDateDe(lr.startDate)} bis ${formatDateDe(lr.endDate)} (${days} ${days===1?'Tag':'Tage'})</div>
                 ${lr.reason ? `<div style="font-size:0.8rem; margin-top:4px; color:#334155;">💬 "${lr.reason}"</div>` : ''}
                 <div id="partialBox_${lr.id}" style="display:none; background:#fff; padding:10px; border-radius:6px; border:1px solid #93c5fd; margin-top:8px;">
@@ -1285,6 +1244,182 @@
 
       renderEmployees(); initDragAndDrop(); updateRoleDropdown(); updateTeamDropdowns(); renderTeamFilterCheckboxes(); renderRoleFilterCheckboxes(); applyTeamStyles(); renderLineCheckboxes(); updateInboxBadge();
     }
+
+    function renderEmployees() {
+      document.querySelectorAll(".drop-zone").forEach(el => el.innerHTML = "");
+      const today = getTodayIso();
+      const displayList = [...employees];
+      if (isPlanner && poolSearchQuery) {
+        displayList.sort((a, b) => {
+          if (a.zone !== "pool" || b.zone !== "pool") return 0;
+          const aM = a.mainLines?.some(id => lines.find(x=>x.id===id)?.name.toLowerCase().includes(poolSearchQuery)) ? 2 : (a.secLines?.some(id => lines.find(x=>x.id===id)?.name.toLowerCase().includes(poolSearchQuery)) ? 1 : 0);
+          const bM = b.mainLines?.some(id => lines.find(x=>x.id===id)?.name.toLowerCase().includes(poolSearchQuery)) ? 2 : (b.secLines?.some(id => lines.find(x=>x.id===id)?.name.toLowerCase().includes(poolSearchQuery)) ? 1 : 0);
+          return bM - aM;
+        });
+      }
+
+      displayList.forEach(emp => {
+        const fName = fullName(emp);
+        if (isPlanner && emp.zone === "pool") {
+          if (activeTeamFilters[emp.team] === false || activeRoleFilters[emp.role] === false) return;
+          if (poolSearchQuery) {
+            const nMatch = fName.toLowerCase().includes(poolSearchQuery);
+            const pMatch = emp.mainLines?.some(id => lines.find(x=>x.id===id)?.name.toLowerCase().includes(poolSearchQuery));
+            const sMatch = emp.secLines?.some(id => lines.find(x=>x.id===id)?.name.toLowerCase().includes(poolSearchQuery));
+            if (!nMatch && !pMatch && !sMatch) return;
+          }
+        }
+
+        const card = document.createElement("div");
+        card.className = `employee-card ${emp.team}`; card.setAttribute("data-id", emp.id);
+        let parts = [];
+        if (emp.lastLineId) {
+          const lastL = lines.find(x => x.id === emp.lastLineId);
+          if (lastL) {
+            const delBtn = emp.zone === "pool" ? `<span onclick="event.stopPropagation(); deletePin('${emp.id}')" style="cursor:pointer; color:#ef4444; font-size:0.75rem; padding:0 3px;">✖</span>` : "";
+            parts.push(`<span style="color:#0284c7; font-weight:700;">📌 ${lastL.name.replace(/Linie\s*/i, '')} ${delBtn}</span>`);
+          }
+        }
+        if (emp.mainLines?.length) parts.push(`<b>Prio:</b> ${emp.mainLines.map(id => lines.find(x=>x.id===id)?.name.replace(/Linie\s*/i, '')).filter(Boolean).join(", ")}`);
+        if (emp.secLines?.length) parts.push(`<span style="color:#94a3b8;">Sek:</span> ${emp.secLines.map(id => lines.find(x=>x.id===id)?.name.replace(/Linie\s*/i, '')).filter(Boolean).join(", ")}`);
+
+        const activeSl = sickLeaves.find(sl => sl.empId === emp.id && sl.startDate <= today && sl.endDate >= today);
+        const sickHtml = activeSl ? `<span class="card-sick-tag">${activeSl.category && activeSl.category.includes('Urlaub') ? '🌴' : '🏥'} Bis ${formatDateDe(activeSl.endDate)}</span>` : '';
+        const activeEs = extraShifts.find(es => es.empId === emp.id && es.status === "approved" && es.date >= today);
+        const extraHtml = activeEs ? `<span class="card-extra-tag">➕ ${formatDateDe(activeEs.date)} (${shiftsLabel[activeEs.shift] || activeEs.shift} | ${activeEs.note || 'BS'})</span>` : '';
+
+        card.innerHTML = `
+          <div class="card-name">${fName}</div>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:4px;">
+            <div style="display:flex; gap:4px; align-items:center;">
+              <span class="card-role">${emp.role}</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:3px;">
+              <button class="quick-sick-btn" onclick="openInboxModal('${emp.id}')" title="Abwesenheit eintragen">🏥</button>
+              ${emp.ersthelfer ? '<span class="first-aider-icon" title="Ersthelfer">+</span>' : ''}
+            </div>
+          </div>
+          ${parts.length ? `<div class="card-lines-info">${parts.join(" | ")}</div>` : ''}
+          ${extraHtml}${sickHtml}`;
+
+        const targetZone = document.getElementById(emp.zone) || document.getElementById("pool");
+        if (targetZone) targetZone.appendChild(card);
+      });
+
+      document.getElementById("poolCount").textContent = `(${document.getElementById("pool")?.children.length || 0})`;
+      document.getElementById("extraCount").textContent = `(${document.getElementById("extra")?.children.length || 0})`;
+
+      const extraListEl = document.getElementById("approvedExtraList");
+      if (extraListEl) {
+        const appr = extraShifts.filter(es => es.status === "approved" && es.date >= today).sort((a,b) => a.date.localeCompare(b.date));
+        extraListEl.innerHTML = appr.map(es => `
+          <div style="display:flex; justify-content:space-between; align-items:center; background:#dcfce7; padding:3px 6px; border-radius:4px; margin-top:3px; color:#166534;">
+            <span><b>${es.empName}</b>: ${formatDateDe(es.date)} (${shiftsLabel[es.shift]})</span>
+            <div style="display:flex; gap:4px;">
+              <button onclick="pullExtraShiftToBox('${es.id}')" style="border:none; background:#16a34a; color:#fff; border-radius:3px; padding:1px 5px; cursor:pointer; font-size:0.68rem;" title="Karte vorab in dieses Zusatz-Fenster holen">📥</button>
+              <button onclick="deleteExtraShift('${es.id}')" style="border:none; background:none; color:#b91c1c; cursor:pointer; font-size:0.72rem;" title="Bringschicht entfernen">✖</button>
+            </div>
+          </div>`).join("");
+      }
+    }
+
+    function initDragAndDrop() {
+      sortableInstances.forEach(s => s.destroy()); sortableInstances = [];
+      document.querySelectorAll(".drop-zone").forEach(zone => {
+        sortableInstances.push(new Sortable(zone, {
+          group: "shared-shifts", animation: 150, disabled: !isPlanner,
+          onEnd: function (evt) {
+            const empId = evt.item.getAttribute("data-id"), newZone = evt.to.getAttribute("data-zone");
+            const emp = employees.find(e => e.id === empId);
+            if (emp) {
+              emp.zone = newZone;
+              const nL = extractLineIdFromZone(newZone), nS = extractShiftIdFromZone(newZone);
+              if (nL && (!emp.lastLineId || (nS && shiftRotation[nS] === emp.team))) emp.lastLineId = nL;
+              saveToFirebase(); renderEmployees();
+            }
+          }
+        }));
+      });
+    }
+
+    function openLineEditModal(lineId) {
+      const l = lines.find(x => x.id === lineId); if (!l) return;
+      document.getElementById("editLineId").value = l.id;
+      document.getElementById("lineEditTitle").textContent = `${l.name} bearbeiten`;
+      document.getElementById("editLinePrio").value = l.prio || "";
+      document.getElementById("editLineTag").value = l.tag || "";
+      document.getElementById("editLineNote").value = l.note || "";
+      document.getElementById("lineEditModal").style.display = "flex";
+    }
+
+    function saveLineDetails() {
+      const l = lines.find(x => x.id === document.getElementById("editLineId").value); if (!l) return;
+      l.prio = document.getElementById("editLinePrio").value;
+      l.tag = document.getElementById("editLineTag").value.trim();
+      l.note = document.getElementById("editLineNote").value.trim();
+      saveToFirebase(); initBoard(); closeModal('lineEditModal');
+    }
+
+    function closeModal(id) { document.getElementById(id).style.display = "none"; if (id === 'settingsModal') resetEmpForm(); }
+    function openSettingsModal() { if (plannerLevel < 3) return; document.getElementById("settingsModal").style.display = "flex"; renderSettingsLists(); }
+    function switchTab(t, idx) {
+      document.querySelectorAll(".tab-btn").forEach((b, i) => b.classList.toggle("active", i === idx));
+      document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+      document.getElementById(t).classList.add("active");
+      if (t === 'tabBackups') renderBackups();
+      if (t === 'tabHistory') renderHistory();
+    }
+
+    function updateRoleDropdown() {
+      const sel = document.getElementById("newEmpRole"); if (!sel) return;
+      sel.innerHTML = roles.map(r => `<option value="${r}">${r}</option>`).join("");
+    }
+
+    function addTeam() {
+      const name = document.getElementById("newTeamName").value.trim(), color = document.getElementById("newTeamColor").value;
+      if (!name) return;
+      const k = "team_" + Date.now(); teamsConfig[k] = { name, color }; activeTeamFilters[k] = true;
+      document.getElementById("newTeamName").value = ""; saveToFirebase(); renderSettingsLists(); initBoard();
+    }
+
+    function updateTeam(k) {
+      const name = document.getElementById(`teamNameInput_${k}`)?.value.trim(), color = document.getElementById(`teamColorInput_${k}`)?.value;
+      if (name && teamsConfig[k]) { teamsConfig[k] = { name, color }; saveToFirebase(); initBoard(); alert("Team aktualisiert!"); }
+    }
+
+    function deleteTeam(k) {
+      if (Object.keys(teamsConfig).length <= 1 || !confirm("Team wirklich löschen?")) return;
+      delete teamsConfig[k]; delete activeTeamFilters[k];
+      const fb = Object.keys(teamsConfig).sort()[0];
+      employees.forEach(e => { if (e.team === k) e.team = fb; });
+      saveToFirebase(); renderSettingsLists(); initBoard();
+    }
+
+    function renderSettingsLists() {
+      document.getElementById("roleList").innerHTML = roles.map((r, i) => `<div class="item-row"><span>${r}</span><button class="btn btn-outline" style="padding:4px 10px; color:#ef4444;" onclick="deleteRole(${i})">Löschen</button></div>`).join("");
+      document.getElementById("employeeList").innerHTML = employees.map(e => {
+        const fName = fullName(e), lvl = Number(e.accessLevel) || 1;
+        const lvlBadge = `<span style="background:#f1f5f9; color:#475569; font-size:0.68rem; padding:1px 5px; border-radius:4px; font-weight:700;">Stufe ${lvl}</span>`;
+        const pwBadge = (e.mustChangePw || !e.password || e.password === "1234") ? `<span style="font-size:0.7rem; color:#d97706;">⏳ PIN: 1234</span>` : `<span style="font-size:0.7rem; color:#15803d;">🔒 Eigenes PW</span>`;
+        return `<div class="item-row"><div style="flex:1;"><b>${fName}</b> <small>(${e.role})</small> ${lvlBadge} ${pwBadge}</div><div style="display:flex; gap:5px;"><button class="btn btn-outline" style="padding:4px 8px; font-size:0.75rem; color:#0284c7;" onclick="resetEmpPassword('${e.id}')">🔄 PIN</button><button class="btn btn-outline" style="padding:4px 8px; font-size:0.75rem;" onclick="editEmployee('${e.id}')">Bearbeiten</button><button class="btn btn-outline" style="padding:4px 8px; font-size:0.75rem; color:#ef4444;" onclick="deleteEmployee('${e.id}')">Löschen</button></div></div>`;
+      }).join("");
+      document.getElementById("lineSettingsList").innerHTML = lines.map((l, i) => `<div class="item-row"><span><b>${l.name}</b></span><div style="display:flex; gap:6px;"><button class="btn btn-outline" style="padding:2px 8px;" ${i===0?'disabled':''} onclick="moveLine(${i},-1)">▲</button><button class="btn btn-outline" style="padding:2px 8px;" ${i===lines.length-1?'disabled':''} onclick="moveLine(${i},1)">▼</button><button class="btn btn-outline" style="padding:4px 10px; color:#ef4444;" onclick="deleteLine('${l.id}')">Löschen</button></div></div>`).join("");
+      document.getElementById("teamSettingsList").innerHTML = Object.keys(teamsConfig).sort().map(k => `<div class="item-row"><input type="color" id="teamColorInput_${k}" value="${teamsConfig[k].color}" style="width:36px; height:32px; border:none;"><input type="text" id="teamNameInput_${k}" class="form-control" value="${teamsConfig[k].name}" style="flex:1; padding:6px;"><button class="btn btn-outline" style="padding:6px 10px; color:var(--bayer-blue);" onclick="updateTeam('${k}')">Speichern</button><button class="btn btn-outline" style="padding:6px 10px; color:#ef4444;" onclick="deleteTeam('${k}')">Löschen</button></div>`).join("");
+    }
+
+    function resetEmpPassword(id) {
+      const emp = employees.find(e => e.id === id); if (!emp || !confirm(`PIN von "${fullName(emp)}" auf 1234 zurücksetzen?`)) return;
+      emp.password = "1234"; emp.mustChangePw = true; saveToFirebase(); renderSettingsLists();
+    }
+
+    function addLine() {
+      const name = document.getElementById("newLineName").value.trim(); if (!name) return;
+      lines.push({ id: "L_" + Date.now(), name, prio: "", tag: "", note: "" }); document.getElementById("newLineName").value = ""; saveToFirebase(); initBoard(); renderSettingsLists();
+    }
+    function moveLine(i, dir) { const item = lines.splice(i, 1)[0]; lines.splice(i + dir, 0, item); saveToFirebase(); initBoard(); renderSettingsLists(); }
+    function deleteLine(id) { if (!confirm("Linie wirklich löschen?")) return; lines = lines.filter(l => l.id !== id); employees.forEach(e => { if (e.zone?.startsWith(id + "_")) e.zone = "pool"; if (e.lastLineId === id) delete e.lastLineId; }); saveToFirebase(); initBoard(); renderSettingsLists(); }
+    function addRole() { const val = document.getElementById("newRoleName").value.trim(); if (!val || roles.includes(val)) return; roles.push(val); activeRoleFilters[val] = true; document.getElementById("newRoleName").value = ""; saveToFirebase(); updateRoleDropdown(); renderRoleFilterCheckboxes(); renderSettingsLists(); }
+    function deleteRole(i) { const rem = roles.splice(i, 1)[0]; delete activeRoleFilters[rem]; saveToFirebase(); updateRoleDropdown(); renderRoleFilterCheckboxes(); renderSettingsLists(); }
 
     function saveEmployee() {
       const idInp = document.getElementById("editEmpId").value;
