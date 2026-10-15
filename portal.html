@@ -3,112 +3,381 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mitarbeiter-Portal - Schichtplan</title>
+  <title>Schicht- und Linienplanung</title>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   <style>
     :root { --bayer-blue: #0091df; --bg-gray: #f4f6f9; }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
-    body { background-color: var(--bg-gray); min-height: 100vh; display: flex; flex-direction: column; }
+    body { background-color: var(--bg-gray); min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
     .brand-gradient { height: 6px; background: linear-gradient(90deg, #0091df 0%, #00bcff 50%, #89d329 100%); width: 100%; flex-shrink: 0; }
-    header { background: #fff; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+    header { background: #fff; padding: 10px 24px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 6px rgba(0,0,0,0.06); position: sticky; top: 0; z-index: 50; }
     .header-left { display: flex; align-items: center; gap: 16px; }
-    .bayer-logo { width: 48px; height: 48px; object-fit: contain; }
-    .header-title h1 { font-size: 1.25rem; font-weight: 700; color: var(--bayer-blue); margin: 0; }
-    .header-title p { font-size: 0.78rem; color: #64748b; }
-    main { padding: 20px; max-width: 800px; width: 100%; margin: 0 auto; flex: 1; display: flex; flex-direction: column; gap: 16px; }
-    .card { background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; }
-    .card h2 { font-size: 1.05rem; color: #1e293b; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-    .form-group { margin-bottom: 14px; }
-    .form-group label { display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 5px; color: #475569; }
-    .form-control { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; background: #f8fafc; }
-    textarea.form-control { resize: vertical; min-height: 75px; }
-    .btn { padding: 10px 16px; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; width: 100%; }
+    .bayer-logo-btn { width: 64px; height: 64px; cursor: pointer; transition: 0.2s; }
+    .bayer-logo-btn:hover { transform: scale(1.05); }
+    .bayer-logo-btn img { width: 100%; height: 100%; object-fit: contain; }
+    .header-title h1 { font-size: 1.45rem; font-weight: 700; color: var(--bayer-blue); margin: 0; }
+    .status-badge { display: none; font-size: 0.75rem; padding: 3px 10px; border-radius: 999px; font-weight: 700; background: #dcfce7; color: #166534; margin-top: 2px; }
+    body.planner-active .status-badge { display: inline-block; }
+    .header-actions { display: flex; gap: 8px; align-items: center; }
+    .btn { padding: 8px 14px; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; position: relative; }
     .btn-primary { background: var(--bayer-blue); color: #fff; }
     .btn-primary:hover { background: #0077b6; }
-    .btn-danger { background: #dc2626; color: #fff; }
-    .btn-danger:hover { background: #b91c1c; }
-    .btn-outline { background: #fff; border-color: #cbd5e1; color: #475569; width: auto; }
-    .alert { padding: 12px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; margin-bottom: 14px; display: none; }
-    .alert-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
-    .alert-error { background: #fee2e2; color: #b91c1c; border: 1px solid #fecdd3; }
-    .alert-info { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
-    .login-container { max-width: 400px; margin: 60px auto; width: 100%; }
-    #portalMain { display: none; }
+    .btn-outline { border-color: #cbd5e1; background: #fff; color: #475569; }
+    .btn-outline:hover { background: #f8fafc; }
+    .inbox-badge { position: absolute; top: -6px; right: -6px; background: #dc2626; color: #fff; font-size: 0.72rem; font-weight: 800; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; display: none; align-items: center; justify-content: center; }
+    main { padding: 16px; display: flex; gap: 16px; flex: 1; width: 100%; }
+    .sidebar { width: 290px; flex-shrink: 0; display: none; flex-direction: column; gap: 10px; }
+    body.planner-active .sidebar { display: flex; }
+    .panel { background: #fff; border-radius: 10px; padding: 10px 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; display: flex; flex-direction: column; max-height: 32vh; }
+    .panel h2 { font-size: 0.86rem; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; color: #1e293b; }
+    .card-list { flex: 1; overflow-y: auto; min-height: 65px; padding: 6px; background: #f8fafc; border-radius: 6px; border: 1px dashed #cbd5e1; display: flex; flex-direction: column; gap: 6px; }
+    .team-filter-box { display: none; background: #fff; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 0.78rem; }
+    body.planner-active .team-filter-box { display: block; }
+    .team-filter-options { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; }
+    .filter-quick-links span { cursor: pointer; color: var(--bayer-blue); font-weight: 600; }
+    .search-wrapper { position: relative; margin-bottom: 8px; }
+    .search-input { width: 100%; padding: 6px 26px 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.8rem; background: #f8fafc; }
+    .search-clear { display: none; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #64748b; font-weight: bold; font-size: 1rem; }
+    .employee-card { background: #fff; padding: 6px 8px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); display: flex; flex-direction: column; border-left: 5px solid #94a3b8; user-select: none; gap: 3px; }
+    body.planner-active .employee-card { cursor: grab; }
+    .card-name { font-size: 0.8rem; font-weight: 700; color: #1e293b; line-height: 1.15; word-break: break-word; }
+    .card-role { font-size: 0.68rem; padding: 2px 5px; background: #f1f5f9; border-radius: 4px; color: #475569; font-weight: 600; }
+    .card-fix-tag { display: none; font-size: 0.62rem; padding: 1px 5px; background: #fef08a; color: #854d0e; border-radius: 4px; font-weight: 700; }
+    body.planner-active .card-fix-tag { display: inline-block; }
+    .card-lines-info { display: none; font-size: 0.65rem; color: #64748b; margin-top: 1px; line-height: 1.25; overflow-wrap: break-word; }
+    body.planner-active .card-lines-info { display: block; }
+    .card-sick-tag { display: none; font-size: 0.62rem; color: #b91c1c; background: #fee2e2; padding: 1px 5px; border-radius: 4px; font-weight: 700; margin-top: 1px; align-self: flex-start; }
+    body.planner-active .card-sick-tag { display: inline-block; }
+    .card-extra-tag { font-size: 0.62rem; color: #166534; background: #dcfce7; padding: 1px 5px; border-radius: 4px; font-weight: 700; margin-top: 1px; align-self: flex-start; }
+    .quick-sick-btn { display: none; border: none; background: #f1f5f9; border-radius: 4px; padding: 2px 4px; font-size: 0.72rem; cursor: pointer; line-height: 1; }
+    .quick-sick-btn:hover { background: #fee2e2; }
+    body.planner-lvl-3 .quick-sick-btn { display: inline-block; }
+    .first-aider-icon { color: #dc2626; font-size: 1.2rem; font-weight: 900; line-height: 0.5; }
+    .board-container { flex: 1; background: #fff; border-radius: 10px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: flex; flex-direction: column; overflow: hidden; }
+    .board-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .board-table th, .board-table td { border: 1px solid #e2e8f0; vertical-align: top; }
+    .line-header { background: #f8fafc; padding: 10px 4px; text-align: center; position: relative; }
+    body.planner-active .line-header { cursor: pointer; }
+    body.planner-active .line-header:hover { background: #f1f5f9; }
+    .line-title { font-size: 0.85rem; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .badge-container { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; margin-top: 2px; }
+    .line-prio { font-size: 0.6rem; padding: 1px 3px; border-radius: 3px; background: #e2e8f0; font-weight: 700; color: #334155; }
+    .line-prio.prio-high { background: #fee2e2; color: #b91c1c; }
+    .line-prio.prio-mid { background: #fef3c7; color: #b45309; }
+    .line-status-tag { font-size: 0.6rem; padding: 1px 3px; border-radius: 3px; background: #fecdd3; color: #9f1239; font-weight: 700; }
+    .line-notes { font-size: 0.65rem; color: #475569; margin-top: 3px; background: #fff; padding: 3px; border-radius: 3px; border: 1px dashed #cbd5e1; white-space: pre-wrap; word-break: break-word; }
+    .shift-header { background: #f1f5f9; font-weight: 700; font-size: 0.9rem; width: 92px; text-align: center; padding: 14px 4px; color: #334155; vertical-align: middle; }
+    body.planner-active .shift-header { width: 116px; padding: 10px 5px; }
+    .shift-team-badge { display: inline-flex; align-items: center; justify-content: center; gap: 4px; margin-top: 5px; padding: 3px 6px; border-radius: 4px; background: #fff; border: 1px solid #cbd5e1; font-size: 0.72rem; font-weight: 700; color: #1e293b; }
+    body.planner-active .shift-team-badge { display: none; }
+    .shift-controls { display: none; flex-direction: column; gap: 5px; margin-top: 6px; }
+    body.planner-active .shift-controls { display: flex; }
+    .shift-rotate-btn { width: 100%; font-size: 0.72rem; font-weight: 700; padding: 5px 4px; border-radius: 4px; border: none; background: var(--bayer-blue); color: #fff; cursor: pointer; }
+    .shift-team-select { width: 100%; font-size: 0.72rem; font-weight: 700; padding: 4px 2px; border-radius: 4px; border: 1px solid var(--bayer-blue); background: #fff; color: #0f172a; cursor: pointer; }
+    .shift-clear-btn { width: 100%; font-size: 0.68rem; font-weight: 600; padding: 4px; border-radius: 4px; border: 1px solid #cbd5e1; background: #fff; color: #64748b; cursor: pointer; }
+    .shift-clear-btn:hover { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
+    .drop-zone { padding: 5px; min-height: 120px; display: flex; flex-direction: column; gap: 5px; background: #fafafa; }
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 100; padding: 12px; }
+    .modal { background: #fff; padding: 24px; border-radius: 10px; width: 100%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); max-height: 90vh; overflow-y: auto; }
+    .form-group { margin-bottom: 12px; position: relative; }
+    .form-group label { display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; color: #475569; }
+    .form-control { width: 100%; padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; }
+    textarea.form-control { resize: vertical; min-height: 65px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+    .suggestions-box { display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 8px 20px rgba(0,0,0,0.12); max-height: 160px; overflow-y: auto; z-index: 60; margin-top: 2px; text-align: left; }
+    .suggestion-item { padding: 8px 10px; font-size: 0.86rem; cursor: pointer; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
+    .suggestion-item:hover { background: #f0f9ff; color: var(--bayer-blue); }
+    .tabs { display: flex; gap: 6px; border-bottom: 2px solid #e2e8f0; margin-bottom: 16px; overflow-x: auto; }
+    .tab-btn { padding: 8px 12px; background: none; border: none; border-bottom: 2px solid transparent; font-weight: 600; cursor: pointer; color: #64748b; margin-bottom: -2px; font-size: 0.9rem; white-space: nowrap; }
+    .tab-btn.active { color: var(--bayer-blue); border-bottom-color: var(--bayer-blue); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .item-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid #f1f5f9; font-size: 0.92rem; gap: 8px; }
+    .sick-card { background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid var(--bayer-blue); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+    .sick-card.unread { background: #fff1f2; border-color: #fecdd3; border-left: 4px solid #dc2626; }
+    .inbox-filter-bar { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+    .filter-chip { padding: 4px 10px; border-radius: 999px; font-size: 0.74rem; font-weight: 600; cursor: pointer; border: 1px solid #cbd5e1; background: #fff; color: #475569; transition: 0.15s; }
+    .filter-chip:hover { background: #f1f5f9; }
+    .filter-chip.active { background: var(--bayer-blue); color: #fff; border-color: var(--bayer-blue); }
+    .manual-entry-toggle { width: 100%; text-align: left; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 14px; font-size: 0.86rem; font-weight: 700; color: #0f172a; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: 0.15s; }
+    .manual-entry-toggle:hover { background: #f1f5f9; }
+    .lvl-3-only, .admin-element { display: none; }
+    body.planner-active .admin-element { display: inline-flex; }
+    body.planner-lvl-3 .lvl-3-only { display: inline-flex; }
   </style>
 </head>
 <body>
   <div class="brand-gradient"></div>
   <header>
     <div class="header-left">
-      <img src="logo.png" alt="Bayer Logo" class="bayer-logo" onerror="this.style.display='none'">
+      <div class="bayer-logo-btn" onclick="handleLogoClick()"><img src="logo.png" alt="Bayer Logo" onerror="this.style.display='none'"></div>
       <div class="header-title">
-        <h1>Mitarbeiter-Portal</h1>
-        <p>Persönliche Schicht-, Urlaubs- & Linienübersicht</p>
+        <h1>Schicht- und Linienübersicht</h1>
+        <span id="plannerStatusBadge" class="status-badge">Planer-Modus aktiv</span>
       </div>
     </div>
-    <button class="btn btn-outline" id="logoutBtn" style="display:none;" onclick="logoutPortal()">Abmelden</button>
+    <div class="header-actions">
+      <button class="btn btn-outline lvl-3-only" onclick="openInboxModal()">📬 Postfach & Anträge <span id="inboxBadge" class="inbox-badge">0</span></button>
+      <button class="btn btn-outline lvl-3-only" onclick="openSettingsModal()">⚙️ Einstellungen</button>
+      <button class="btn btn-outline admin-element" onclick="logoutPlanner()">Abmelden</button>
+    </div>
   </header>
 
   <main>
-    <!-- LOGIN ANSICHT -->
-    <div id="portalLoginCard" class="card login-container">
-      <h2 style="text-align:center; color:var(--bayer-blue); margin-bottom:16px;">🔑 Mitarbeiter-Anmeldung</h2>
-      <div id="portalLoginError" class="alert alert-error"></div>
-      <div class="form-group">
-        <label>Dein vollständiger Name</label>
-        <input type="text" id="portalLoginName" class="form-control" placeholder="Vor- und Nachname..." autocomplete="off">
-      </div>
-      <div class="form-group">
-        <label>Persönliche PIN</label>
-        <input type="password" id="portalLoginPin" class="form-control" placeholder="****" onkeydown="if(event.key==='Enter') verifyPortalLogin()">
-      </div>
-      <button class="btn btn-primary" onclick="verifyPortalLogin()">Anmelden</button>
-    </div>
-
-    <!-- HAUPT-PORTAL FÜR MITARBEITER -->
-    <div id="portalMain">
-      <div class="card" style="background:linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-color:#bae6fd;">
-        <h2 id="welcomeEmpTitle" style="color:#0369a1; margin-bottom:4px;">Hallo Mitarbeiter</h2>
-        <p id="welcomeEmpSub" style="font-size:0.85rem; color:#0284c7;">Lade deine Schichtdaten...</p>
+    <aside class="sidebar">
+      <div class="team-filter-box">
+        <div class="search-wrapper">
+          <input type="text" id="poolSearchInput" class="search-input" placeholder="🔍 Name oder Linie (z.B. 37)..." oninput="updatePoolSearch(this.value)">
+          <span id="clearSearchBtn" class="search-clear" onclick="updatePoolSearch('')">&times;</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-weight:700; color:#1e293b;">Pool-Teams</span>
+          <div class="filter-quick-links"><span onclick="toggleAllTeamFilters(true)">Alle</span> / <span onclick="toggleAllTeamFilters(false)">Keine</span></div>
+        </div>
+        <div id="teamFilterContainer" class="team-filter-options"></div>
+        <div style="border-top: 1px dashed #cbd5e1; margin: 7px 0 5px 0;"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-weight:700; color:#1e293b;">Pool-Rollen</span>
+          <div class="filter-quick-links"><span onclick="toggleAllRoleFilters(true)">Alle</span> / <span onclick="toggleAllRoleFilters(false)">Keine</span></div>
+        </div>
+        <div id="roleFilterContainer" class="team-filter-options"></div>
       </div>
 
-      <!-- KRANKMELDUNG / ABWESENHEIT EINREICHEN -->
-      <div class="card">
-        <h2>🏥 Abwesenheit / Krankmeldung / Urlaub einreichen</h2>
-        <div id="portalAlertBox" class="alert"></div>
-        <div class="form-group">
-          <label>Art der Abwesenheit</label>
-          <select id="portalCategory" class="form-control">
-            <option value="Arbeitsunfähigkeit (Krank)">🏥 Krank / Arbeitsunfähigkeit (AU)</option>
-            <option value="Urlaub - bezahlt">🌴 Urlaub (bezahlt)</option>
-            <option value="Urlaub - unbezahlt">🌴 Urlaub (unbezahlt)</option>
-            <option value="Freizeitausgleich / Gleittag">⏱️ Freizeitausgleich / Gleittag</option>
-            <option value="Aus- und Fortbildung">🎓 Aus- und Fortbildung</option>
-            <option value="Dienstreise">🚗 Dienstreise</option>
-          </select>
-        </div>
-        <div style="display:flex; gap:10px;">
-          <div class="form-group" style="flex:1;"><label>Von (Startdatum)</label><input type="date" id="portalStartDate" class="form-control"></div>
-          <div class="form-group" style="flex:1;"><label>Bis (Einschließlich)</label><input type="date" id="portalEndDate" class="form-control"></div>
-        </div>
-        <div class="form-group">
-          <label>Begleisschreiben / Notiz (optional)</label>
-          <textarea id="portalReason" class="form-control" placeholder="z.B. Grippe, Arzttermin, geplanter Urlaub..."></textarea>
-        </div>
-        <div class="alert alert-info" style="display:block;">
-          ⏰ <b>Wichtig:</b> Bitte denke daran, deine Krankmeldung spätestens <b>eine Stunde vor Schichtbeginn</b> abzugeben.
-        </div>
-        <button class="btn btn-danger" onclick="submitPortalRequest()">Meldung / Antrag absenden</button>
+      <div class="panel">
+        <h2>
+          <span>Pool <span id="poolCount" style="font-size:0.8rem; color:#64748b;">(0)</span></span>
+          <div style="display:flex; align-items:center; gap:4px;">
+            <select id="teamSelect_frei" style="font-size:0.72rem; padding:2px 4px; border-radius:4px; border:1px solid #cbd5e1; font-weight:700; color:#334155;"></select>
+            <button class="btn btn-outline" style="padding:1px 6px; font-size:0.7rem; color:var(--bayer-blue); border-color:var(--bayer-blue);" onclick="loadTeamToShift('frei')" title="Team als Schichtfrei in den Pool setzen">📥</button>
+          </div>
+        </h2>
+        <div id="pool" class="card-list drop-zone" data-zone="pool"></div>
       </div>
 
-      <!-- MEINE ANTRÄGE & HISTORIE -->
-      <div class="card">
-        <h2>📋 Meine eingereichten Anträge & Status</h2>
-        <div id="myRequestsList" style="font-size:0.86rem; color:#475569;">Lade Anträge...</div>
+      <div class="panel">
+        <h2>
+          <span>➕ Bringschichten / Zusatz <span id="extraCount" style="font-size:0.8rem; color:#166534;">(0)</span></span>
+        </h2>
+        <div id="extra" class="card-list drop-zone" data-zone="extra" style="background:#f0fdf4; border-color:#86efac;"></div>
+        <div id="approvedExtraList" style="max-height:75px; overflow-y:auto; margin-top:4px; font-size:0.72rem;"></div>
       </div>
-    </div>
+
+      <div class="panel">
+        <h2>
+          <span>Abwesend</span>
+          <button class="btn btn-outline lvl-3-only" style="padding:2px 7px; font-size:0.72rem;" onclick="openInboxModal(null, true)">+ Zeitraum</button>
+        </h2>
+        <div id="absent" class="card-list drop-zone" data-zone="absent" style="background: #fff1f2;"></div>
+      </div>
+    </aside>
+
+    <section class="board-container">
+      <table class="board-table">
+        <thead><tr id="headerRow"><th class="shift-header">Schicht</th></tr></thead>
+        <tbody id="matrixBody"></tbody>
+      </table>
+    </section>
   </main>
+
+  <!-- LOGIN MODAL (NAME + PIN) -->
+  <div id="pinModal" class="modal-overlay">
+    <div class="modal" style="max-width: 380px;">
+      <h3 style="color: var(--bayer-blue); margin-bottom: 12px; text-align:center;">🔐 Planer-Anmeldung</h3>
+      <div id="loginModalError" style="display:none; background:#fee2e2; color:#b91c1c; padding:10px; border-radius:6px; font-size:0.82rem; font-weight:700; margin-bottom:12px; text-align:center;"></div>
+      <div class="form-group" id="plannerLoginSearchGroup">
+        <label>Dein Name (oder "Admin")</label>
+        <input type="text" id="loginPlannerName" class="form-control" placeholder="Vor- und Nachname tippen..." autocomplete="off" oninput="onPlannerLoginInput(this.value)" onkeydown="if(event.key==='Enter') document.getElementById('pinInput').focus()">
+        <div id="plannerLoginSuggestions" class="suggestions-box"></div>
+      </div>
+      <div class="form-group">
+        <label>Persönliche PIN / Passwort</label>
+        <input type="password" id="pinInput" class="form-control" placeholder="****" onkeydown="if(event.key==='Enter') verifyPin()">
+      </div>
+      <div class="modal-actions" style="justify-content: space-between;">
+        <button class="btn btn-outline" onclick="closeModal('pinModal')">Abbrechen</button>
+        <button class="btn btn-primary" onclick="verifyPin()">Anmelden</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- POSTFACH & ANTRÄGE MODAL (STUFE 3) -->
+  <div id="inboxModal" class="modal-overlay">
+    <div class="modal" style="max-width: 680px;">
+      <h3 style="display:flex; justify-content:space-between; align-items:center; color:var(--bayer-blue); margin-bottom:8px;">
+        <span>📬 Postfach, Urlaub & Bringschichten</span>
+        <button onclick="closeModal('inboxModal')" style="border:none; background:none; font-size:1.5rem; cursor:pointer;">&times;</button>
+      </h3>
+      <div id="serverSyncInfo" style="font-size:0.74rem; background:#f1f5f9; color:#475569; padding:6px 10px; border-radius:6px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+        <span>🔄 Prüfe Live-Datenbank...</span>
+        <button class="btn btn-outline" style="padding:2px 8px; font-size:0.7rem;" onclick="forceRefreshFromServer()">🔄 Jetzt abrufen</button>
+      </div>
+
+      <!-- LIVE-SUCHE FÜR DAS GESAMTE POSTFACH -->
+      <div class="search-wrapper" style="margin-bottom: 12px;">
+        <input type="text" id="inboxSearchInput" class="search-input" style="padding: 8px 30px 8px 12px; font-size: 0.84rem; background: #fff; border-color: #94a3b8;" placeholder="🔍 Postfach durchsuchen (Name, Datum, Urlaub, Krank, Notiz)..." oninput="updateInboxSearch(this.value)">
+        <span id="clearInboxSearchBtn" class="search-clear" onclick="updateInboxSearch('')">&times;</span>
+      </div>
+
+      <!-- AUF-/ZUKLAPPBARES DIREKT-EINTRAGEN FORMULAR -->
+      <div style="margin-bottom: 16px;">
+        <button type="button" class="manual-entry-toggle" onclick="toggleManualEntryBox()">
+          <span>➕ Abwesenheit / Urlaub / Krank direkt eintragen</span>
+          <span id="manualEntryArrow" style="font-size:0.76rem; color:var(--bayer-blue);">▼ Formular öffnen</span>
+        </button>
+        <div id="manualEntryContent" style="display:none; background:#f8fafc; border:1px solid #cbd5e1; border-top:none; border-radius:0 0 8px 8px; padding:14px;">
+          <div style="display:flex; gap:10px;">
+            <div class="form-group" id="manualSickSearchGroup" style="flex:1.4;">
+              <label>Mitarbeiter</label>
+              <input type="text" id="manualSickEmpInput" class="form-control" placeholder="🔍 Name tippen..." autocomplete="off" oninput="onManualSickNameInput(this.value)">
+              <div id="manualSickSuggestions" class="suggestions-box"></div>
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label>Art der Abwesenheit</label>
+              <select id="manualSickCategory" class="form-control">
+                <option value="Arbeitsunfähigkeit (Krank)">🏥 Krank / AU</option>
+                <option value="Urlaub - bezahlt">🌴 Urlaub (bezahlt)</option>
+                <option value="Urlaub - unbezahlt">🌴 Urlaub (unbezahlt)</option>
+                <option value="Freizeitausgleich / Gleittag">⏱️ Freizeitausgleich / Gleittag</option>
+                <option value="Aus- und Fortbildung">🎓 Aus- und Fortbildung</option>
+                <option value="Dienstreise">🚗 Dienstreise</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <div class="form-group" style="flex:1;"><label>Von</label><input type="date" id="manualSickStart" class="form-control"></div>
+            <div class="form-group" style="flex:1;"><label>Bis</label><input type="date" id="manualSickEnd" class="form-control"></div>
+          </div>
+          <div class="form-group"><label>Notiz / Bemerkung</label><input type="text" id="manualSickReason" class="form-control" placeholder="Optional..."></div>
+          <button class="btn btn-primary" style="width:100%;" onclick="addManualSickLeave()">Eintragen & Genehmigen</button>
+        </div>
+      </div>
+
+      <!-- BEREICH 1: OFFENE ANTRÄGE & MELDUNGEN -->
+      <div style="margin-bottom: 18px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
+          <h4 style="font-size:0.92rem; color:#dc2626;">🔔 Offene Anträge, Stornos & Meldungen</h4>
+          <button id="btnMarkAllRead" class="btn btn-outline" style="padding:4px 10px; font-size:0.75rem; display:none;" onclick="markAllSickLeavesRead()">Krankmeldungen gelesen</button>
+        </div>
+        <div id="inboxUnreadFilterBar" class="inbox-filter-bar"></div>
+        <div id="unreadSickList"></div>
+      </div>
+
+      <!-- BEREICH 2: AKTIVE & GENEHMIGTE ABWESENHEITEN -->
+      <div style="border-top: 2px solid #e2e8f0; padding-top: 14px;">
+        <h4 style="font-size:0.92rem; margin-bottom: 6px;">📋 Aktive & Genehmigte Abwesenheiten</h4>
+        <div id="inboxActiveFilterBar" class="inbox-filter-bar"></div>
+        <div id="activeSickList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LINIE BEARBEITEN MODAL -->
+  <div id="lineEditModal" class="modal-overlay">
+    <div class="modal" style="max-width: 450px;">
+      <h3 id="lineEditTitle" style="color: var(--bayer-blue); margin-bottom: 16px;">Linie bearbeiten</h3>
+      <input type="hidden" id="editLineId">
+      <div class="form-group">
+        <label>Priorität</label>
+        <select id="editLinePrio" class="form-control">
+          <option value="">Keine Priorität</option><option value="PRIO 1">PRIO 1</option><option value="PRIO 2">PRIO 2</option><option value="PRIO 3">PRIO 3</option><option value="PRIO 4">PRIO 4</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Status / Tag</label><input type="text" id="editLineTag" class="form-control"></div>
+      <div class="form-group"><label>Notiz</label><textarea id="editLineNote" class="form-control"></textarea></div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeModal('lineEditModal')">Abbrechen</button>
+        <button class="btn btn-primary" onclick="saveLineDetails()">Speichern</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EINSTELLUNGEN MODAL (STUFE 3) -->
+  <div id="settingsModal" class="modal-overlay">
+    <div class="modal" style="max-width: 640px;">
+      <h3 style="display:flex; justify-content:space-between; color:var(--bayer-blue); margin-bottom:16px;">
+        Verwaltung <button onclick="closeModal('settingsModal')" style="border:none; background:none; font-size:1.5rem; cursor:pointer;">&times;</button>
+      </h3>
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('tabEmployees', 0)">Mitarbeiter & Rechte</button>
+        <button class="tab-btn" onclick="switchTab('tabRoles', 1)">Rollen</button>
+        <button class="tab-btn" onclick="switchTab('tabLines', 2)">Linien</button>
+        <button class="tab-btn" onclick="switchTab('tabTeams', 3)">Teams</button>
+        <button class="tab-btn" onclick="switchTab('tabHistory', 4)">Historie</button>
+        <button class="tab-btn" onclick="switchTab('tabBackups', 5)">Backups</button>
+      </div>
+      
+      <div id="tabEmployees" class="tab-content active">
+        <div style="background:#f8fafc; padding:14px; border-radius:8px; margin-bottom:14px; border:1px solid #e2e8f0;">
+          <input type="hidden" id="editEmpId">
+          <div style="display:flex; gap:10px;">
+            <div class="form-group" style="flex:1;"><label>Vorname</label><input type="text" id="newEmpFirstName" class="form-control"></div>
+            <div class="form-group" style="flex:1;"><label>Nachname</label><input type="text" id="newEmpLastName" class="form-control"></div>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <div class="form-group" style="flex:1;"><label>Team</label><select id="newEmpTeam" class="form-control"></select></div>
+            <div class="form-group" style="flex:1;"><label>Rolle</label><select id="newEmpRole" class="form-control"></select></div>
+            <div class="form-group" style="flex:1.2;">
+              <label>Zugriffsrecht (Board)</label>
+              <select id="newEmpAccessLevel" class="form-control">
+                <option value="1">Stufe 1</option>
+                <option value="2">Stufe 2</option>
+                <option value="3">Stufe 3</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px; flex-wrap:wrap; gap:8px;">
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="newEmpFirstAider"> Ersthelfer <span style="color:#dc2626; font-weight:900;">+</span></label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="newEmpNoRotation"> ⚓ Fix (Rotiert nicht)</label>
+            <span style="font-size:0.75rem; color:#64748b;">🔑 Start-PIN: <b>1234</b></span>
+          </div>
+          <div class="form-group"><label>Prio-Linien:</label><div id="mainLinesCheckboxes" style="display:flex; flex-wrap:wrap; gap:6px;"></div></div>
+          <div class="form-group"><label>Sek-Linien:</label><div id="secLinesCheckboxes" style="display:flex; flex-wrap:wrap; gap:6px;"></div></div>
+          <div style="display:flex; gap:10px; margin-top: 10px;">
+            <button id="btnSaveEmp" class="btn btn-primary" style="flex:1;" onclick="saveEmployee()">Hinzufügen / Speichern</button>
+            <button id="btnCancelEditEmp" class="btn btn-outline" style="display:none;" onclick="resetEmpForm()">Abbrechen</button>
+          </div>
+        </div>
+        <div id="employeeList" style="max-height: 210px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
+      </div>
+      
+      <div id="tabRoles" class="tab-content">
+        <div style="display:flex; gap:10px; margin-bottom:16px;"><input type="text" id="newRoleName" class="form-control" placeholder="Neue Rolle"><button class="btn btn-primary" onclick="addRole()">Hinzufügen</button></div>
+        <div id="roleList" style="max-height: 250px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
+      </div>
+
+      <div id="tabLines" class="tab-content">
+        <div style="display:flex; gap:10px; margin-bottom:16px;"><input type="text" id="newLineName" class="form-control" placeholder="Neue Linie"><button class="btn btn-primary" onclick="addLine()">Hinzufügen</button></div>
+        <div id="lineSettingsList" style="max-height: 250px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
+      </div>
+
+      <div id="tabTeams" class="tab-content">
+        <div style="background:#f8fafc; padding:14px; border-radius:8px; margin-bottom:16px; border:1px solid #e2e8f0;">
+          <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:6px;">Neues Team hinzufügen (z.B. Team 5 / Tagschicht)</label>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <input type="color" id="newTeamColor" value="#3b82f6" style="width:40px; height:38px; border:none; cursor:pointer;">
+            <input type="text" id="newTeamName" class="form-control" placeholder="Team-Name" style="flex:1; min-width:140px;">
+            <label style="display:flex; align-items:center; gap:5px; font-size:0.82rem; font-weight:600; cursor:pointer; background:#fff; padding:7px 10px; border-radius:6px; border:1px solid #cbd5e1;">
+              <input type="checkbox" id="newTeamRotates" checked> 🔄 Rotiert
+            </label>
+            <button class="btn btn-primary" onclick="addTeam()">+ Hinzufügen</button>
+          </div>
+        </div>
+        <div id="teamSettingsList" style="max-height: 240px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
+      </div>
+
+      <div id="tabHistory" class="tab-content">
+        <div style="margin-bottom:12px;"><input type="text" id="historyUnifiedInput" class="form-control" placeholder="🔍 Nach Name oder Datum filtern..." oninput="filterHistoryUnified()" style="font-size:0.82rem; padding:8px 10px;"></div>
+        <div id="historyList" style="max-height: 230px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px; padding:10px;">Lade Historie...</div>
+      </div>
+
+      <div id="tabBackups" class="tab-content">
+        <p style="font-size:0.9rem; color:#64748b; margin-bottom:14px;">Automatische Sicherung (letzte 7 Tage):</p>
+        <div id="backupList" style="max-height: 250px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px; padding:10px;">Lade Backups...</div>
+      </div>
+    </div>
+  </div>
 
   <script>
     firebase.initializeApp({
@@ -118,196 +387,1439 @@
     });
     const db = firebase.firestore();
     const boardRef = db.collection("shiftplan").doc("live_board");
+    const shifts = [{ id: "frueh", name: "Früh" }, { id: "spaet", name: "Spät" }, { id: "nacht", name: "Nacht" }];
+    const shiftsLabel = { frueh: "Früh", spaet: "Spät", nacht: "Nacht" };
+    const defaultLines = ["32","33","34","09","22","39","36","37","38","54"].map(function(n) { return { id: "L" + n, name: "Linie " + n, prio: "", tag: "", note: "" }; });
+    let shiftRotation = { frueh: "team-1", spaet: "team-2", nacht: "team-3", frei: "team-4" };
+    let lines = defaultLines.slice();
+    let roles = ["Bediener", "LOP", "TL", "Schichtexperte", "Waschraumoperator"];
+    let employees = [], sickLeaves = [], leaveRequests = [], extraShifts = [], cachedHistoryData = [];
+    let teamsConfig = {
+      "team-1": { name: "Team 1", color: "#0091df", rotates: true },
+      "team-2": { name: "Team 2", color: "#f59e0b", rotates: true },
+      "team-3": { name: "Team 3", color: "#10b981", rotates: true },
+      "team-4": { name: "Team 4", color: "#f43f5e", rotates: true }
+    };
+    let activeTeamFilters = {}, activeRoleFilters = {}, poolSearchQuery = "";
+    let inboxSearchQuery = "", inboxUnreadFilter = "all", inboxActiveFilter = "all";
+    let selectedManualSickEmpId = null, selectedLoginPlannerId = null;
+    let isPlanner = false, plannerLevel = 0, currentPlannerName = "";
+    let sortableInstances = [], backupDoneToday = false;
 
-    let currentEmpId = null, currentEmpData = null, globalDbData = null;
-    let alertTimer = null;
-
-    // 1 Stunde Inaktivitäts-Logout für das Mitarbeiter-Portal
-    const PORTAL_INACTIVITY_MS = 60 * 60 * 1000;
-    let portalLastActivityTime = Date.now();
-    function resetPortalActivity() { portalLastActivityTime = Date.now(); }
+    // 3 Stunden Inaktivitäts-Logout für das Planer-Board
+    const PLANER_INACTIVITY_MS = 3 * 60 * 60 * 1000;
+    let planerLastActivityTime = Date.now();
+    function resetPlanerActivity() {
+      planerLastActivityTime = Date.now();
+      if (isPlanner) sessionStorage.setItem("planner_last_active", String(planerLastActivityTime));
+    }
     setInterval(function() {
-      if (currentEmpId && (Date.now() - portalLastActivityTime > PORTAL_INACTIVITY_MS)) {
-        logoutPortal();
-        alert("🔒 Wegen Inaktivität (1 Stunde) wurdest du im Portal automatisch abgemeldet.");
+      if (isPlanner && (Date.now() - planerLastActivityTime > PLANER_INACTIVITY_MS)) {
+        logoutPlanner();
+        alert("🔒 Wegen Inaktivität (3 Stunden) wurdest du automatisch abgemeldet.");
       }
-    }, 60000);
+    }, 30000);
+
+    function getTodayIso() {
+      const d = new Date();
+      return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    }
+    function formatDateDe(s) {
+      return (s && s.indexOf("-") !== -1) ? s.split("-").reverse().join(".") : (s || "");
+    }
+    function fullName(e) {
+      return ((e.firstName || "") + " " + (e.lastName || "")).trim();
+    }
+    function extractLineIdFromZone(z) {
+      return (!z || ["pool","absent","extra"].indexOf(z) !== -1 || z.indexOf("_") === -1) ? null : z.split("_").slice(0, -1).join("_");
+    }
+    function extractShiftIdFromZone(z) {
+      return (!z || ["pool","absent","extra"].indexOf(z) !== -1 || z.indexOf("_") === -1) ? null : z.split("_").pop();
+    }
+    function isTeamRotating(teamKey) {
+      return teamsConfig[teamKey] ? (teamsConfig[teamKey].rotates !== false) : true;
+    }
+    function isEmpProtectedFromRotation(emp) {
+      return !!(emp.noRotation || !isTeamRotating(emp.team));
+    }
+
+    function parseIsoLocal(iso) {
+      if (!iso || iso.indexOf("-") === -1) return 0;
+      const p = iso.split("-").map(Number);
+      return new Date(p[0], p[1] - 1, p[2], 12, 0, 0).getTime();
+    }
+    function canMergeDateRanges(s1, e1, s2, e2) {
+      const msDay = 86400000, tS1 = parseIsoLocal(s1), tE1 = parseIsoLocal(e1), tS2 = parseIsoLocal(s2), tE2 = parseIsoLocal(e2);
+      return (tS1 && tE1 && tS2 && tE2) ? (tS1 <= tE2 + msDay * 1.1) && (tS2 <= tE1 + msDay * 1.1) : false;
+    }
+    function calcSickDays(s, e) {
+      const diff = Math.round((parseIsoLocal(e) - parseIsoLocal(s)) / 86400000) + 1;
+      return diff > 0 ? diff : 1;
+    }
+    function mergeReasonsText(r1, r2) {
+      const a = (r1 || "").trim(), b = (r2 || "").trim();
+      if (!a || a === "Vom Planer eingetragen") return b || a;
+      if (!b || b === "Vom Planer eingetragen") return a;
+      if (a.toLowerCase().indexOf(b.toLowerCase()) !== -1) return a;
+      if (b.toLowerCase().indexOf(a.toLowerCase()) !== -1) return b;
+      return a + " | " + b;
+    }
+
+    function getPredeterminedLineForEmp(emp) {
+      if (emp.lastLineId && lines.some(function(l) { return l.id === emp.lastLineId; })) return emp.lastLineId;
+      if (emp.mainLines && emp.mainLines.length > 0 && lines.some(function(l) { return l.id === emp.mainLines[0]; })) {
+        emp.lastLineId = emp.mainLines[0];
+        return emp.mainLines[0];
+      }
+      return null;
+    }
+
+    function returnEmpFromAbsentOrExtra(emp) {
+      const l = getPredeterminedLineForEmp(emp);
+      if (isEmpProtectedFromRotation(emp) && emp.lastShiftId && l) emp.zone = l + "_" + emp.lastShiftId;
+      else if (emp.team === shiftRotation.frueh && l && !isEmpProtectedFromRotation(emp)) emp.zone = l + "_frueh";
+      else if (emp.team === shiftRotation.spaet && l && !isEmpProtectedFromRotation(emp)) emp.zone = l + "_spaet";
+      else if (emp.team === shiftRotation.nacht && l && !isEmpProtectedFromRotation(emp)) emp.zone = l + "_nacht";
+      else emp.zone = "pool";
+    }
+
+    window.deletePin = function(id) {
+      const emp = employees.find(function(e) { return e.id === id; });
+      if (emp) { delete emp.lastLineId; saveToFirebase(); renderEmployees(); }
+    };
 
     window.addEventListener("DOMContentLoaded", function() {
-      const savedId = sessionStorage.getItem("portal_emp_id");
-      if (savedId) {
-        boardRef.get().then(function(doc) {
-          if (doc.exists) {
-            globalDbData = doc.data();
-            const emps = globalDbData.employees || [];
-            const found = emps.find(function(e) { return e.id === savedId; });
-            if (found) {
-              currentEmpId = found.id;
-              currentEmpData = found;
-              showPortalMainView();
+      Object.keys(teamsConfig).forEach(function(k) { activeTeamFilters[k] = true; });
+      roles.forEach(function(r) { activeRoleFilters[r] = true; });
+      const savedName = sessionStorage.getItem("planner_name"), savedLvl = Number(sessionStorage.getItem("planner_level") || 0);
+      const lastAct = Number(sessionStorage.getItem("planner_last_active") || Date.now());
+      if (savedName && savedLvl >= 2 && (Date.now() - lastAct <= PLANER_INACTIVITY_MS)) {
+        applyPlannerLoginState(savedName, savedLvl);
+      } else if (savedName) {
+        sessionStorage.removeItem("planner_name");
+        sessionStorage.removeItem("planner_level");
+        sessionStorage.removeItem("planner_last_active");
+      }
+      initBoard();
+
+      ["mousemove", "mousedown", "keydown", "scroll", "touchstart", "click"].forEach(function(evt) {
+        document.addEventListener(evt, resetPlanerActivity, { passive: true });
+      });
+
+      document.addEventListener("click", function(e) {
+        const g1 = document.getElementById("manualSickSearchGroup");
+        if (g1 && !g1.contains(e.target)) document.getElementById("manualSickSuggestions").style.display = "none";
+        const g2 = document.getElementById("plannerLoginSearchGroup");
+        if (g2 && !g2.contains(e.target)) document.getElementById("plannerLoginSuggestions").style.display = "none";
+      });
+    });
+
+    function handleLogoClick() {
+      if (!isPlanner) {
+        document.getElementById("pinModal").style.display = "flex";
+        document.getElementById("loginModalError").style.display = "none";
+        document.getElementById("loginPlannerName").value = "";
+        document.getElementById("pinInput").value = "";
+        selectedLoginPlannerId = null;
+        document.getElementById("loginPlannerName").focus();
+      }
+    }
+
+    function onPlannerLoginInput(val) {
+      selectedLoginPlannerId = null;
+      const box = document.getElementById("plannerLoginSuggestions"), q = val.trim().toLowerCase();
+      if (!q) { box.style.display = "none"; return; }
+      const matches = employees.filter(function(e) {
+        return fullName(e).toLowerCase().indexOf(q) !== -1 || ((e.lastName || "") + " " + (e.firstName || "")).toLowerCase().indexOf(q) !== -1;
+      });
+      if (!matches.length) { box.style.display = "none"; return; }
+      box.innerHTML = matches.map(function(e) {
+        return '<div class="suggestion-item" onclick="selectPlannerLogin(\'' + e.id + '\')"><span><b>' + fullName(e) + '</b></span><small style="color:#64748b;">Stufe ' + (e.accessLevel || 1) + '</small></div>';
+      }).join("");
+      box.style.display = "block";
+    }
+
+    function selectPlannerLogin(id) {
+      const e = employees.find(function(x) { return x.id === id; });
+      if (e) {
+        selectedLoginPlannerId = e.id;
+        document.getElementById("loginPlannerName").value = fullName(e);
+        document.getElementById("plannerLoginSuggestions").style.display = "none";
+        document.getElementById("pinInput").focus();
+      }
+    }
+
+    function verifyPin() {
+      const nameVal = document.getElementById("loginPlannerName").value.trim().toLowerCase();
+      const pinVal = document.getElementById("pinInput").value.trim();
+      const errBox = document.getElementById("loginModalError");
+      errBox.style.display = "none";
+
+      if ((nameVal === "admin" || nameVal === "planer") && pinVal === "1234") {
+        applyPlannerLoginState("Admin", 3); closeModal("pinModal"); initBoard(); return;
+      }
+
+      let emp = selectedLoginPlannerId ? employees.find(function(e) { return e.id === selectedLoginPlannerId; }) : employees.find(function(e) { return fullName(e).toLowerCase() === nameVal; });
+      if (!emp && nameVal) {
+        const p = employees.filter(function(e) { return fullName(e).toLowerCase().indexOf(nameVal) !== -1; });
+        if (p.length === 1) emp = p[0];
+      }
+
+      if (!emp || (emp.password || "1234") !== pinVal) {
+        errBox.textContent = "❌ Name oder PIN nicht korrekt!"; errBox.style.display = "block"; return;
+      }
+
+      const lvl = Number(emp.accessLevel) || 1;
+      if (lvl <= 1) {
+        errBox.textContent = "⛔ Bitte kontaktiere deinen Vorgesetzten für Administrationsrechte (Aktuell: Stufe 1)."; errBox.style.display = "block"; return;
+      }
+
+      applyPlannerLoginState(fullName(emp), lvl); closeModal("pinModal"); initBoard();
+    }
+
+    function applyPlannerLoginState(name, lvl) {
+      isPlanner = true; plannerLevel = lvl; currentPlannerName = name;
+      sessionStorage.setItem("planner_name", name); sessionStorage.setItem("planner_level", lvl);
+      document.body.classList.add("planner-active");
+      document.body.classList.toggle("planner-lvl-3", lvl === 3);
+      document.getElementById("plannerStatusBadge").textContent = "👤 " + name + " (Stufe " + lvl + ")";
+      resetPlanerActivity();
+    }
+
+    function logoutPlanner() {
+      isPlanner = false; plannerLevel = 0; currentPlannerName = "";
+      sessionStorage.removeItem("planner_name");
+      sessionStorage.removeItem("planner_level");
+      sessionStorage.removeItem("planner_last_active");
+      document.body.classList.remove("planner-active", "planner-lvl-3");
+      closeModal("inboxModal");
+      closeModal("settingsModal");
+      closeModal("lineEditModal");
+      initBoard();
+    }
+
+    function applyIncomingDocData(d) {
+      if (!d) return;
+      try {
+        if (Array.isArray(d.lines) && d.lines.length > 0) lines = d.lines;
+        if (Array.isArray(d.roles) && d.roles.length > 0) roles = d.roles;
+        sickLeaves = Array.isArray(d.sickLeaves) ? d.sickLeaves : [];
+        leaveRequests = Array.isArray(d.leaveRequests) ? d.leaveRequests : [];
+        extraShifts = Array.isArray(d.extraShifts) ? d.extraShifts : [];
+        if (d.shiftRotation && typeof d.shiftRotation === "object") shiftRotation = d.shiftRotation;
+        
+        if (d.teamsConfig && typeof d.teamsConfig === "object" && Object.keys(d.teamsConfig).length > 0) {
+          const cleanTeams = {};
+          Object.keys(d.teamsConfig).forEach(function(k) {
+            const t = d.teamsConfig[k];
+            if (t && typeof t === "object") {
+              cleanTeams[k] = {
+                name: t.name || k,
+                color: t.color || "#0091df",
+                rotates: t.rotates !== undefined ? !!t.rotates : true
+              };
             }
+          });
+          if (Object.keys(cleanTeams).length > 0) teamsConfig = cleanTeams;
+        }
+
+        let memoryUpdated = false;
+        if (Array.isArray(d.employees)) {
+          employees = d.employees.filter(Boolean).map(function(e) {
+            if (!e.firstName && e.name) { const p = String(e.name).split(" "); e.firstName = p[0] || ""; e.lastName = p.slice(1).join(" ") || ""; }
+            if (!Array.isArray(e.mainLines)) e.mainLines = [];
+            if (!Array.isArray(e.secLines)) e.secLines = [];
+            if (!e.password) e.password = "1234";
+            if (e.mustChangePw === undefined) e.mustChangePw = (e.password === "1234");
+            if (e.noRotation === undefined) e.noRotation = false;
+            if (!e.accessLevel) e.accessLevel = 1;
+            if (e.zone && e.zone.slice(-5) === "_frei") { const lId = extractLineIdFromZone(e.zone); if (lId) e.lastLineId = lId; e.zone = "pool"; memoryUpdated = true; }
+            const cLine = extractLineIdFromZone(e.zone), cShift = extractShiftIdFromZone(e.zone);
+            if (["pool","absent","extra"].indexOf(e.zone) === -1 && cShift) e.lastShiftId = cShift;
+            if (cLine && (!e.lastLineId || (cShift && shiftRotation[cShift] === e.team))) { if (e.lastLineId !== cLine) { e.lastLineId = cLine; memoryUpdated = true; } }
+            return e;
+          });
+        }
+
+        Object.keys(teamsConfig).forEach(function(k) { if (activeTeamFilters[k] === undefined) activeTeamFilters[k] = true; });
+        roles.forEach(function(r) { if (activeRoleFilters[r] === undefined) activeRoleFilters[r] = true; });
+
+        const autoChanged = processSickLeavesAutomation();
+        if (memoryUpdated || autoChanged) saveToFirebase();
+
+        applyTeamStyles(); updateTeamDropdowns(); renderTeamFilterCheckboxes(); renderRoleFilterCheckboxes(); updateInboxBadge();
+        if (document.getElementById("inboxModal").style.display === "flex") renderInboxModal();
+        if (document.getElementById("settingsModal").style.display === "flex") renderSettingsLists();
+        if (!backupDoneToday && employees.length > 0) createDailyBackup(d);
+      } catch (err) {
+        console.error("Fehler beim Verarbeiten der Daten:", err);
+      }
+      initBoard();
+    }
+
+    boardRef.onSnapshot(function(doc) {
+      if (doc.exists) applyIncomingDocData(doc.data());
+      else saveToFirebase();
+    }, function(err) {
+      console.error("Firebase Snapshot-Fehler:", err);
+      initBoard();
+    });
+
+    window.forceRefreshFromServer = function() {
+      const info = document.getElementById("serverSyncInfo");
+      if (info) info.firstElementChild.textContent = "⏳ Lade frisch vom Server...";
+      boardRef.get({ source: "server" }).then(function(doc) {
+        if (doc.exists) applyIncomingDocData(doc.data());
+      }).catch(function() {
+        boardRef.get().then(function(doc) { if (doc.exists) applyIncomingDocData(doc.data()); });
+      });
+    };
+
+    function saveToFirebase() {
+      boardRef.set({ lines: lines, roles: roles, employees: employees, teamsConfig: teamsConfig, sickLeaves: sickLeaves, leaveRequests: leaveRequests, extraShifts: extraShifts, shiftRotation: shiftRotation }, { merge: true });
+    }
+
+    function rotateAllShifts() {
+      const slotOrder = ["frueh", "spaet", "nacht", "frei"];
+      const slotLabel = { frueh: "Früh", spaet: "Spät", nacht: "Nacht", frei: "Frei (Pool)" };
+      const activeSlots = slotOrder.filter(function(s) { return shiftRotation[s] && isTeamRotating(shiftRotation[s]); });
+
+      if (activeSlots.length < 2) {
+        alert("Für die Rotation müssen mindestens 2 Schichten mit rotierenden Teams (Haken 'Rotiert' in den Einstellungen) besetzt sein.");
+        return;
+      }
+
+      const nextShiftRotation = Object.assign({}, shiftRotation);
+      const summaryLines = [];
+      activeSlots.forEach(function(fromSlot, idx) {
+        const toSlot = activeSlots[(idx + 1) % activeSlots.length];
+        const tKey = shiftRotation[fromSlot];
+        nextShiftRotation[toSlot] = tKey;
+        const tName = (teamsConfig[tKey] && teamsConfig[tKey].name) ? teamsConfig[tKey].name : tKey;
+        summaryLines.push("• " + tName + ": " + slotLabel[fromSlot] + " ➔ " + slotLabel[toSlot]);
+      });
+
+      if (!confirm("Rotierende Teams weiterschalten?\n\n" + summaryLines.join("\n") + "\n\n(Teams ohne Rotations-Haken sowie Mitarbeiter mit ⚓ Fix bleiben unverändert)")) return;
+
+      const today = getTodayIso();
+      employees.forEach(function(emp) {
+        if (isEmpProtectedFromRotation(emp)) return;
+        const cL = extractLineIdFromZone(emp.zone), cS = extractShiftIdFromZone(emp.zone);
+        if (cL && (!emp.lastLineId || (cS && shiftRotation[cS] === emp.team))) emp.lastLineId = cL;
+      });
+
+      shiftRotation = nextShiftRotation;
+
+      employees.forEach(function(emp) {
+        if (isEmpProtectedFromRotation(emp)) return;
+        const isSick = sickLeaves.some(function(sl) { return sl.empId === emp.id && sl.startDate <= today && sl.endDate >= today; });
+        if (emp.zone === "absent" || emp.zone === "extra" || isSick) return;
+        if (emp.team === shiftRotation.frueh) { const l = getPredeterminedLineForEmp(emp); emp.zone = l ? (l + "_frueh") : "pool"; }
+        else if (emp.team === shiftRotation.spaet) { const l = getPredeterminedLineForEmp(emp); emp.zone = l ? (l + "_spaet") : "pool"; }
+        else if (emp.team === shiftRotation.nacht) { const l = getPredeterminedLineForEmp(emp); emp.zone = l ? (l + "_nacht") : "pool"; }
+        else if (emp.team === shiftRotation.frei) emp.zone = "pool";
+      });
+      saveToFirebase(); initBoard();
+    }
+
+    window.loadTeamToShift = function(slotKey) {
+      const sel = document.getElementById("teamSelect_" + slotKey);
+      if (sel) assignTeamToShift(slotKey, sel.value);
+    };
+
+    function assignTeamToShift(slotKey, newTeamKey) {
+      if (!newTeamKey) return;
+      const oldTeamInSlot = shiftRotation[slotKey];
+      let swappedSlot = null;
+      if (newTeamKey !== oldTeamInSlot) {
+        ["frueh", "spaet", "nacht", "frei"].forEach(function(k) {
+          if (k !== slotKey && shiftRotation[k] === newTeamKey) { shiftRotation[k] = oldTeamInSlot; swappedSlot = k; }
+        });
+      }
+      shiftRotation[slotKey] = newTeamKey;
+      const today = getTodayIso();
+      employees.forEach(function(emp) {
+        if (emp.noRotation) return;
+        const isSick = sickLeaves.some(function(sl) { return sl.empId === emp.id && sl.startDate <= today && sl.endDate >= today; });
+        if (emp.zone === "absent" || emp.zone === "extra" || isSick) return;
+        if (emp.team === newTeamKey) {
+          if (slotKey === "frei") { const l = extractLineIdFromZone(emp.zone); if (l) emp.lastLineId = l; emp.zone = "pool"; }
+          else { const l = getPredeterminedLineForEmp(emp); emp.zone = l ? (l + "_" + slotKey) : "pool"; }
+        } else if (newTeamKey !== oldTeamInSlot && emp.team === oldTeamInSlot && isTeamRotating(oldTeamInSlot)) {
+          if (swappedSlot === "frei") { const l = extractLineIdFromZone(emp.zone); if (l) emp.lastLineId = l; emp.zone = "pool"; }
+          else if (swappedSlot) { const l = getPredeterminedLineForEmp(emp); emp.zone = l ? (l + "_" + swappedSlot) : "pool"; }
+        }
+      });
+      saveToFirebase(); initBoard();
+    }
+
+    function clearShiftRow(shiftId, shiftName) {
+      const suffix = "_" + shiftId;
+      const inShift = employees.filter(function(e) { return e.zone && e.zone.slice(-suffix.length) === suffix && !isEmpProtectedFromRotation(e); });
+      if (!inShift.length) { alert("Keine rotierenden Mitarbeiter in der " + shiftName + "-Schicht."); return; }
+      if (!confirm(shiftName + "-Schicht (" + inShift.length + " rotierende Mitarbeiter) in den Pool leeren?\n(Mitarbeiter mit ⚓ Fix und nicht-rotierende Teams bleiben erhalten)")) return;
+      inShift.forEach(function(emp) { const l = extractLineIdFromZone(emp.zone); if (l && (!emp.lastLineId || shiftRotation[shiftId] === emp.team)) emp.lastLineId = l; emp.zone = "pool"; });
+      saveToFirebase(); initBoard();
+    }
+
+    function clearEntireBoard() {
+      const onBoard = employees.filter(function(e) { return e.zone && ["pool","absent","extra"].indexOf(e.zone) === -1 && !isEmpProtectedFromRotation(e); });
+      if (!onBoard.length) { alert("Keine rotierenden Mitarbeiter auf dem Board."); return; }
+      if (!confirm("Alle " + onBoard.length + " rotierenden Mitarbeiter in den Pool leeren?\n(Mitarbeiter mit ⚓ Fix und nicht-rotierende Teams bleiben stehen)")) return;
+      onBoard.forEach(function(emp) { const l = extractLineIdFromZone(emp.zone), s = extractShiftIdFromZone(emp.zone); if (l && (!emp.lastLineId || (s && shiftRotation[s] === emp.team))) emp.lastLineId = l; emp.zone = "pool"; });
+      saveToFirebase(); initBoard();
+    }
+
+    function processSickLeavesAutomation() {
+      const today = getTodayIso();
+      let changed = false;
+      if (sickLeaves.length > 1) {
+        const merged = [];
+        sickLeaves.slice().sort(function(a, b) { return a.startDate.localeCompare(b.startDate); }).forEach(function(item) {
+          const ex = merged.find(function(m) { return m.empId === item.empId && (m.category || "Krank") === (item.category || "Krank") && canMergeDateRanges(m.startDate, m.endDate, item.startDate, item.endDate); });
+          if (ex) {
+            if (item.startDate < ex.startDate) ex.startDate = item.startDate;
+            if (item.endDate > ex.endDate) ex.endDate = item.endDate;
+            ex.reason = mergeReasonsText(ex.reason, item.reason);
+            if (!item.readByPlanner) ex.readByPlanner = false;
+            if (item.returnRequestPending) { ex.returnRequestPending = true; ex.returnRequestDate = item.returnRequestDate; ex.returnRequestCreatedAt = item.returnRequestCreatedAt; }
+            changed = true;
+          } else merged.push(Object.assign({}, item));
+        });
+        if (changed) sickLeaves = merged;
+      }
+
+      const expired = sickLeaves.filter(function(sl) { return sl.endDate < today; });
+      if (expired.length > 0) {
+        expired.forEach(function(exp) {
+          db.collection("shiftplan_history").doc(exp.id).set(Object.assign({}, exp, { archivedAt: new Date().toISOString() })).catch(function(){});
+          const emp = employees.find(function(e) { return e.id === exp.empId; });
+          const hasOther = sickLeaves.some(function(sl) { return sl.id !== exp.id && sl.empId === exp.empId && sl.startDate <= today && sl.endDate >= today; });
+          if (emp && emp.zone === "absent" && !hasOther) returnEmpFromAbsentOrExtra(emp);
+        });
+        sickLeaves = sickLeaves.filter(function(sl) { return sl.endDate >= today; });
+        changed = true;
+      }
+
+      sickLeaves.forEach(function(sl) {
+        if (sl.startDate <= today && sl.endDate >= today) {
+          const emp = employees.find(function(e) { return e.id === sl.empId; });
+          if (emp && emp.zone !== "absent") {
+            const cL = extractLineIdFromZone(emp.zone), cS = extractShiftIdFromZone(emp.zone);
+            if (cL) emp.lastLineId = cL;
+            if (cS) emp.lastShiftId = cS;
+            emp.zone = "absent"; changed = true;
+          }
+        }
+      });
+
+      const expiredEs = extraShifts.filter(function(es) { return es.date < today && es.status === "approved"; });
+      if (expiredEs.length > 0) {
+        expiredEs.forEach(function(exp) {
+          db.collection("shiftplan_history").doc(exp.id).set({
+            id: exp.id, empId: exp.empId, empName: exp.empName,
+            category: "Bringschicht (" + (shiftsLabel[exp.shift] || exp.shift) + ")",
+            startDate: exp.date, endDate: exp.date, reason: exp.note || "BS",
+            createdAt: exp.createdAt, approvedBy: exp.approvedBy, approvedAt: exp.approvedAt,
+            archivedAt: new Date().toISOString()
+          }).catch(function(){});
+          const emp = employees.find(function(e) { return e.id === exp.empId; });
+          const hasOtherEs = extraShifts.some(function(x) { return x.id !== exp.id && x.empId === exp.empId && x.status === "approved" && x.date === today; });
+          if (emp && emp.zone === "extra" && !hasOtherEs) returnEmpFromAbsentOrExtra(emp);
+        });
+        extraShifts = extraShifts.filter(function(es) { return !(es.date < today && es.status === "approved"); });
+        changed = true;
+      }
+
+      extraShifts.forEach(function(es) {
+        if (es.status === "approved" && es.date === today && !es.placedOnBoard) {
+          const emp = employees.find(function(e) { return e.id === es.empId; });
+          if (emp && emp.zone === "pool") { emp.zone = "extra"; es.placedOnBoard = true; changed = true; }
+        }
+      });
+      return changed;
+    }
+
+    function updateInboxBadge() {
+      const badge = document.getElementById("inboxBadge");
+      if (!badge) return;
+      const c1 = sickLeaves.filter(function(sl) { return !sl.readByPlanner || sl.returnRequestPending; }).length;
+      const c2 = leaveRequests.filter(function(lr) { return (!lr.status || lr.status === "pending") || lr.cancelUnreadByPlanner; }).length;
+      const c3 = extraShifts.filter(function(es) { return (!es.status || es.status === "pending") || es.cancelUnreadByPlanner; }).length;
+      const total = c1 + c2 + c3;
+      badge.textContent = total;
+      badge.style.display = total > 0 ? "inline-flex" : "none";
+    }
+
+    window.approveLeaveRequest = function(reqId) {
+      const req = leaveRequests.find(function(r) { return r.id === reqId; });
+      if (!req) return;
+      const nowStr = new Date().toLocaleString("de-DE");
+      const slId = "sl_" + Date.now();
+      req.status = "approved"; req.approvedBy = currentPlannerName; req.approvedAt = nowStr; req.linkedSickLeaveId = slId;
+      sickLeaves.push({
+        id: slId, requestId: req.id, empId: req.empId, empName: req.empName,
+        category: req.type || "Urlaub - bezahlt", startDate: req.startDate, endDate: req.endDate,
+        reason: req.reason || req.type, createdAt: req.createdAt, readByPlanner: true,
+        approvedBy: currentPlannerName, approvedAt: nowStr
+      });
+      processSickLeavesAutomation(); saveToFirebase(); renderInboxModal(); updateInboxBadge(); renderEmployees();
+    };
+
+    window.rejectLeaveRequest = function(reqId) {
+      const req = leaveRequests.find(function(r) { return r.id === reqId; });
+      if (!req) return;
+      req.status = "rejected"; req.approvedBy = currentPlannerName; req.approvedAt = new Date().toLocaleString("de-DE");
+      saveToFirebase(); renderInboxModal(); updateInboxBadge();
+    };
+
+    window.acknowledgeLeaveCancel = function(reqId) {
+      const req = leaveRequests.find(function(r) { return r.id === reqId; });
+      if (req) { req.cancelUnreadByPlanner = false; saveToFirebase(); renderInboxModal(); updateInboxBadge(); }
+    };
+
+    window.acknowledgeExtraCancel = function(esId) {
+      const es = extraShifts.find(function(x) { return x.id === esId; });
+      if (es) { es.cancelUnreadByPlanner = false; saveToFirebase(); renderInboxModal(); updateInboxBadge(); }
+    };
+
+    window.togglePartialLeaveBox = function(reqId) {
+      const el = document.getElementById("partialBox_" + reqId);
+      if (el) el.style.display = el.style.display === "none" ? "block" : "none";
+    };
+
+    window.addPartialRangeRow = function(reqId, minD, maxD) {
+      const container = document.getElementById("partialRanges_" + reqId);
+      const div = document.createElement("div");
+      div.style.cssText = "display:flex; gap:6px; align-items:center; margin-top:6px;";
+      div.innerHTML = '<span style="font-size:0.75rem;">Von:</span><input type="date" class="form-control partial-start" value="' + minD + '" style="padding:4px; font-size:0.78rem;"><span style="font-size:0.75rem;">Bis:</span><input type="date" class="form-control partial-end" value="' + maxD + '" style="padding:4px; font-size:0.78rem;"><button class="btn btn-outline" style="padding:2px 6px; color:#ef4444;" onclick="this.parentElement.remove()">✖</button>';
+      container.appendChild(div);
+    };
+
+    window.sendPartialCounterOffer = function(reqId) {
+      const req = leaveRequests.find(function(r) { return r.id === reqId; });
+      if (!req) return;
+      const container = document.getElementById("partialRanges_" + reqId);
+      const starts = container.querySelectorAll(".partial-start"), ends = container.querySelectorAll(".partial-end");
+      const ranges = [];
+      for (let i = 0; i < starts.length; i++) {
+        const s = starts[i].value, e = ends[i].value;
+        if (!s || !e || e < s) { alert("Bitte gültige Zeiträume (Von - Bis) beim Gegenvorschlag eingeben!"); return; }
+        ranges.push({ startDate: s, endDate: e });
+      }
+      if (!ranges.length) return;
+      const note = document.getElementById("partialNote_" + reqId).value.trim();
+      req.status = "counter_offered"; req.proposedRanges = ranges; req.plannerNote = note;
+      req.approvedBy = currentPlannerName; req.approvedAt = new Date().toLocaleString("de-DE");
+      saveToFirebase(); renderInboxModal(); updateInboxBadge();
+    };
+
+    window.approveExtraShift = function(esId) {
+      const es = extraShifts.find(function(x) { return x.id === esId; });
+      if (!es) return;
+      const today = getTodayIso();
+      es.status = "approved"; es.approvedBy = currentPlannerName; es.approvedAt = new Date().toLocaleString("de-DE");
+      const emp = employees.find(function(e) { return e.id === es.empId; });
+      if (emp && emp.zone === "pool" && es.date === today) { emp.zone = "extra"; es.placedOnBoard = true; }
+      saveToFirebase(); renderInboxModal(); updateInboxBadge(); renderEmployees();
+    };
+
+    window.rejectExtraShift = function(esId) {
+      const es = extraShifts.find(function(x) { return x.id === esId; });
+      if (!es) return;
+      es.status = "rejected"; es.approvedBy = currentPlannerName; es.approvedAt = new Date().toLocaleString("de-DE");
+      saveToFirebase(); renderInboxModal(); updateInboxBadge();
+    };
+
+    window.pullExtraShiftToBox = function(esId) {
+      const es = extraShifts.find(function(x) { return x.id === esId; });
+      if (!es) return;
+      const emp = employees.find(function(e) { return e.id === es.empId; });
+      if (emp) { emp.zone = "extra"; es.placedOnBoard = true; saveToFirebase(); renderEmployees(); }
+    };
+
+    window.deleteExtraShift = function(esId) {
+      const es = extraShifts.find(function(x) { return x.id === esId; });
+      if (es) {
+        const emp = employees.find(function(e) { return e.id === es.empId; });
+        if (emp && emp.zone === "extra") returnEmpFromAbsentOrExtra(emp);
+      }
+      extraShifts = extraShifts.filter(function(x) { return x.id !== esId; });
+      saveToFirebase(); renderEmployees();
+    };
+
+    window.acceptReturnRequest = function(id) {
+      const sl = sickLeaves.find(function(x) { return x.id === id; });
+      if (sl && sl.returnRequestDate) {
+        const parts = sl.returnRequestDate.split("-");
+        const d = new Date(parts[0], parts[1] - 1, parts[2]); d.setDate(d.getDate() - 1);
+        sl.endDate = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+        sl.returnRequestPending = false; sl.readByPlanner = true;
+        sl.approvedBy = currentPlannerName; sl.approvedAt = new Date().toLocaleString("de-DE");
+        processSickLeavesAutomation(); saveToFirebase(); renderInboxModal(); updateInboxBadge(); renderEmployees();
+      }
+    };
+
+    window.rejectReturnRequest = function(id) {
+      const sl = sickLeaves.find(function(x) { return x.id === id; });
+      if (sl) { sl.returnRequestPending = false; sl.readByPlanner = true; sl.approvedBy = currentPlannerName; saveToFirebase(); renderInboxModal(); updateInboxBadge(); }
+    };
+
+    window.toggleEditSickDate = function(id) {
+      const box = document.getElementById("editDateBox_" + id);
+      if (box) box.style.display = (box.style.display === "none") ? "flex" : "none";
+    };
+
+    window.saveSickLeaveDates = function(id) {
+      const startInp = document.getElementById("newStartDate_" + id);
+      const endInp = document.getElementById("newEndDate_" + id);
+      if (!startInp || !endInp || !startInp.value || !endInp.value) return;
+      if (endInp.value < startInp.value) { alert("Das Enddatum darf nicht vor dem Startdatum liegen!"); return; }
+
+      const sl = sickLeaves.find(function(x) { return x.id === id; });
+      if (!sl) return;
+
+      const oldStart = sl.startDate, oldEnd = sl.endDate;
+      sl.startDate = startInp.value;
+      sl.endDate = endInp.value;
+      sl.approvedBy = currentPlannerName;
+      sl.approvedAt = new Date().toLocaleString("de-DE");
+
+      const linkedReq = leaveRequests.find(function(r) { return r.id === sl.requestId || r.linkedSickLeaveId === sl.id || (r.empId === sl.empId && r.startDate === oldStart && r.endDate === oldEnd && r.status === "approved"); });
+      if (linkedReq) {
+        linkedReq.startDate = sl.startDate;
+        linkedReq.endDate = sl.endDate;
+        linkedReq.approvedBy = currentPlannerName;
+        linkedReq.approvedAt = sl.approvedAt;
+      }
+
+      const today = getTodayIso();
+      const emp = employees.find(function(e) { return e.id === sl.empId; });
+      if (emp) {
+        const stillAbsentToday = sickLeaves.some(function(x) { return x.empId === emp.id && x.startDate <= today && x.endDate >= today; });
+        if (!stillAbsentToday && emp.zone === "absent") returnEmpFromAbsentOrExtra(emp);
+      }
+
+      processSickLeavesAutomation(); saveToFirebase(); renderInboxModal(); renderEmployees();
+    };
+
+    function onManualSickNameInput(val) {
+      selectedManualSickEmpId = null;
+      const box = document.getElementById("manualSickSuggestions"), q = val.trim().toLowerCase();
+      if (!q) { box.style.display = "none"; return; }
+      const matches = employees.filter(function(e) { return fullName(e).toLowerCase().indexOf(q) !== -1 || ((e.lastName || "") + " " + (e.firstName || "")).toLowerCase().indexOf(q) !== -1; });
+      if (!matches.length) { box.style.display = "none"; return; }
+      box.innerHTML = matches.map(function(e) {
+        return '<div class="suggestion-item" onclick="selectManualSickEmp(\'' + e.id + '\')"><span><b>' + fullName(e) + '</b></span><small style="color:#64748b;">' + e.role + '</small></div>';
+      }).join("");
+      box.style.display = "block";
+    }
+    function selectManualSickEmp(id) {
+      const e = employees.find(function(x) { return x.id === id; });
+      if (e) { selectedManualSickEmpId = e.id; document.getElementById("manualSickEmpInput").value = fullName(e); document.getElementById("manualSickSuggestions").style.display = "none"; }
+    }
+
+    window.toggleManualEntryBox = function(forceState) {
+      const content = document.getElementById("manualEntryContent");
+      const arrow = document.getElementById("manualEntryArrow");
+      if (!content || !arrow) return;
+      const isOpen = forceState !== undefined ? forceState : (content.style.display === "none");
+      content.style.display = isOpen ? "block" : "none";
+      arrow.textContent = isOpen ? "▲ Formular schließen" : "▼ Formular öffnen";
+    };
+
+    window.updateInboxSearch = function(val) {
+      inboxSearchQuery = val.trim().toLowerCase();
+      const inp = document.getElementById("inboxSearchInput");
+      if (inp && inp.value !== val) inp.value = val;
+      const clr = document.getElementById("clearInboxSearchBtn");
+      if (clr) clr.style.display = inboxSearchQuery.length > 0 ? "block" : "none";
+      renderInboxModal();
+    };
+
+    window.setInboxUnreadFilter = function(f) {
+      inboxUnreadFilter = f;
+      renderInboxModal();
+    };
+
+    window.setInboxActiveFilter = function(f) {
+      inboxActiveFilter = f;
+      renderInboxModal();
+    };
+
+    function matchesInboxSearch(fields) {
+      if (!inboxSearchQuery) return true;
+      for (let i = 0; i < fields.length; i++) {
+        if (fields[i] && String(fields[i]).toLowerCase().indexOf(inboxSearchQuery) !== -1) return true;
+      }
+      return false;
+    }
+
+    function openInboxModal(preselectEmpId, forceOpenManual) {
+      if (plannerLevel < 3) return;
+      document.getElementById("inboxModal").style.display = "flex";
+      const input = document.getElementById("manualSickEmpInput");
+      if (preselectEmpId) {
+        const emp = employees.find(function(e) { return e.id === preselectEmpId; });
+        if (emp) { selectedManualSickEmpId = emp.id; input.value = fullName(emp); }
+        toggleManualEntryBox(true);
+      } else {
+        selectedManualSickEmpId = null; input.value = "";
+        toggleManualEntryBox(!!forceOpenManual);
+      }
+      const today = getTodayIso();
+      document.getElementById("manualSickStart").value = today;
+      document.getElementById("manualSickEnd").value = today;
+      forceRefreshFromServer();
+      renderInboxModal();
+    }
+
+    function addManualSickLeave() {
+      const typed = document.getElementById("manualSickEmpInput").value.trim().toLowerCase();
+      const cat = document.getElementById("manualSickCategory").value;
+      const sD = document.getElementById("manualSickStart").value, eD = document.getElementById("manualSickEnd").value;
+      const r = document.getElementById("manualSickReason").value.trim();
+      let emp = selectedManualSickEmpId ? employees.find(function(e) { return e.id === selectedManualSickEmpId; }) : employees.find(function(e) { return fullName(e).toLowerCase() === typed; });
+      if (!emp || !sD || !eD || eD < sD) { alert("Bitte gültigen Mitarbeiter und Zeitraum wählen!"); return; }
+      const nowStr = new Date().toLocaleString("de-DE"), today = getTodayIso();
+      const ex = sickLeaves.find(function(sl) { return sl.empId === emp.id && (sl.category || "Krank") === cat && canMergeDateRanges(sl.startDate, sl.endDate, sD, eD); });
+      if (ex) {
+        if (sD < ex.startDate) ex.startDate = sD;
+        if (eD > ex.endDate) ex.endDate = eD;
+        ex.reason = mergeReasonsText(ex.reason, r || cat);
+        ex.approvedBy = currentPlannerName; ex.approvedAt = nowStr;
+      } else {
+        sickLeaves.push({ id: "sl_" + Date.now(), empId: emp.id, empName: fullName(emp), category: cat, startDate: sD, endDate: eD, reason: r || cat, createdAt: nowStr, readByPlanner: true, approvedBy: currentPlannerName, approvedAt: nowStr });
+      }
+      if (sD <= today && eD >= today && emp.zone !== "absent") {
+        const cL = extractLineIdFromZone(emp.zone), cS = extractShiftIdFromZone(emp.zone);
+        if (cL) emp.lastLineId = cL; if (cS) emp.lastShiftId = cS; emp.zone = "absent";
+      }
+      selectedManualSickEmpId = null; document.getElementById("manualSickEmpInput").value = ""; document.getElementById("manualSickReason").value = "";
+      toggleManualEntryBox(false);
+      saveToFirebase(); renderInboxModal(); renderEmployees();
+    }
+
+    function renderInboxModal() {
+      const unreadC = document.getElementById("unreadSickList"), activeC = document.getElementById("activeSickList"), btnMark = document.getElementById("btnMarkAllRead"), today = getTodayIso();
+      const unreadSlAll = sickLeaves.filter(function(sl) { return !sl.readByPlanner || sl.returnRequestPending; });
+      const pendingLrAll = leaveRequests.filter(function(lr) { return !lr.status || lr.status === "pending" || lr.status === "counter_offered"; });
+      const cancelledLrAll = leaveRequests.filter(function(lr) { return lr.cancelUnreadByPlanner; });
+      const pendingEsAll = extraShifts.filter(function(es) { return !es.status || es.status === "pending"; });
+      const cancelledEsAll = extraShifts.filter(function(es) { return es.cancelUnreadByPlanner; });
+
+      btnMark.style.display = unreadSlAll.length > 0 ? "inline-block" : "none";
+
+      const syncInfo = document.getElementById("serverSyncInfo");
+      if (syncInfo) {
+        syncInfo.firstElementChild.innerHTML = "✅ Live-Stand: <b>" + pendingLrAll.length + "</b> offene Urlaubsanträge | <b>" + pendingEsAll.length + "</b> Bringschichten | <b>" + unreadSlAll.length + "</b> Krankmeldungen";
+      }
+
+      const totalCancelCount = cancelledLrAll.length + cancelledEsAll.length;
+      const totalOpenCount = pendingLrAll.length + pendingEsAll.length + unreadSlAll.length + totalCancelCount;
+
+      const unreadBar = document.getElementById("inboxUnreadFilterBar");
+      if (unreadBar) {
+        const uChips = [
+          { id: "all", label: "Alle (" + totalOpenCount + ")" },
+          { id: "leave", label: "🌴 Anträge (" + pendingLrAll.length + ")" },
+          { id: "extra", label: "➕ Bringschichten (" + pendingEsAll.length + ")" },
+          { id: "sick", label: "🏥 Krank & Gesund (" + unreadSlAll.length + ")" },
+          { id: "cancel", label: "🚫 Stornos (" + totalCancelCount + ")" }
+        ];
+        unreadBar.innerHTML = uChips.map(function(c) {
+          return '<button type="button" class="filter-chip ' + (inboxUnreadFilter === c.id ? 'active' : '') + '" onclick="setInboxUnreadFilter(\'' + c.id + '\')">' + c.label + '</button>';
+        }).join("");
+      }
+
+      const showCancel = (inboxUnreadFilter === "all" || inboxUnreadFilter === "cancel");
+      const showLeave = (inboxUnreadFilter === "all" || inboxUnreadFilter === "leave");
+      const showExtra = (inboxUnreadFilter === "all" || inboxUnreadFilter === "extra");
+      const showSick = (inboxUnreadFilter === "all" || inboxUnreadFilter === "sick");
+
+      let html = "";
+
+      if (showCancel) {
+        cancelledLrAll.forEach(function(lr) {
+          if (!matchesInboxSearch([lr.empName, lr.type, lr.reason, formatDateDe(lr.startDate), formatDateDe(lr.endDate), lr.startDate, lr.endDate, "storno"])) return;
+          html += '<div class="sick-card unread" style="border-left-color:#dc2626;">' +
+            '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">' +
+              '<div>' +
+                '<div style="font-weight:700; color:#9f1239;">🚫 Stornierung durch Mitarbeiter: ' + lr.empName + '</div>' +
+                '<div style="font-size:0.8rem; margin-top:3px;">Der Mitarbeiter hat seinen <b>' + lr.type + ' (' + formatDateDe(lr.startDate) + ' – ' + formatDateDe(lr.endDate) + ')</b> storniert.</div>' +
+                '<div style="font-size:0.65rem; color:#64748b; margin-top:2px;">🕒 Storniert am: ' + (lr.cancelledAt || '-') + '</div>' +
+              '</div>' +
+              '<button class="btn btn-primary" style="padding:5px 10px; font-size:0.75rem;" onclick="acknowledgeLeaveCancel(\'' + lr.id + '\')">✓ Gelesen</button>' +
+            '</div>' +
+          '</div>';
+        });
+
+        cancelledEsAll.forEach(function(es) {
+          if (!matchesInboxSearch([es.empName, es.note, formatDateDe(es.date), es.date, shiftsLabel[es.shift], "storno", "bringschicht"])) return;
+          html += '<div class="sick-card unread" style="border-left-color:#dc2626;">' +
+            '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">' +
+              '<div>' +
+                '<div style="font-weight:700; color:#9f1239;">🚫 Bringschicht abgesagt: ' + es.empName + '</div>' +
+                '<div style="font-size:0.8rem; margin-top:3px;">Bringschicht am <b>' + formatDateDe(es.date) + ' (' + (shiftsLabel[es.shift] || es.shift) + ')</b> wurde vom Mitarbeiter storniert.</div>' +
+                '<div style="font-size:0.65rem; color:#64748b; margin-top:2px;">🕒 Storniert am: ' + (es.cancelledAt || '-') + '</div>' +
+              '</div>' +
+              '<button class="btn btn-primary" style="padding:5px 10px; font-size:0.75rem;" onclick="acknowledgeExtraCancel(\'' + es.id + '\')">✓ Gelesen</button>' +
+            '</div>' +
+          '</div>';
+        });
+      }
+
+      if (showLeave) {
+        pendingLrAll.forEach(function(lr) {
+          if (!matchesInboxSearch([lr.empName, lr.type, lr.reason, formatDateDe(lr.startDate), formatDateDe(lr.endDate), lr.startDate, lr.endDate, "urlaub", "antrag"])) return;
+          const days = calcSickDays(lr.startDate, lr.endDate);
+          html += '<div class="sick-card" style="background:#f0f9ff; border-left-color:#0284c7; border-color:#bae6fd;">' +
+            '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">' +
+              '<div style="flex:1;">' +
+                '<div style="font-weight:700; color:#0369a1;">🌴 Antrag (' + lr.type + '): ' + lr.empName + '</div>' +
+                '<div style="font-size:0.65rem; color:#0284c7; margin-top:2px;">🕒 Eingereicht am: ' + (lr.createdAt || '-') + '</div>' +
+                '<div style="font-size:0.84rem; font-weight:700; margin-top:4px;">📅 Gewünscht: ' + formatDateDe(lr.startDate) + ' bis ' + formatDateDe(lr.endDate) + ' (' + days + ' ' + (days === 1 ? 'Tag' : 'Tage') + ')</div>' +
+                (lr.reason ? '<div style="font-size:0.8rem; margin-top:4px; color:#334155;">💬 "' + lr.reason + '"</div>' : '') +
+                '<div id="partialBox_' + lr.id + '" style="display:none; background:#fff; padding:10px; border-radius:6px; border:1px solid #93c5fd; margin-top:8px;">' +
+                  '<div style="font-size:0.78rem; font-weight:700; color:#1e3a8a; margin-bottom:6px;">⚖️ Gegenvorschlag (Genehmigte Teil-Zeiträume angeben):</div>' +
+                  '<div id="partialRanges_' + lr.id + '">' +
+                    '<div style="display:flex; gap:6px; align-items:center;">' +
+                      '<span style="font-size:0.75rem;">Von:</span><input type="date" class="form-control partial-start" value="' + lr.startDate + '" style="padding:4px; font-size:0.78rem;">' +
+                      '<span style="font-size:0.75rem;">Bis:</span><input type="date" class="form-control partial-end" value="' + lr.endDate + '" style="padding:4px; font-size:0.78rem;">' +
+                    '</div>' +
+                  '</div>' +
+                  '<button class="btn btn-outline" style="padding:3px 8px; font-size:0.72rem; margin-top:6px;" onclick="addPartialRangeRow(\'' + lr.id + '\',\'' + lr.startDate + '\',\'' + lr.endDate + '\')">+ Weiterer Zeitraum (z.B. Woche 3)</button>' +
+                  '<input type="text" id="partialNote_' + lr.id + '" class="form-control" placeholder="Kurze Info an Mitarbeiter (optional)..." style="margin-top:6px; padding:5px 8px; font-size:0.78rem;">' +
+                  '<button class="btn btn-primary" style="width:100%; margin-top:6px; padding:6px; font-size:0.78rem;" onclick="sendPartialCounterOffer(\'' + lr.id + '\')">📤 Vorschlag an Mitarbeiter senden</button>' +
+                '</div>' +
+              '</div>' +
+              '<div style="display:flex; flex-direction:column; gap:5px;">' +
+                '<button class="btn btn-primary" style="background:#16a34a; padding:5px 10px; font-size:0.75rem;" onclick="approveLeaveRequest(\'' + lr.id + '\')">✓ Bestätigen</button>' +
+                '<button class="btn btn-outline" style="padding:5px 10px; font-size:0.75rem; color:#0284c7; border-color:#7dd3fc;" onclick="togglePartialLeaveBox(\'' + lr.id + '\')">⚖️ Teilweise</button>' +
+                '<button class="btn btn-outline" style="padding:5px 10px; font-size:0.75rem; color:#ef4444;" onclick="rejectLeaveRequest(\'' + lr.id + '\')">✖ Ablehnen</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+        });
+      }
+
+      if (showExtra) {
+        pendingEsAll.forEach(function(es) {
+          if (!matchesInboxSearch([es.empName, es.note, formatDateDe(es.date), es.date, shiftsLabel[es.shift], "bringschicht", "zusatzschicht"])) return;
+          html += '<div class="sick-card" style="background:#f0fdf4; border-left-color:#16a34a; border-color:#bbf7d0;">' +
+            '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">' +
+              '<div>' +
+                '<div style="font-weight:700; color:#166534;">➕ Bringschicht-Anfrage: ' + es.empName + '</div>' +
+                '<div style="font-size:0.65rem; color:#15803d; margin-top:2px;">🕒 Eingereicht am: ' + (es.createdAt || '-') + '</div>' +
+                '<div style="font-size:0.84rem; font-weight:700; margin-top:4px;">📅 Datum: ' + formatDateDe(es.date) + ' | Schicht: ' + (shiftsLabel[es.shift] || es.shift) + '</div>' +
+                '<div style="font-size:0.8rem; color:#334155; margin-top:2px;">Bemerkung: <b>' + (es.note || 'BS/ZS') + '</b></div>' +
+              '</div>' +
+              '<div style="display:flex; flex-direction:column; gap:5px;">' +
+                '<button class="btn btn-primary" style="background:#16a34a; padding:5px 10px; font-size:0.75rem;" onclick="approveExtraShift(\'' + es.id + '\')">✓ Bestätigen</button>' +
+                '<button class="btn btn-outline" style="padding:5px 10px; font-size:0.75rem; color:#ef4444;" onclick="rejectExtraShift(\'' + es.id + '\')">✖ Ablehnen</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+        });
+      }
+
+      if (showSick) {
+        unreadSlAll.forEach(function(sl) {
+          if (!matchesInboxSearch([sl.empName, sl.category, sl.reason, formatDateDe(sl.startDate), formatDateDe(sl.endDate), sl.startDate, sl.endDate, "krank", "gesund"])) return;
+          if (sl.returnRequestPending) {
+            html += '<div class="sick-card" style="background:#fffbeb; border-left-color:#f59e0b; border-color:#fde68a;">' +
+              '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">' +
+                '<div>' +
+                  '<div style="font-weight:700; color:#b45309;">⚠️ Gesundmeldung: ' + sl.empName + '</div>' +
+                  '<div style="font-size:0.65rem; color:#92400e; margin-top:2px;">🕒 Angefragt am: ' + (sl.returnRequestCreatedAt || sl.createdAt || '-') + '</div>' +
+                  '<div style="font-size:0.82rem; background:#fff; padding:6px; border-radius:4px; margin-top:6px; border:1px solid #fde68a;">' +
+                    'War gemeldet bis: <span style="text-decoration:line-through; color:#94a3b8;">' + formatDateDe(sl.endDate) + '</span><br>' +
+                    'Wieder einsatzbereit am: <b style="color:#16a34a;">' + formatDateDe(sl.returnRequestDate) + '</b>' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display:flex; flex-direction:column; gap:6px;">' +
+                  '<button class="btn btn-primary" style="background:#16a34a; padding:6px 10px; font-size:0.75rem;" onclick="acceptReturnRequest(\'' + sl.id + '\')">✓ Bestätigen</button>' +
+                  '<button class="btn btn-outline" style="padding:6px 10px; font-size:0.75rem; color:#ef4444;" onclick="rejectReturnRequest(\'' + sl.id + '\')">✖ Ablehnen</button>' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+          } else {
+            const days = calcSickDays(sl.startDate, sl.endDate);
+            html += '<div class="sick-card unread">' +
+              '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">' +
+                '<div>' +
+                  '<div style="font-weight:700; color:#9f1239;">🏥 Krankmeldung: ' + sl.empName + '</div>' +
+                  '<div style="font-size:0.65rem; color:#9f1239; margin-top:2px;">🕒 Eingereicht am: ' + (sl.createdAt || '-') + '</div>' +
+                  '<div style="font-size:0.82rem; font-weight:600; margin-top:2px;">📅 Zeitraum: ' + formatDateDe(sl.startDate) + ' bis ' + formatDateDe(sl.endDate) + ' (' + days + ' ' + (days === 1 ? 'Tag' : 'Tage') + ')</div>' +
+                  '<div style="font-size:0.8rem; margin-top:4px; background:#fff; padding:5px 8px; border-radius:4px; border:1px solid #fecdd3;"><b>Notiz:</b> ' + (sl.reason || '<i>Keine Angabe</i>') + '</div>' +
+                '</div>' +
+                '<button class="btn btn-primary" style="padding:5px 10px; font-size:0.78rem;" onclick="markSickLeaveRead(\'' + sl.id + '\')">✓ Bestätigen</button>' +
+              '</div>' +
+            '</div>';
           }
         });
       }
 
-      ["mousemove", "mousedown", "keypress", "scroll", "touchstart"].forEach(function(evt) {
-        document.addEventListener(evt, resetPortalActivity, { passive: true });
-      });
+      unreadC.innerHTML = html || '<div style="color:#64748b; font-size:0.83rem; padding:8px; background:#f8fafc; border-radius:6px;">Keine passenden Anträge oder Meldungen für diesen Filter.</div>';
 
-      const today = new Date().toISOString().split("T")[0];
-      const sInp = document.getElementById("portalStartDate"), eInp = document.getElementById("portalEndDate");
-      if (sInp) sInp.value = today;
-      if (eInp) eInp.value = today;
-    });
+      const isSickCat = function(sl) { return !sl.category || sl.category.indexOf("Krank") !== -1; };
+      const countToday = sickLeaves.filter(function(sl) { return sl.startDate <= today && sl.endDate >= today; }).length;
+      const countFuture = sickLeaves.filter(function(sl) { return sl.startDate > today; }).length;
+      const countSickOnly = sickLeaves.filter(isSickCat).length;
+      const countLeaveOnly = sickLeaves.filter(function(sl) { return !isSickCat(sl); }).length;
 
-    function showPortalAlert(msg, type) {
-      const box = document.getElementById("portalAlertBox");
-      if (!box) return;
-      if (alertTimer) clearTimeout(alertTimer);
-      box.className = "alert alert-" + (type || "success");
-      box.textContent = msg;
-      box.style.display = "block";
-      alertTimer = setTimeout(function() {
-        box.style.display = "none";
-      }, 5000);
-    }
-
-    function verifyPortalLogin() {
-      const nameVal = document.getElementById("portalLoginName").value.trim().toLowerCase();
-      const pinVal = document.getElementById("portalLoginPin").value.trim();
-      const errBox = document.getElementById("portalLoginError");
-      errBox.style.display = "none";
-
-      boardRef.get().then(function(doc) {
-        if (!doc.exists) {
-          errBox.textContent = "❌ Verbindung zur Datenbank fehlgeschlagen."; errBox.style.display = "block"; return;
-        }
-        globalDbData = doc.data();
-        const emps = globalDbData.employees || [];
-        const emp = emps.find(function(e) {
-          const f = ((e.firstName || "") + " " + (e.lastName || "")).trim().toLowerCase();
-          const l = ((e.lastName || "") + " " + (e.firstName || "")).trim().toLowerCase();
-          return f === nameVal || l === nameVal || e.id === nameVal;
-        });
-
-        if (!emp || (emp.password || "1234") !== pinVal) {
-          errBox.textContent = "❌ Name oder PIN nicht korrekt!"; errBox.style.display = "block"; return;
-        }
-
-        currentEmpId = emp.id;
-        currentEmpData = emp;
-        sessionStorage.setItem("portal_emp_id", emp.id);
-        showPortalMainView();
-      }).catch(function() {
-        errBox.textContent = "❌ Netzwerkfehler beim Login."; errBox.style.display = "block";
-      });
-    }
-
-    function showPortalMainView() {
-      document.getElementById("portalLoginCard").style.display = "none";
-      document.getElementById("portalMain").style.display = "block";
-      document.getElementById("logoutBtn").style.display = "inline-block";
-      const fName = ((currentEmpData.firstName || "") + " " + (currentEmpData.lastName || "")).trim();
-      document.getElementById("welcomeEmpTitle").textContent = "Willkommen, " + fName + "!";
-      document.getElementById("welcomeEmpSub").textContent = "Team: " + (currentEmpData.team || '-') + " | Rolle: " + (currentEmpData.role || '-');
-      renderMyRequests();
-      resetPortalActivity();
-    }
-
-    function logoutPortal() {
-      currentEmpId = null; currentEmpData = null;
-      sessionStorage.removeItem("portal_emp_id");
-      document.getElementById("portalMain").style.display = "none";
-      document.getElementById("logoutBtn").style.display = "none";
-      document.getElementById("portalLoginCard").style.display = "block";
-      document.getElementById("portalLoginName").value = "";
-      document.getElementById("portalLoginPin").value = "";
-    }
-
-    function submitPortalRequest() {
-      const cat = document.getElementById("portalCategory").value;
-      const sD = document.getElementById("portalStartDate").value;
-      const eD = document.getElementById("portalEndDate").value;
-      const r = document.getElementById("portalReason").value.trim();
-
-      if (!sD || !eD || eD < sD) {
-        showPortalAlert("Bitte gib einen gültigen Zeitraum (Start- und Enddatum) an!", "error");
-        return;
+      const activeBar = document.getElementById("inboxActiveFilterBar");
+      if (activeBar) {
+        const aChips = [
+          { id: "all", label: "Alle (" + sickLeaves.length + ")" },
+          { id: "today", label: "🔴 Heute abwesend (" + countToday + ")" },
+          { id: "future", label: "📅 Zukünftig (" + countFuture + ")" },
+          { id: "sick", label: "🏥 Nur Krank (" + countSickOnly + ")" },
+          { id: "leave", label: "🌴 Nur Urlaub/Frei (" + countLeaveOnly + ")" }
+        ];
+        activeBar.innerHTML = aChips.map(function(c) {
+          return '<button type="button" class="filter-chip ' + (inboxActiveFilter === c.id ? 'active' : '') + '" onclick="setInboxActiveFilter(\'' + c.id + '\')">' + c.label + '</button>';
+        }).join("");
       }
 
-      boardRef.get().then(function(doc) {
-        if (!doc.exists) return;
-        const d = doc.data();
-        const lr = Array.isArray(d.leaveRequests) ? d.leaveRequests : [];
-        const sl = Array.isArray(d.sickLeaves) ? d.sickLeaves : [];
-        const nowStr = new Date().toLocaleString("de-DE");
-        const fName = ((currentEmpData.firstName || "") + " " + (currentEmpData.lastName || "")).trim();
+      const filteredActive = sickLeaves.slice().sort(function(a, b) { return a.startDate.localeCompare(b.startDate); }).filter(function(sl) {
+        if (inboxActiveFilter === "today" && !(sl.startDate <= today && sl.endDate >= today)) return false;
+        if (inboxActiveFilter === "future" && !(sl.startDate > today)) return false;
+        if (inboxActiveFilter === "sick" && !isSickCat(sl)) return false;
+        if (inboxActiveFilter === "leave" && isSickCat(sl)) return false;
+        return matchesInboxSearch([sl.empName, sl.category || "Krank", sl.reason, sl.approvedBy, formatDateDe(sl.startDate), formatDateDe(sl.endDate), sl.startDate, sl.endDate]);
+      });
 
-        if (cat.indexOf("Krank") !== -1) {
-          const slId = "sl_" + Date.now();
-          sl.push({
-            id: slId, empId: currentEmpData.id, empName: fName,
-            category: cat, startDate: sD, endDate: eD, reason: r || cat,
-            createdAt: nowStr, readByPlanner: false
+      if (!filteredActive.length) {
+        activeC.innerHTML = '<div style="color:#64748b; font-size:0.83rem; padding:8px; background:#f8fafc; border-radius:6px;">Keine aktiven Zeiträume für diesen Filter gefunden.</div>';
+      } else {
+        activeC.innerHTML = filteredActive.map(function(sl) {
+          const isCurr = sl.startDate <= today && sl.endDate >= today;
+          const badge = isCurr ? '<span style="background:#fee2e2; color:#b91c1c; font-size:0.68rem; padding:2px 6px; border-radius:4px; font-weight:700;">AKTUELL ABWESEND</span>' : '<span style="background:#fef3c7; color:#b45309; font-size:0.68rem; padding:2px 6px; border-radius:4px; font-weight:700;">AB ' + formatDateDe(sl.startDate) + '</span>';
+          const catBadge = '<span style="background:#e0f2fe; color:#0369a1; font-size:0.68rem; padding:2px 6px; border-radius:4px; font-weight:700;">' + (sl.category || 'Krank') + '</span>';
+          const days = calcSickDays(sl.startDate, sl.endDate);
+          return '<div class="sick-card">' +
+            '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">' +
+              '<div style="flex:1;">' +
+                '<div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;"><span style="font-weight:700; color:#0f172a;">' + sl.empName + '</span>' + catBadge + badge + '</div>' +
+                '<div style="font-size:0.65rem; color:#64748b; margin-top:2px;">🕒 Eingereicht: ' + (sl.createdAt || '-') + ' ' + (sl.approvedBy ? '| ✍️ <b>Bestätigt durch: ' + sl.approvedBy + '</b>' : '') + '</div>' +
+                '<div style="font-size:0.8rem; margin-top:2px;">' +
+                  'Zeitraum: <b>' + formatDateDe(sl.startDate) + '</b> bis <b>' + formatDateDe(sl.endDate) + '</b> (' + days + ' ' + (days === 1 ? 'Tag' : 'Tage') + ')' +
+                  '<button class="btn btn-outline" style="padding:1px 6px; font-size:0.7rem; margin-left:6px; color:var(--bayer-blue);" onclick="toggleEditSickDate(\'' + sl.id + '\')">✏️ Zeitraum ändern</button>' +
+                '</div>' +
+                '<div id="editDateBox_' + sl.id + '" style="display:none; align-items:center; flex-wrap:wrap; gap:6px; margin-top:6px; background:#fff; padding:6px; border-radius:6px; border:1px solid #cbd5e1;">' +
+                  '<span style="font-size:0.75rem; font-weight:600;">Von:</span>' +
+                  '<input type="date" id="newStartDate_' + sl.id + '" value="' + sl.startDate + '" class="form-control" style="width:auto; padding:3px 6px; font-size:0.78rem;">' +
+                  '<span style="font-size:0.75rem; font-weight:600;">Bis:</span>' +
+                  '<input type="date" id="newEndDate_' + sl.id + '" value="' + sl.endDate + '" class="form-control" style="width:auto; padding:3px 6px; font-size:0.78rem;">' +
+                  '<button class="btn btn-primary" style="padding:4px 10px; font-size:0.75rem;" onclick="saveSickLeaveDates(\'' + sl.id + '\')">Speichern</button>' +
+                '</div>' +
+                (sl.reason ? '<div style="font-size:0.78rem; color:#475569; margin-top:3px;">💬 "' + sl.reason + '"</div>' : '') +
+              '</div>' +
+              '<button class="btn btn-outline" style="padding:4px 8px; font-size:0.75rem; color:#ef4444;" onclick="deleteSickLeave(\'' + sl.id + '\')">Beenden / Löschen</button>' +
+            '</div>' +
+          '</div>';
+        }).join("");
+      }
+    }
+
+    function markSickLeaveRead(id) {
+      const sl = sickLeaves.find(function(x) { return x.id === id; });
+      if (sl) { sl.readByPlanner = true; sl.approvedBy = currentPlannerName; sl.approvedAt = new Date().toLocaleString("de-DE"); saveToFirebase(); renderInboxModal(); updateInboxBadge(); }
+    }
+
+    function markAllSickLeavesRead() {
+      const nowStr = new Date().toLocaleString("de-DE");
+      sickLeaves.forEach(function(sl) { if (!sl.returnRequestPending && !sl.readByPlanner) { sl.readByPlanner = true; sl.approvedBy = currentPlannerName; sl.approvedAt = nowStr; } });
+      saveToFirebase(); renderInboxModal(); updateInboxBadge();
+    }
+
+    function deleteSickLeave(id) {
+      if (!confirm("Abwesenheit beenden / löschen? Der Eintrag wird auch beim Mitarbeiter im Portal als storniert markiert.")) return;
+      const sl = sickLeaves.find(function(x) { return x.id === id; }), today = getTodayIso(), nowStr = new Date().toLocaleString("de-DE");
+      if (sl) {
+        leaveRequests.forEach(function(r) {
+          if (r.id === sl.requestId || r.linkedSickLeaveId === sl.id || (r.empId === sl.empId && r.startDate === sl.startDate && r.endDate === sl.endDate && (r.status === "approved" || r.status === "accepted_counter"))) {
+            r.status = "cancelled_by_planner";
+            r.approvedBy = currentPlannerName;
+            r.approvedAt = nowStr;
+          }
+        });
+
+        const emp = employees.find(function(e) { return e.id === sl.empId; });
+        const hasOtherActive = sickLeaves.some(function(x) { return x.id !== id && x.empId === sl.empId && x.startDate <= today && x.endDate >= today; });
+        if (emp && emp.zone === "absent" && !hasOtherActive) returnEmpFromAbsentOrExtra(emp);
+      }
+      sickLeaves = sickLeaves.filter(function(x) { return x.id !== id; });
+      saveToFirebase(); renderInboxModal(); updateInboxBadge(); renderEmployees();
+    }
+
+    function renderHistory() {
+      const list = document.getElementById("historyList");
+      list.innerHTML = "Lade Historie...";
+      db.collection("shiftplan_history").orderBy("endDate", "desc").limit(200).get().then(function(snap) {
+        const rawDocs = []; snap.forEach(function(doc) { rawDocs.push(Object.assign({ docId: doc.id }, doc.data())); });
+        rawDocs.sort(function(a, b) { return (a.startDate || "").localeCompare(b.startDate || ""); });
+        const mergedList = [], toDel = [], toUpd = [];
+        rawDocs.forEach(function(item) {
+          const key = item.empId || item.empName;
+          const match = mergedList.find(function(m) { return (m.empId || m.empName) === key && (m.category || "Krank") === (item.category || "Krank") && canMergeDateRanges(m.startDate, m.endDate, item.startDate, item.endDate); });
+          if (match) {
+            if (item.startDate < match.startDate) match.startDate = item.startDate;
+            if (item.endDate > match.endDate) match.endDate = item.endDate;
+            match.reason = mergeReasonsText(match.reason, item.reason);
+            toDel.push(item.docId); if (toUpd.indexOf(match) === -1) toUpd.push(match);
+          } else mergedList.push(Object.assign({}, item));
+        });
+        toUpd.forEach(function(m) { const c = Object.assign({}, m); delete c.docId; db.collection("shiftplan_history").doc(m.docId).set(c).catch(function(){}); });
+        toDel.forEach(function(id) { db.collection("shiftplan_history").doc(id).delete().catch(function(){}); });
+        mergedList.sort(function(a, b) { return (b.endDate || "").localeCompare(a.endDate || ""); });
+        cachedHistoryData = mergedList; displayFilteredHistory(cachedHistoryData);
+      }).catch(function() { list.innerHTML = "<div style='color:#b91c1c;'>Fehler beim Laden.</div>"; });
+    }
+
+    window.deleteHistoryEntry = function(docId) {
+      if (!confirm("Diesen Eintrag dauerhaft aus der Historie löschen?")) return;
+      db.collection("shiftplan_history").doc(docId).delete().then(function() { cachedHistoryData = cachedHistoryData.filter(function(h) { return h.docId !== docId; }); filterHistoryUnified(); });
+    };
+
+    function displayFilteredHistory(data) {
+      const list = document.getElementById("historyList");
+      if (!data.length) { list.innerHTML = "<div style='color:#64748b;'>Keine Einträge gefunden.</div>"; return; }
+      list.innerHTML = data.map(function(h) {
+        const days = calcSickDays(h.startDate, h.endDate);
+        return '<div class="item-row" style="align-items:flex-start; flex-direction:column; gap:2px; background:#f8fafc; padding:10px; border-radius:6px; margin-bottom:6px; border:1px solid #e2e8f0;">' +
+          '<div style="display:flex; justify-content:space-between; align-items:center; width:100%;">' +
+            '<b>' + h.empName + ' <span style="font-size:0.72rem; color:#0369a1;">(' + (h.category || 'Krank') + ')</span></b>' +
+            '<div style="display:flex; align-items:center; gap:8px;">' +
+              '<span style="font-size:0.75rem; font-weight:600;">📅 ' + formatDateDe(h.startDate) + ' – ' + formatDateDe(h.endDate) + ' <span style="color:var(--bayer-blue);">(' + days + ' ' + (days === 1 ? 'Tag' : 'Tage') + ')</span></span>' +
+              '<button onclick="deleteHistoryEntry(\'' + (h.docId || h.id) + '\')" style="border:none; background:none; cursor:pointer; font-size:0.8rem;" title="Löschen">🗑️</button>' +
+            '</div>' +
+          '</div>' +
+          '<div style="font-size:0.78rem; color:#475569;">Notiz: ' + (h.reason || 'Keine Angabe') + '</div>' +
+          '<div style="font-size:0.68rem; color:#94a3b8;">Eingereicht: ' + (h.createdAt || '-') + ' ' + (h.approvedBy ? '| ✍️ Bestätigt durch: <b>' + h.approvedBy + '</b>' : '') + '</div>' +
+        '</div>';
+      }).join("");
+    }
+
+    function filterHistoryUnified() {
+      const q = document.getElementById("historyUnifiedInput").value.trim().toLowerCase();
+      if (!q) { displayFilteredHistory(cachedHistoryData); return; }
+      displayFilteredHistory(cachedHistoryData.filter(function(h) {
+        return h.empName.toLowerCase().indexOf(q) !== -1 || (h.reason && h.reason.toLowerCase().indexOf(q) !== -1) || formatDateDe(h.startDate).indexOf(q) !== -1 || formatDateDe(h.endDate).indexOf(q) !== -1 || h.startDate.indexOf(q) !== -1 || h.endDate.indexOf(q) !== -1;
+      }));
+    }
+
+    function applyTeamStyles() {
+      let st = document.getElementById("dynamicTeamStyles");
+      if (!st) { st = document.createElement("style"); st.id = "dynamicTeamStyles"; document.head.appendChild(st); }
+      st.textContent = Object.keys(teamsConfig).sort().map(function(k) { return ".employee-card." + k + " { border-left-color: " + teamsConfig[k].color + " !important; }"; }).join("\n");
+    }
+
+    function updateTeamDropdowns() {
+      const keys = Object.keys(teamsConfig).sort();
+      const newEmpTeam = document.getElementById("newEmpTeam");
+      if (newEmpTeam) newEmpTeam.innerHTML = keys.map(function(k) { return '<option value="' + k + '">' + teamsConfig[k].name + (isTeamRotating(k) ? ' 🔄' : '') + '</option>'; }).join("");
+      const freiSel = document.getElementById("teamSelect_frei");
+      if (freiSel) freiSel.innerHTML = keys.map(function(k) { return '<option value="' + k + '" ' + (shiftRotation.frei === k ? 'selected' : '') + '>🏖️ Frei: ' + teamsConfig[k].name + (isTeamRotating(k) ? ' 🔄' : '') + '</option>'; }).join("");
+    }
+
+    function updatePoolSearch(val) {
+      poolSearchQuery = val.trim().toLowerCase();
+      const inp = document.getElementById("poolSearchInput"); if (inp && inp.value !== val) inp.value = val;
+      document.getElementById("clearSearchBtn").style.display = poolSearchQuery.length > 0 ? "block" : "none";
+      renderEmployees();
+    }
+
+    function renderTeamFilterCheckboxes() {
+      const c = document.getElementById("teamFilterContainer"); if (!c) return;
+      c.innerHTML = Object.keys(teamsConfig).sort().map(function(k) {
+        const rotIcon = isTeamRotating(k) ? '<span style="font-size:0.65rem; opacity:0.65;" title="Rotiert automatisch">🔄</span>' : '';
+        return '<label style="display:flex; align-items:center; gap:4px; cursor:pointer; font-size:0.75rem;"><input type="checkbox" ' + (activeTeamFilters[k] ? 'checked' : '') + ' onchange="activeTeamFilters[\'' + k + '\']=this.checked; renderEmployees();"><span style="color:' + teamsConfig[k].color + '; font-weight:700;">■</span> ' + teamsConfig[k].name + rotIcon + '</label>';
+      }).join("");
+    }
+    function toggleAllTeamFilters(s) { Object.keys(teamsConfig).forEach(function(k) { activeTeamFilters[k] = s; }); renderTeamFilterCheckboxes(); renderEmployees(); }
+
+    function renderRoleFilterCheckboxes() {
+      const c = document.getElementById("roleFilterContainer"); if (!c) return;
+      c.innerHTML = roles.map(function(r, i) { return '<label style="display:flex; align-items:center; gap:4px; cursor:pointer; font-size:0.75rem;"><input type="checkbox" ' + (activeRoleFilters[r] ? 'checked' : '') + ' onchange="activeRoleFilters[roles[' + i + ']]=this.checked; renderEmployees();">' + r + '</label>'; }).join("");
+    }
+    function toggleAllRoleFilters(s) { roles.forEach(function(r) { activeRoleFilters[r] = s; }); renderRoleFilterCheckboxes(); renderEmployees(); }
+
+    function renderLineCheckboxes(selMain, selSec) {
+      selMain = selMain || []; selSec = selSec || [];
+      const mC = document.getElementById("mainLinesCheckboxes"), sC = document.getElementById("secLinesCheckboxes"); if (!mC || !sC) return;
+      const build = function(cls, sel) {
+        return lines.map(function(l) {
+          return '<label style="font-size:0.78rem; display:flex; align-items:center; gap:4px; cursor:pointer; background:#f1f5f9; padding:3px 6px; border-radius:4px;"><input type="checkbox" value="' + l.id + '" class="' + cls + '" ' + (sel.indexOf(l.id) !== -1 ? 'checked' : '') + '> ' + l.name.replace(/Linie\s*/i, '') + '</label>';
+        }).join("");
+      };
+      mC.innerHTML = build("main-line-chk", selMain); sC.innerHTML = build("sec-line-chk", selSec);
+    }
+
+    function createDailyBackup(data) {
+      const todayIso = getTodayIso(), todayDe = new Date().toLocaleDateString("de-DE");
+      db.collection("shiftplan_backups").doc(todayIso).get().then(function(snap) {
+        if (!snap.exists) {
+          db.collection("shiftplan_backups").doc(todayIso).set({
+            date: todayIso, displayDate: todayDe, lines: data.lines || lines, roles: data.roles || roles,
+            employees: data.employees || employees, teamsConfig: data.teamsConfig || teamsConfig,
+            sickLeaves: data.sickLeaves || [], leaveRequests: data.leaveRequests || [],
+            extraShifts: data.extraShifts || [], shiftRotation: data.shiftRotation || shiftRotation
+          }).then(function() {
+            db.collection("shiftplan_backups").orderBy("date", "desc").get().then(function(sn) { let c = 0; sn.forEach(function(d) { if (++c > 7) d.ref.delete(); }); });
           });
-          d.sickLeaves = sl;
-          boardRef.set(d, { merge: true }).then(function() {
-            showPortalAlert("✅ Deine Krankmeldung (" + sD.split("-").reverse().join(".") + " bis " + eD.split("-").reverse().join(".") + ") wurde übermittelt!", "success");
-            document.getElementById("portalReason").value = "";
-            globalDbData = d;
-            renderMyRequests();
-          });
-        } else {
-          const reqId = "lr_" + Date.now();
-          lr.push({
-            id: reqId, empId: currentEmpData.id, empName: fName,
-            type: cat, startDate: sD, endDate: eD, reason: r,
-            status: "pending", createdAt: nowStr
-          });
-          d.leaveRequests = lr;
-          boardRef.set(d, { merge: true }).then(function() {
-            showPortalAlert("✅ Dein Urlaubs-/Antrag wurde eingereicht und an den Planer übermittelt!", "success");
-            document.getElementById("portalReason").value = "";
-            globalDbData = d;
-            renderMyRequests();
-          });
+        }
+        backupDoneToday = true;
+      }).catch(function(){});
+    }
+
+    function renderBackups() {
+      const list = document.getElementById("backupList"); list.innerHTML = "Lade Backups...";
+      db.collection("shiftplan_backups").orderBy("date", "desc").get().then(function(snap) {
+        if (snap.empty) { list.innerHTML = "Noch keine Backups vorhanden."; return; }
+        list.innerHTML = ""; snap.forEach(function(doc) { const b = doc.data(); list.innerHTML += '<div class="item-row"><span>Stand vom <b>' + b.displayDate + '</b> (' + (b.employees || []).length + ' Mitarbeiter)</span><button class="btn btn-outline" style="padding:4px 10px; color:var(--bayer-blue);" onclick="restoreBackup(\'' + doc.id + '\')">Wiederherstellen</button></div>'; });
+      });
+    }
+
+    function restoreBackup(docId) {
+      if (!confirm("Diesen Stand wirklich laden?")) return;
+      db.collection("shiftplan_backups").doc(docId).get().then(function(snap) {
+        if (snap.exists) {
+          const b = snap.data();
+          boardRef.set({
+            lines: (b.lines && b.lines.length) ? b.lines : defaultLines,
+            roles: (b.roles && b.roles.length) ? b.roles : roles,
+            employees: b.employees || [],
+            teamsConfig: b.teamsConfig || teamsConfig,
+            sickLeaves: b.sickLeaves || [],
+            leaveRequests: b.leaveRequests || [],
+            extraShifts: b.extraShifts || [],
+            shiftRotation: b.shiftRotation || shiftRotation
+          }, { merge: true });
+          closeModal("settingsModal");
         }
       });
     }
 
-    function renderMyRequests() {
-      const listEl = document.getElementById("myRequestsList");
-      if (!globalDbData || !currentEmpId) { list.innerHTML = "Keine Daten."; return; }
+    function initBoard() {
+      const headerRow = document.getElementById("headerRow");
+      if (!headerRow) return;
+      if (!Array.isArray(lines) || lines.length === 0) lines = defaultLines.slice();
 
-      const myLr = (globalDbData.leaveRequests || []).filter(function(r) { return r.empId === currentEmpId; });
-      const mySl = (globalDbData.sickLeaves || []).filter(function(s) { return s.empId === currentEmpId; });
-
-      let html = "";
-      myLr.forEach(function(lr) {
-        let statusBadge = '<span style="color:#d97706; font-weight:700;">⏳ In Prüfung beim Planer</span>';
-        if (lr.status === "approved") statusBadge = '<span style="color:#16a34a; font-weight:700;">✓ Genehmigt</span>';
-        else if (lr.status === "rejected") statusBadge = '<span style="color:#dc2626; font-weight:700;">✖ Abgelehnt</span>';
-        else if (lr.status === "cancelled_by_planner") statusBadge = '<span style="color:#dc2626; font-weight:700;">🚫 Vom Planer beendet/storniert</span>';
-
-        html += '<div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:6px; padding:10px; margin-bottom:8px;">' +
-          '<div style="display:flex; justify-content:space-between; align-items:center;">' +
-            '<b>' + lr.type + '</b>' + statusBadge +
-          '</div>' +
-          '<div style="font-size:0.78rem; margin-top:3px;">📅 ' + lr.startDate.split("-").reverse().join(".") + ' bis ' + lr.endDate.split("-").reverse().join(".") + '</div>' +
-          (lr.reason ? '<div style="font-size:0.78rem; color:#475569; margin-top:2px;">Notiz: ' + lr.reason + '</div>' : '') +
-        '</div>';
+      headerRow.innerHTML = '<th class="shift-header"><div>Schicht</div><div class="shift-controls"><button class="shift-rotate-btn" onclick="rotateAllShifts()">🔄 Rotieren</button><button class="shift-clear-btn" onclick="clearEntireBoard()">🧹 Alle leeren</button></div></th>';
+      lines.forEach(function(line) {
+        const th = document.createElement("th"); th.className = "line-header";
+        if (isPlanner) th.onclick = function() { openLineEditModal(line.id); };
+        let pCls = line.prio && (line.prio.indexOf("1") !== -1 || line.prio.indexOf("2") !== -1) ? "prio-high" : (line.prio ? "prio-mid" : "");
+        th.innerHTML = '<div class="line-title">' + line.name + '</div><div class="badge-container">' + (line.prio ? '<span class="line-prio ' + pCls + '">' + line.prio + '</span>' : '') + (line.tag ? '<span class="line-status-tag">' + line.tag + '</span>' : '') + '</div>' + (line.note ? '<div class="line-notes">' + line.note + '</div>' : '');
+        headerRow.appendChild(th);
       });
 
-      mySl.forEach(function(sl) {
-        html += '<div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:6px; padding:10px; margin-bottom:8px;">' +
-          '<div style="display:flex; justify-content:space-between; align-items:center;">' +
-            '<b>' + (sl.category || 'Krank') + '</b><span style="color:#166534; font-weight:700;">✓ Aktiv / Erfasst</span>' +
-          '</div>' +
-          '<div style="font-size:0.78rem; margin-top:3px;">📅 ' + sl.startDate.split("-").reverse().join(".") + ' bis ' + sl.endDate.split("-").reverse().join(".") + '</div>' +
-        '</div>';
+      const matrixBody = document.getElementById("matrixBody"); matrixBody.innerHTML = "";
+      const keys = Object.keys(teamsConfig).sort();
+      shifts.forEach(function(shift) {
+        const curKey = shiftRotation[shift.id] || keys[0], curObj = teamsConfig[curKey] || { name: "Team", color: "#0091df" };
+        const opts = keys.map(function(k) { return '<option value="' + k + '" ' + (k === curKey ? 'selected' : '') + '>' + teamsConfig[k].name + (isTeamRotating(k) ? ' 🔄' : '') + '</option>'; }).join("");
+        const tr = document.createElement("tr"), thS = document.createElement("th");
+        thS.className = "shift-header";
+        thS.innerHTML = '<div>' + shift.name + '</div><div class="shift-team-badge"><span style="color:' + curObj.color + ';">■</span> ' + curObj.name + '</div><div class="shift-controls"><div style="display:flex; gap:4px;"><select id="teamSelect_' + shift.id + '" class="shift-team-select" style="flex:1;">' + opts + '</select><button class="shift-clear-btn" style="width:26px; padding:0; color:var(--bayer-blue); border-color:var(--bayer-blue);" onclick="loadTeamToShift(\'' + shift.id + '\')" title="Team auf Linien laden">📥</button></div><button class="shift-clear-btn" onclick="clearShiftRow(\'' + shift.id + '\', \'' + shift.name + '\')">🧹 Leeren</button></div>';
+        tr.appendChild(thS);
+        lines.forEach(function(line) {
+          const td = document.createElement("td"), zId = line.id + "_" + shift.id;
+          td.innerHTML = '<div id="' + zId + '" class="card-list drop-zone" data-zone="' + zId + '"></div>';
+          tr.appendChild(td);
+        });
+        matrixBody.appendChild(tr);
       });
 
-      listEl.innerHTML = html || '<div style="color:#64748b; font-size:0.83rem;">Du hast aktuell keine offenen Anträge oder aktiven Abwesenheiten.</div>';
+      renderEmployees(); initDragAndDrop(); updateRoleDropdown(); updateTeamDropdowns(); renderTeamFilterCheckboxes(); renderRoleFilterCheckboxes(); applyTeamStyles(); renderLineCheckboxes(); updateInboxBadge();
+    }
+
+    function renderEmployees() {
+      document.querySelectorAll(".drop-zone").forEach(function(el) { el.innerHTML = ""; });
+      const today = getTodayIso();
+      const displayList = employees.slice();
+      if (isPlanner && poolSearchQuery) {
+        displayList.sort(function(a, b) {
+          if (a.zone !== "pool" || b.zone !== "pool") return 0;
+          const aM = (a.mainLines && a.mainLines.some(function(id) { const l = lines.find(function(x){return x.id===id;}); return l && l.name.toLowerCase().indexOf(poolSearchQuery) !== -1; })) ? 2 : ((a.secLines && a.secLines.some(function(id) { const l = lines.find(function(x){return x.id===id;}); return l && l.name.toLowerCase().indexOf(poolSearchQuery) !== -1; })) ? 1 : 0);
+          const bM = (b.mainLines && b.mainLines.some(function(id) { const l = lines.find(function(x){return x.id===id;}); return l && l.name.toLowerCase().indexOf(poolSearchQuery) !== -1; })) ? 2 : ((b.secLines && b.secLines.some(function(id) { const l = lines.find(function(x){return x.id===id;}); return l && l.name.toLowerCase().indexOf(poolSearchQuery) !== -1; })) ? 1 : 0);
+          return bM - aM;
+        });
+      }
+
+      displayList.forEach(function(emp) {
+        const fName = fullName(emp);
+        if (isPlanner && emp.zone === "pool") {
+          if (activeTeamFilters[emp.team] === false || activeRoleFilters[emp.role] === false) return;
+          if (poolSearchQuery) {
+            const nMatch = fName.toLowerCase().indexOf(poolSearchQuery) !== -1;
+            const pMatch = emp.mainLines && emp.mainLines.some(function(id) { const l = lines.find(function(x){return x.id===id;}); return l && l.name.toLowerCase().indexOf(poolSearchQuery) !== -1; });
+            const sMatch = emp.secLines && emp.secLines.some(function(id) { const l = lines.find(function(x){return x.id===id;}); return l && l.name.toLowerCase().indexOf(poolSearchQuery) !== -1; });
+            if (!nMatch && !pMatch && !sMatch) return;
+          }
+        }
+
+        const card = document.createElement("div");
+        card.className = "employee-card " + emp.team; card.setAttribute("data-id", emp.id);
+        let parts = [];
+        if (emp.lastLineId) {
+          const lastL = lines.find(function(x) { return x.id === emp.lastLineId; });
+          if (lastL) {
+            const delBtn = emp.zone === "pool" ? '<span onclick="event.stopPropagation(); deletePin(\'' + emp.id + '\')" style="cursor:pointer; color:#ef4444; font-size:0.75rem; padding:0 3px;">✖</span>' : "";
+            parts.push('<span style="color:#0284c7; font-weight:700;">📌 ' + lastL.name.replace(/Linie\s*/i, '') + ' ' + delBtn + '</span>');
+          }
+        }
+        if (emp.mainLines && emp.mainLines.length) {
+          parts.push("<b>Prio:</b> " + emp.mainLines.map(function(id) { const l = lines.find(function(x){return x.id===id;}); return l ? l.name.replace(/Linie\s*/i, '') : null; }).filter(Boolean).join(", "));
+        }
+        if (emp.secLines && emp.secLines.length) {
+          parts.push('<span style="color:#94a3b8;">Sek:</span> ' + emp.secLines.map(function(id) { const l = lines.find(function(x){return x.id===id;}); return l ? l.name.replace(/Linie\s*/i, '') : null; }).filter(Boolean).join(", "));
+        }
+
+        const fixHtml = emp.noRotation ? '<span class="card-fix-tag" title="Fixiert (rotiert nicht)">⚓ Fix</span>' : '';
+        const activeSl = sickLeaves.find(function(sl) { return sl.empId === emp.id && sl.startDate <= today && sl.endDate >= today; });
+        const sickHtml = activeSl ? '<span class="card-sick-tag">' + (activeSl.category && activeSl.category.indexOf('Urlaub') !== -1 ? '🌴' : '🏥') + ' Bis ' + formatDateDe(activeSl.endDate) + '</span>' : '';
+        const activeEs = extraShifts.find(function(es) { return es.empId === emp.id && es.status === "approved" && es.date >= today; });
+        const extraHtml = activeEs ? '<span class="card-extra-tag">➕ ' + formatDateDe(activeEs.date) + ' (' + (shiftsLabel[activeEs.shift] || activeEs.shift) + ' | ' + (activeEs.note || 'BS') + ')</span>' : '';
+
+        card.innerHTML =
+          '<div class="card-name">' + fName + '</div>' +
+          '<div style="display:flex; justify-content:space-between; align-items:center; gap:4px;">' +
+            '<div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap;">' +
+              '<span class="card-role">' + emp.role + '</span>' +
+              fixHtml +
+            '</div>' +
+            '<div style="display:flex; align-items:center; gap:3px;">' +
+              '<button class="quick-sick-btn" onclick="openInboxModal(\'' + emp.id + '\', true)" title="Abwesenheit eintragen">🏥</button>' +
+              (emp.ersthelfer ? '<span class="first-aider-icon" title="Ersthelfer">+</span>' : '') +
+            '</div>' +
+          '</div>' +
+          (parts.length ? '<div class="card-lines-info">' + parts.join(" | ") + '</div>' : '') +
+          extraHtml + sickHtml;
+
+        const targetZone = document.getElementById(emp.zone) || document.getElementById("pool");
+        if (targetZone) targetZone.appendChild(card);
+      });
+
+      const pEl = document.getElementById("pool"), eEl = document.getElementById("extra");
+      document.getElementById("poolCount").textContent = "(" + (pEl ? pEl.children.length : 0) + ")";
+      document.getElementById("extraCount").textContent = "(" + (eEl ? eEl.children.length : 0) + ")";
+
+      const extraListEl = document.getElementById("approvedExtraList");
+      if (extraListEl) {
+        const appr = extraShifts.filter(function(es) { return es.status === "approved" && es.date >= today; }).sort(function(a,b) { return a.date.localeCompare(b.date); });
+        extraListEl.innerHTML = appr.map(function(es) {
+          return '<div style="display:flex; justify-content:space-between; align-items:center; background:#dcfce7; padding:3px 6px; border-radius:4px; margin-top:3px; color:#166534;">' +
+            '<span><b>' + es.empName + '</b>: ' + formatDateDe(es.date) + ' (' + shiftsLabel[es.shift] + ')</span>' +
+            '<div style="display:flex; gap:4px;">' +
+              '<button onclick="pullExtraShiftToBox(\'' + es.id + '\')" style="border:none; background:#16a34a; color:#fff; border-radius:3px; padding:1px 5px; cursor:pointer; font-size:0.68rem;" title="Karte vorab in dieses Zusatz-Fenster holen">📥</button>' +
+              '<button onclick="deleteExtraShift(\'' + es.id + '\')" style="border:none; background:none; color:#b91c1c; cursor:pointer; font-size:0.72rem;" title="Bringschicht entfernen">✖</button>' +
+            '</div>' +
+          '</div>';
+        }).join("");
+      }
+    }
+
+    function initDragAndDrop() {
+      sortableInstances.forEach(function(s) { s.destroy(); }); sortableInstances = [];
+      document.querySelectorAll(".drop-zone").forEach(function(zone) {
+        sortableInstances.push(new Sortable(zone, {
+          group: "shared-shifts", animation: 150, disabled: !isPlanner,
+          onEnd: function (evt) {
+            const empId = evt.item.getAttribute("data-id"), newZone = evt.to.getAttribute("data-zone");
+            const emp = employees.find(function(e) { return e.id === empId; });
+            if (emp) {
+              emp.zone = newZone;
+              const nL = extractLineIdFromZone(newZone), nS = extractShiftIdFromZone(newZone);
+              if (nL && nS) emp.lastShiftId = nS;
+              if (nL && (!emp.lastLineId || (nS && shiftRotation[nS] === emp.team) || isEmpProtectedFromRotation(emp))) emp.lastLineId = nL;
+              saveToFirebase(); renderEmployees();
+            }
+          }
+        }));
+      });
+    }
+
+    function openLineEditModal(lineId) {
+      const l = lines.find(function(x) { return x.id === lineId; }); if (!l) return;
+      document.getElementById("editLineId").value = l.id;
+      document.getElementById("lineEditTitle").textContent = l.name + " bearbeiten";
+      document.getElementById("editLinePrio").value = l.prio || "";
+      document.getElementById("editLineTag").value = l.tag || "";
+      document.getElementById("editLineNote").value = l.note || "";
+      document.getElementById("lineEditModal").style.display = "flex";
+    }
+
+    function saveLineDetails() {
+      const l = lines.find(function(x) { return x.id === document.getElementById("editLineId").value; }); if (!l) return;
+      l.prio = document.getElementById("editLinePrio").value;
+      l.tag = document.getElementById("editLineTag").value.trim();
+      l.note = document.getElementById("editLineNote").value.trim();
+      saveToFirebase(); initBoard(); closeModal("lineEditModal");
+    }
+
+    function closeModal(id) {
+      const el = document.getElementById(id);
+      if (el) el.style.display = "none";
+      if (id === "settingsModal") resetEmpForm();
+    }
+
+    function openSettingsModal() {
+      if (plannerLevel < 3) return;
+      document.getElementById("settingsModal").style.display = "flex";
+      renderSettingsLists();
+    }
+
+    function switchTab(t, idx) {
+      document.querySelectorAll(".tab-btn").forEach(function(b, i) { b.classList.toggle("active", i === idx); });
+      document.querySelectorAll(".tab-content").forEach(function(c) { c.classList.remove("active"); });
+      document.getElementById(t).classList.add("active");
+      if (t === "tabBackups") renderBackups();
+      if (t === "tabHistory") renderHistory();
+    }
+
+    function updateRoleDropdown() {
+      const sel = document.getElementById("newEmpRole"); if (!sel) return;
+      sel.innerHTML = roles.map(function(r) { return '<option value="' + r + '">' + r + '</option>'; }).join("");
+    }
+
+    function addTeam() {
+      const name = document.getElementById("newTeamName").value.trim();
+      const color = document.getElementById("newTeamColor").value;
+      const rotates = document.getElementById("newTeamRotates").checked;
+      if (!name) return;
+      const k = "team_" + Date.now();
+      teamsConfig[k] = { name: name, color: color, rotates: rotates };
+      activeTeamFilters[k] = true;
+      document.getElementById("newTeamName").value = "";
+      document.getElementById("newTeamRotates").checked = true;
+      saveToFirebase(); renderSettingsLists(); initBoard();
+    }
+
+    window.toggleTeamRotation = function(k, isChecked) {
+      if (!teamsConfig[k]) return;
+      teamsConfig[k].rotates = !!isChecked;
+      saveToFirebase();
+      initBoard();
+    };
+
+    function updateTeam(k) {
+      const nameEl = document.getElementById("teamNameInput_" + k);
+      const colorEl = document.getElementById("teamColorInput_" + k);
+      const rotEl = document.getElementById("teamRotatesInput_" + k);
+      const name = nameEl ? nameEl.value.trim() : "";
+      const color = colorEl ? colorEl.value : "#0091df";
+      const rotates = rotEl ? rotEl.checked : true;
+      if (name && teamsConfig[k]) {
+        teamsConfig[k] = { name: name, color: color, rotates: rotates };
+        saveToFirebase(); renderSettingsLists(); initBoard(); alert("Team aktualisiert!");
+      }
+    }
+
+    function deleteTeam(k) {
+      if (Object.keys(teamsConfig).length <= 1 || !confirm("Team wirklich löschen?")) return;
+      delete teamsConfig[k]; delete activeTeamFilters[k];
+      const fb = Object.keys(teamsConfig).sort()[0];
+      employees.forEach(function(e) { if (e.team === k) e.team = fb; });
+      saveToFirebase(); renderSettingsLists(); initBoard();
+    }
+
+    function renderSettingsLists() {
+      document.getElementById("roleList").innerHTML = roles.map(function(r, i) { return '<div class="item-row"><span>' + r + '</span><button class="btn btn-outline" style="padding:4px 10px; color:#ef4444;" onclick="deleteRole(' + i + ')">Löschen</button></div>'; }).join("");
+      document.getElementById("employeeList").innerHTML = employees.map(function(e) {
+        const fName = fullName(e), lvl = Number(e.accessLevel) || 1;
+        const lvlBadge = '<span style="background:#f1f5f9; color:#475569; font-size:0.68rem; padding:1px 5px; border-radius:4px; font-weight:700;">Stufe ' + lvl + '</span>';
+        const pwBadge = (e.mustChangePw || !e.password || e.password === "1234") ? '<span style="font-size:0.7rem; color:#d97706;">⏳ PIN: 1234</span>' : '<span style="font-size:0.7rem; color:#15803d;">🔒 Eigenes PW</span>';
+        const fixBadge = e.noRotation ? '<span style="background:#fef08a; color:#854d0e; font-size:0.68rem; padding:1px 5px; border-radius:4px; font-weight:700;">⚓ Fix</span>' : '';
+        return '<div class="item-row"><div style="flex:1;"><b>' + fName + '</b> <small>(' + e.role + ')</small> ' + fixBadge + ' ' + lvlBadge + ' ' + pwBadge + '</div><div style="display:flex; gap:5px;"><button class="btn btn-outline" style="padding:4px 8px; font-size:0.75rem; color:#0284c7;" onclick="resetEmpPassword(\'' + e.id + '\')">🔄 PIN</button><button class="btn btn-outline" style="padding:4px 8px; font-size:0.75rem;" onclick="editEmployee(\'' + e.id + '\')">Bearbeiten</button><button class="btn btn-outline" style="padding:4px 8px; font-size:0.75rem; color:#ef4444;" onclick="deleteEmployee(\'' + e.id + '\')">Löschen</button></div></div>';
+      }).join("");
+      document.getElementById("lineSettingsList").innerHTML = lines.map(function(l, i) { return '<div class="item-row"><span><b>' + l.name + '</b></span><div style="display:flex; gap:6px;"><button class="btn btn-outline" style="padding:2px 8px;" ' + (i === 0 ? 'disabled' : '') + ' onclick="moveLine(' + i + ',-1)">▲</button><button class="btn btn-outline" style="padding:2px 8px;" ' + (i === lines.length - 1 ? 'disabled' : '') + ' onclick="moveLine(' + i + ',1)">▼</button><button class="btn btn-outline" style="padding:4px 10px; color:#ef4444;" onclick="deleteLine(\'' + l.id + '\')">Löschen</button></div></div>'; }).join("");
+      document.getElementById("teamSettingsList").innerHTML = Object.keys(teamsConfig).sort().map(function(k) {
+        const rotChecked = isTeamRotating(k) ? "checked" : "";
+        return '<div class="item-row" style="flex-wrap:wrap;">' +
+          '<input type="color" id="teamColorInput_' + k + '" value="' + teamsConfig[k].color + '" style="width:36px; height:32px; border:none; cursor:pointer;">' +
+          '<input type="text" id="teamNameInput_' + k + '" class="form-control" value="' + teamsConfig[k].name + '" style="flex:1; min-width:120px; padding:6px;">' +
+          '<label style="display:flex; align-items:center; gap:5px; font-size:0.8rem; font-weight:600; cursor:pointer; background:#f8fafc; padding:5px 8px; border-radius:6px; border:1px solid #cbd5e1;" title="Haken gesetzt = Team rotiert automatisch mit">' +
+            '<input type="checkbox" id="teamRotatesInput_' + k + '" ' + rotChecked + ' onchange="toggleTeamRotation(\'' + k + '\', this.checked)"> 🔄 Rotiert' +
+          '</label>' +
+          '<button class="btn btn-outline" style="padding:6px 10px; color:var(--bayer-blue);" onclick="updateTeam(\'' + k + '\')">Speichern</button>' +
+          '<button class="btn btn-outline" style="padding:6px 10px; color:#ef4444;" onclick="deleteTeam(\'' + k + '\')">Löschen</button>' +
+        '</div>';
+      }).join("");
+    }
+
+    function resetEmpPassword(id) {
+      const emp = employees.find(function(e) { return e.id === id; }); if (!emp || !confirm('PIN von "' + fullName(emp) + '" auf 1234 zurücksetzen?')) return;
+      emp.password = "1234"; emp.mustChangePw = true; saveToFirebase(); renderSettingsLists();
+    }
+
+    function addLine() {
+      const name = document.getElementById("newLineName").value.trim(); if (!name) return;
+      lines.push({ id: "L_" + Date.now(), name: name, prio: "", tag: "", note: "" }); document.getElementById("newLineName").value = ""; saveToFirebase(); initBoard(); renderSettingsLists();
+    }
+    function moveLine(i, dir) { const item = lines.splice(i, 1)[0]; lines.splice(i + dir, 0, item); saveToFirebase(); initBoard(); renderSettingsLists(); }
+    function deleteLine(id) {
+      if (!confirm("Linie wirklich löschen?")) return;
+      lines = lines.filter(function(l) { return l.id !== id; });
+      employees.forEach(function(e) { if (e.zone && e.zone.indexOf(id + "_") === 0) e.zone = "pool"; if (e.lastLineId === id) delete e.lastLineId; });
+      saveToFirebase(); initBoard(); renderSettingsLists();
+    }
+    function addRole() {
+      const val = document.getElementById("newRoleName").value.trim(); if (!val || roles.indexOf(val) !== -1) return;
+      roles.push(val); activeRoleFilters[val] = true; document.getElementById("newRoleName").value = ""; saveToFirebase(); updateRoleDropdown(); renderRoleFilterCheckboxes(); renderSettingsLists();
+    }
+    function deleteRole(i) {
+      const rem = roles.splice(i, 1)[0]; delete activeRoleFilters[rem]; saveToFirebase(); updateRoleDropdown(); renderRoleFilterCheckboxes(); renderSettingsLists();
+    }
+
+    function saveEmployee() {
+      const idInp = document.getElementById("editEmpId").value;
+      const fName = document.getElementById("newEmpFirstName").value.trim(), lName = document.getElementById("newEmpLastName").value.trim();
+      const team = document.getElementById("newEmpTeam").value, role = document.getElementById("newEmpRole").value;
+      const lvl = Number(document.getElementById("newEmpAccessLevel").value) || 1;
+      const isFA = document.getElementById("newEmpFirstAider").checked, isFix = document.getElementById("newEmpNoRotation").checked;
+      const mLines = Array.from(document.querySelectorAll(".main-line-chk:checked")).map(function(c) { return c.value; });
+      const sLines = Array.from(document.querySelectorAll(".sec-line-chk:checked")).map(function(c) { return c.value; });
+      if (!fName && !lName) { alert("Bitte Namen eingeben!"); return; }
+      if (idInp) {
+        const emp = employees.find(function(e) { return e.id === idInp; });
+        if (emp) { emp.firstName = fName; emp.lastName = lName; emp.team = team; emp.role = role; emp.accessLevel = lvl; emp.ersthelfer = isFA; emp.noRotation = isFix; emp.mainLines = mLines; emp.secLines = sLines; if (!emp.lastLineId && mLines.length) emp.lastLineId = mLines[0]; }
+      } else {
+        employees.push({ id: "e_" + Date.now(), firstName: fName, lastName: lName, team: team, role: role, accessLevel: lvl, password: "1234", mustChangePw: true, ersthelfer: isFA, noRotation: isFix, mainLines: mLines, secLines: sLines, lastLineId: mLines[0] || null, zone: "pool" });
+      }
+      resetEmpForm(); saveToFirebase(); renderEmployees(); renderSettingsLists();
+    }
+
+    function editEmployee(id) {
+      const emp = employees.find(function(e) { return e.id === id; }); if (!emp) return;
+      document.getElementById("editEmpId").value = emp.id;
+      document.getElementById("newEmpFirstName").value = emp.firstName || "";
+      document.getElementById("newEmpLastName").value = emp.lastName || "";
+      document.getElementById("newEmpTeam").value = emp.team || Object.keys(teamsConfig).sort()[0];
+      document.getElementById("newEmpRole").value = emp.role || roles[0];
+      document.getElementById("newEmpAccessLevel").value = String(emp.accessLevel || 1);
+      document.getElementById("newEmpFirstAider").checked = !!emp.ersthelfer;
+      document.getElementById("newEmpNoRotation").checked = !!emp.noRotation;
+      renderLineCheckboxes(emp.mainLines || [], emp.secLines || []);
+      document.getElementById("btnSaveEmp").textContent = "Aktualisieren";
+      document.getElementById("btnCancelEditEmp").style.display = "inline-block";
+    }
+
+    function resetEmpForm() {
+      document.getElementById("editEmpId").value = ""; document.getElementById("newEmpFirstName").value = ""; document.getElementById("newEmpLastName").value = "";
+      document.getElementById("newEmpAccessLevel").value = "1"; document.getElementById("newEmpFirstAider").checked = false; document.getElementById("newEmpNoRotation").checked = false;
+      renderLineCheckboxes([], []); document.getElementById("btnSaveEmp").textContent = "Hinzufügen / Speichern"; document.getElementById("btnCancelEditEmp").style.display = "none";
+    }
+
+    function deleteEmployee(id) {
+      if (!confirm("Mitarbeiter inklusive aller Anträge wirklich löschen?")) return;
+      employees = employees.filter(function(e) { return e.id !== id; });
+      sickLeaves = sickLeaves.filter(function(sl) { return sl.empId !== id; });
+      leaveRequests = leaveRequests.filter(function(lr) { return lr.empId !== id; });
+      extraShifts = extraShifts.filter(function(es) { return es.empId !== id; });
+      saveToFirebase(); renderEmployees(); renderSettingsLists();
     }
   </script>
 </body>
