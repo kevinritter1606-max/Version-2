@@ -3,187 +3,114 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mitarbeiter-Portal | Schichtplanung</title>
+  <title>Mitarbeiter-Portal - Schichtplan</title>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   <style>
     :root { --bayer-blue: #0091df; --bg-gray: #f4f6f9; }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
-    body { background: var(--bg-gray); min-height: 100vh; display: flex; flex-direction: column; color: #1e293b; }
-    .brand-gradient { height: 6px; background: linear-gradient(90deg, #0091df 0%, #00bcff 50%, #89d329 100%); width: 100%; }
-    header { background: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 6px rgba(0,0,0,0.06); position: sticky; top: 0; z-index: 40; }
-    .header-left { display: flex; align-items: center; gap: 12px; }
-    .header-left img { width: 48px; height: 48px; object-fit: contain; }
-    .header-title h1 { font-size: 1.2rem; color: var(--bayer-blue); font-weight: 700; }
-    .header-title span { font-size: 0.75rem; color: #64748b; }
-    .container { width: 100%; max-width: 540px; margin: 20px auto; padding: 0 16px 40px; flex: 1; }
-    .card { background: #fff; border-radius: 12px; padding: 18px 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; margin-bottom: 16px; }
-    .card h2 { font-size: 1.05rem; color: #0f172a; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-    .form-group { margin-bottom: 12px; position: relative; }
-    .form-group label { display: block; font-size: 0.83rem; font-weight: 600; margin-bottom: 5px; color: #475569; }
-    .form-control { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.92rem; background: #f8fafc; }
-    .form-control:focus { outline: none; border-color: var(--bayer-blue); background: #fff; }
-    textarea.form-control { resize: vertical; min-height: 70px; }
-    .suggestions-box { display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.12); max-height: 190px; overflow-y: auto; z-index: 50; margin-top: 4px; }
-    .suggestion-item { padding: 10px 12px; font-size: 0.92rem; cursor: pointer; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; }
-    .suggestion-item:hover { background: #f0f9ff; color: var(--bayer-blue); }
-    .btn { padding: 11px 16px; border-radius: 8px; font-size: 0.92rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; width: 100%; transition: 0.15s; }
-    .btn:disabled { cursor: not-allowed; opacity: 0.7; }
+    body { background-color: var(--bg-gray); min-height: 100vh; display: flex; flex-direction: column; }
+    .brand-gradient { height: 6px; background: linear-gradient(90deg, #0091df 0%, #00bcff 50%, #89d329 100%); width: 100%; flex-shrink: 0; }
+    header { background: #fff; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .bayer-logo { width: 48px; height: 48px; object-fit: contain; }
+    .header-title h1 { font-size: 1.25rem; font-weight: 700; color: var(--bayer-blue); margin: 0; }
+    .header-title p { font-size: 0.78rem; color: #64748b; }
+    main { padding: 20px; max-width: 800px; width: 100%; margin: 0 auto; flex: 1; display: flex; flex-direction: column; gap: 16px; }
+    .card { background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; }
+    .card h2 { font-size: 1.05rem; color: #1e293b; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 5px; color: #475569; }
+    .form-control { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; background: #f8fafc; }
+    textarea.form-control { resize: vertical; min-height: 75px; }
+    .btn { padding: 10px 16px; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; width: 100%; }
     .btn-primary { background: var(--bayer-blue); color: #fff; }
-    .btn-primary:hover:not(:disabled) { background: #0077b6; }
-    .btn-outline { border-color: #cbd5e1; background: #fff; color: #475569; width: auto; padding: 7px 12px; font-size: 0.82rem; }
-    .btn-sm-danger { border: 1px solid #fecaca; background: #fff1f2; color: #dc2626; padding: 3px 8px; border-radius: 5px; font-size: 0.73rem; font-weight: 600; cursor: pointer; width: auto; }
-    .btn-sm-danger:hover { background: #fee2e2; }
-    .status-box { padding: 15px; border-radius: 10px; font-weight: 600; display: flex; flex-direction: column; gap: 4px; }
-    .status-assigned { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
-    .status-pool { background: #e0f2fe; color: #075985; border: 1px solid #bae6fd; }
-    .status-absent { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
-    .line-badge-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-    .line-badge { padding: 4px 9px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; }
-    .badge-prio { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; font-weight: 700; }
-    .badge-sec { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
-    .success-banner { display: none; background: #dcfce7; color: #166534; border: 1px solid #86efac; padding: 12px; border-radius: 8px; margin-bottom: 12px; font-size: 0.86rem; font-weight: 600; line-height: 1.4; }
-    .error-msg { display: none; background: #fee2e2; color: #b91c1c; padding: 10px; border-radius: 6px; font-size: 0.84rem; margin-bottom: 12px; text-align: center; font-weight: 600; line-height: 1.35; }
-    .notice-hint { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; padding: 8px 10px; border-radius: 6px; font-size: 0.76rem; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; line-height: 1.3; }
-    .req-item { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 12px; font-size: 0.82rem; margin-bottom: 8px; }
-    .stamp-tag { font-size: 0.72rem; color: #475569; margin-top: 6px; padding-top: 5px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }
+    .btn-primary:hover { background: #0077b6; }
+    .btn-danger { background: #dc2626; color: #fff; }
+    .btn-danger:hover { background: #b91c1c; }
+    .btn-outline { background: #fff; border-color: #cbd5e1; color: #475569; width: auto; }
+    .alert { padding: 12px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; margin-bottom: 14px; display: none; }
+    .alert-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .alert-error { background: #fee2e2; color: #b91c1c; border: 1px solid #fecdd3; }
+    .alert-info { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+    .login-container { max-width: 400px; margin: 60px auto; width: 100%; }
+    #portalMain { display: none; }
   </style>
 </head>
 <body>
   <div class="brand-gradient"></div>
   <header>
     <div class="header-left">
-      <img src="logo.png" alt="Logo" onerror="this.style.display='none'">
-      <div class="header-title"><h1>Mitarbeiter-Portal</h1><span>Persönliche Schicht-, Urlaubs- & Linienübersicht</span></div>
+      <img src="logo.png" alt="Bayer Logo" class="bayer-logo" onerror="this.style.display='none'">
+      <div class="header-title">
+        <h1>Mitarbeiter-Portal</h1>
+        <p>Persönliche Schicht-, Urlaubs- & Linienübersicht</p>
+      </div>
     </div>
-    <button id="logoutBtn" class="btn btn-outline" style="display:none;" onclick="logoutEmp()">Abmelden</button>
+    <button class="btn btn-outline" id="logoutBtn" style="display:none;" onclick="logoutPortal()">Abmelden</button>
   </header>
 
-  <div class="container">
-    <!-- LOGIN -->
-    <div id="loginView" class="card">
-      <h2 style="color:var(--bayer-blue); justify-content:center; margin-bottom:16px;">🔐 Mitarbeiter-Anmeldung</h2>
-      <div id="loginError" class="error-msg">Name oder Passwort nicht korrekt!</div>
-      <div class="form-group" id="nameSearchGroup">
-        <label>Dein Name</label>
-        <input type="text" id="loginEmpInput" class="form-control" placeholder="Vor- und Nachname eingeben..." autocomplete="off" oninput="onNameInput(this.value)" onkeydown="if(event.key==='Enter') $('loginPassword').focus()">
-        <div id="loginSuggestions" class="suggestions-box"></div>
+  <main>
+    <!-- LOGIN ANSICHT -->
+    <div id="portalLoginCard" class="card login-container">
+      <h2 style="text-align:center; color:var(--bayer-blue); margin-bottom:16px;">🔑 Mitarbeiter-Anmeldung</h2>
+      <div id="portalLoginError" class="alert alert-error"></div>
+      <div class="form-group">
+        <label>Dein vollständiger Name</label>
+        <input type="text" id="portalLoginName" class="form-control" placeholder="Vor- und Nachname..." autocomplete="off">
       </div>
       <div class="form-group">
-        <label>Passwort / PIN (Erst-Login: 1234)</label>
-        <input type="password" id="loginPassword" class="form-control" placeholder="Passwort eingeben" onkeydown="if(event.key==='Enter') loginEmp()">
+        <label>Persönliche PIN</label>
+        <input type="password" id="portalLoginPin" class="form-control" placeholder="****" onkeydown="if(event.key==='Enter') verifyPortalLogin()">
       </div>
-      <button class="btn btn-primary" onclick="loginEmp()">Anmelden</button>
+      <button class="btn btn-primary" onclick="verifyPortalLogin()">Anmelden</button>
     </div>
 
-    <!-- PASSWORT ÄNDERN -->
-    <div id="changePasswordView" class="card" style="display:none;">
-      <h2 style="color:var(--bayer-blue); margin-bottom:8px;">🔒 Eigenes Passwort festlegen</h2>
-      <p style="font-size:0.85rem; color:#64748b; margin-bottom:16px;">Hallo <b id="cpEmpName"></b>! Bitte vergib jetzt ein persönliches Passwort (mind. 4 Zeichen) für deine zukünftigen Anmeldungen.</p>
-      <div id="cpError" class="error-msg"></div>
-      <div class="form-group"><label>Neues Passwort / PIN</label><input type="password" id="newPasswordInput" class="form-control" placeholder="Neues Passwort eingeben"></div>
-      <div class="form-group"><label>Neues Passwort wiederholen</label><input type="password" id="newPasswordConfirm" class="form-control" placeholder="Passwort bestätigen" onkeydown="if(event.key==='Enter') saveNewPassword()"></div>
-      <button class="btn btn-primary" onclick="saveNewPassword()">Passwort speichern & weiter</button>
-    </div>
-
-    <!-- HAUPTANSICHT PORTAL -->
-    <div id="portalView" style="display:none;">
-      <div class="card">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div><div style="font-size:0.78rem; color:#64748b;">Angemeldet als</div><div id="empWelcomeName" style="font-size:1.25rem; font-weight:700;"></div></div>
-          <span id="empRoleBadge" style="background:#f1f5f9; padding:5px 10px; border-radius:6px; font-size:0.8rem; font-weight:700;"></span>
-        </div>
+    <!-- HAUPT-PORTAL FÜR MITARBEITER -->
+    <div id="portalMain">
+      <div class="card" style="background:linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-color:#bae6fd;">
+        <h2 id="welcomeEmpTitle" style="color:#0369a1; margin-bottom:4px;">Hallo Mitarbeiter</h2>
+        <p id="welcomeEmpSub" style="font-size:0.85rem; color:#0284c7;">Lade deine Schichtdaten...</p>
       </div>
 
-      <div class="card"><h2>📍 Meine heutige Einteilung</h2><div id="empCurrentStatus" class="status-box status-pool"></div></div>
-
+      <!-- KRANKMELDUNG / ABWESENHEIT EINREICHEN -->
       <div class="card">
-        <h2>⚙️ Meine Linien-Qualifikationen</h2>
-        <div style="margin-bottom:10px;"><div style="font-size:0.8rem; font-weight:600; color:#475569;">Meine Stammlinien (Prio-Linien):</div><div id="empPrioLines" class="line-badge-list"></div></div>
-        <div><div style="font-size:0.8rem; font-weight:600; color:#475569;">Weitere Linien (Sek-Linien):</div><div id="empSecLines" class="line-badge-list"></div></div>
-      </div>
-
-      <!-- 1. KRANKMELDUNG -->
-      <div class="card">
-        <h2>🏥 Krankmeldung (Arbeitsunfähigkeit)</h2>
-        
-        <div id="earlyReturnBox" style="display:none; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:14px; margin-bottom:16px;">
-          <h3 style="font-size:0.92rem; color:#166534; margin-bottom:6px;">✅ Gesundmeldung (Frühere Rückkehr)</h3>
-          <p style="font-size:0.78rem; color:#15803d; margin-bottom:10px; line-height:1.35;">Bist du früher wieder fit als geplant? Teile dem Planer hier deinen ersten Arbeitstag mit.</p>
-          <div class="form-group"><label style="color:#166534;">Wieder einsatzbereit am:</label><input type="date" id="earlyReturnDate" class="form-control" style="border-color:#bbf7d0;"></div>
-          <button id="earlyReturnBtn" class="btn btn-primary" style="background:#16a34a; font-size:0.85rem;" onclick="submitEarlyReturn()">Korrektur an Planer senden</button>
-          <div id="earlyReturnSuccess" style="display:none; font-size:0.82rem; color:#166534; font-weight:bold; margin-top:8px;">✅ Deine Rückkehr-Anfrage wurde gesendet!</div>
-          <div id="earlyReturnError" style="display:none; font-size:0.82rem; color:#b91c1c; font-weight:bold; margin-top:8px;"></div>
-        </div>
-
-        <div id="sickSuccessBanner" class="success-banner"></div>
-        <div id="sickErrorBanner" class="error-msg"></div>
-        <div style="display:flex; gap:10px;">
-          <div class="form-group" style="flex:1;"><label>Von (Startdatum)</label><input type="date" id="sickStartDate" class="form-control"></div>
-          <div class="form-group" style="flex:1;"><label>Bis (Einschließlich)</label><input type="date" id="sickEndDate" class="form-control"></div>
-        </div>
-        <div class="form-group"><label>Begleitschreiben / Notiz</label><textarea id="sickReason" class="form-control" placeholder="z.B. Grippe, Arzttermin, Folge-AU..."></textarea></div>
-        
-        <div class="notice-hint">
-          <span>⏰</span>
-          <span>Bitte denke daran, deine Krankmeldung spätestens <b>eine Stunde vor Schichtbeginn</b> abzugeben.</span>
-        </div>
-
-        <button id="sickSubmitBtn" class="btn btn-primary" style="background:#dc2626;" onclick="submitSickLeave()">Krankmeldung absenden</button>
-        <div id="mySickLeavesHistory" style="margin-top:16px;"></div>
-      </div>
-
-      <!-- 2. URLAUBS- & ABWESENHEITSANTRAG -->
-      <div class="card">
-        <h2>🌴 Urlaubs- & Abwesenheitsantrag</h2>
-        <p style="font-size:0.8rem; color:#64748b; margin-bottom:12px;">Dein Antrag wird digital an den Planer/Vorgesetzten zur Genehmigung übermittelt.</p>
-        <div id="leaveSuccessBanner" class="success-banner"></div>
-        <div id="leaveErrorBanner" class="error-msg"></div>
+        <h2>🏥 Abwesenheit / Krankmeldung / Urlaub einreichen</h2>
+        <div id="portalAlertBox" class="alert"></div>
         <div class="form-group">
           <label>Art der Abwesenheit</label>
-          <select id="leaveType" class="form-control">
-            <option value="Urlaub - bezahlt">Urlaub – bezahlt</option>
-            <option value="Freizeitausgleich / Gleittag">Freizeitausgleich / Gleittag / Altersfreizeit</option>
-            <option value="Urlaub - unbezahlt">Urlaub – unbezahlt</option>
-            <option value="Aus- und Fortbildung">Aus- und Fortbildung</option>
-            <option value="Dienstreise">Dienstreise</option>
+          <select id="portalCategory" class="form-control">
+            <option value="Arbeitsunfähigkeit (Krank)">🏥 Krank / Arbeitsunfähigkeit (AU)</option>
+            <option value="Urlaub - bezahlt">🌴 Urlaub (bezahlt)</option>
+            <option value="Urlaub - unbezahlt">🌴 Urlaub (unbezahlt)</option>
+            <option value="Freizeitausgleich / Gleittag">⏱️ Freizeitausgleich / Gleittag</option>
+            <option value="Aus- und Fortbildung">🎓 Aus- und Fortbildung</option>
+            <option value="Dienstreise">🚗 Dienstreise</option>
           </select>
         </div>
         <div style="display:flex; gap:10px;">
-          <div class="form-group" style="flex:1;"><label>Von</label><input type="date" id="leaveStartDate" class="form-control"></div>
-          <div class="form-group" style="flex:1;"><label>Bis (Einschließlich)</label><input type="date" id="leaveEndDate" class="form-control"></div>
+          <div class="form-group" style="flex:1;"><label>Von (Startdatum)</label><input type="date" id="portalStartDate" class="form-control"></div>
+          <div class="form-group" style="flex:1;"><label>Bis (Einschließlich)</label><input type="date" id="portalEndDate" class="form-control"></div>
         </div>
-        <div class="form-group"><label>Bemerkung (Optional)</label><input type="text" id="leaveReason" class="form-control" placeholder="z.B. Sommerurlaub, Gleittag..."></div>
-        <button id="leaveSubmitBtn" class="btn btn-primary" onclick="submitLeaveRequest()">Antrag zur Prüfung absenden</button>
-        <div id="myLeaveRequestsList" style="margin-top:16px;"></div>
+        <div class="form-group">
+          <label>Begleisschreiben / Notiz (optional)</label>
+          <textarea id="portalReason" class="form-control" placeholder="z.B. Grippe, Arzttermin, geplanter Urlaub..."></textarea>
+        </div>
+        <div class="alert alert-info" style="display:block;">
+          ⏰ <b>Wichtig:</b> Bitte denke daran, deine Krankmeldung spätestens <b>eine Stunde vor Schichtbeginn</b> abzugeben.
+        </div>
+        <button class="btn btn-danger" onclick="submitPortalRequest()">Meldung / Antrag absenden</button>
       </div>
 
-      <!-- 3. MELDUNG VON BRINGSCHICHTEN -->
+      <!-- MEINE ANTRÄGE & HISTORIE -->
       <div class="card">
-        <h2>➕ Meldung von Bringschichten</h2>
-        <p style="font-size:0.8rem; color:#64748b; margin-bottom:12px;">Hier kannst du deine Bringschichten / Zusatzschichten (BS/ZS) beim Planer anmelden.</p>
-        <div id="extraSuccessBanner" class="success-banner"></div>
-        <div id="extraErrorBanner" class="error-msg"></div>
-        <div style="display:flex; gap:10px;">
-          <div class="form-group" style="flex:1.2;"><label>Datum der Bringschicht</label><input type="date" id="extraDate" class="form-control"></div>
-          <div class="form-group" style="flex:1;">
-            <label>Schicht</label>
-            <select id="extraShift" class="form-control">
-              <option value="frueh">Früh</option>
-              <option value="spaet">Spät</option>
-              <option value="nacht">Nacht</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-group"><label>Bemerkung (z.B. BS / ZS)</label><input type="text" id="extraNote" class="form-control" value="BS" placeholder="z.B. BS, ZS, Wunschlinie..."></div>
-        <button id="extraSubmitBtn" class="btn btn-primary" style="background:#16a34a;" onclick="submitExtraShift()">Bringschicht anfragen</button>
-        <div id="myExtraShiftsList" style="margin-top:16px;"></div>
+        <h2>📋 Meine eingereichten Anträge & Status</h2>
+        <div id="myRequestsList" style="font-size:0.86rem; color:#475569;">Lade Anträge...</div>
       </div>
     </div>
-  </div>
+  </main>
 
   <script>
-    const $ = id => document.getElementById(id);
     firebase.initializeApp({
       apiKey: "AIzaSyBPOYRYyUm5gA-j7YSAZl7EJoxedFhDTl4", authDomain: "schichtplan-bayer.firebaseapp.com",
       projectId: "schichtplan-bayer", storageBucket: "schichtplan-bayer.firebasestorage.app",
@@ -191,460 +118,196 @@
     });
     const db = firebase.firestore();
     const boardRef = db.collection("shiftplan").doc("live_board");
-    const shiftsMap = { frueh: "Frühschicht", spaet: "Spätschicht", nacht: "Nachtschicht" };
-    let lines = [], employees = [], sickLeaves = [], leaveRequests = [], extraShifts = [], shiftRotation = {};
-    
-    const SESSION_TIMEOUT_MS = 12 * 60 * 60 * 1000;
-    let loggedInEmpId = localStorage.getItem("portal_emp_id") || null;
-    let loginTime = localStorage.getItem("portal_login_time") || 0;
-    let selectedLoginEmpId = null;
 
-    if (loggedInEmpId && (Date.now() - loginTime > SESSION_TIMEOUT_MS)) {
-      loggedInEmpId = null; localStorage.removeItem("portal_emp_id"); localStorage.removeItem("portal_login_time");
-    }
+    let currentEmpId = null, currentEmpData = null, globalDbData = null;
+    let alertTimer = null;
 
-    const getTodayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
-    const formatDateDe = s => s && s.includes("-") ? s.split("-").reverse().join(".") : (s || "");
-    const extractLineId = z => (!z || ["pool","absent","extra"].includes(z) || !z.includes("_")) ? null : z.split("_").slice(0,-1).join("_");
-    const extractShiftIdFromZone = z => (!z || ["pool","absent","extra"].includes(z) || !z.includes("_")) ? null : z.split("_").pop();
-    const fullName = e => `${e.firstName || ''} ${e.lastName || ''}`.trim();
-
-    function parseIsoLocal(iso) { if (!iso || !iso.includes("-")) return 0; const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d, 12, 0, 0).getTime(); }
-    function canMergeDateRanges(s1, e1, s2, e2) { const msDay = 86400000, tS1 = parseIsoLocal(s1), tE1 = parseIsoLocal(e1), tS2 = parseIsoLocal(s2), tE2 = parseIsoLocal(e2); return (tS1 && tE1 && tS2 && tE2) ? (tS1 <= tE2 + msDay * 1.1) && (tS2 <= tE1 + msDay * 1.1) : false; }
-    function mergeReasonsText(r1, r2) { const a = (r1 || "").trim(), b = (r2 || "").trim(); if (!a) return b; if (!b) return a; if (a.toLowerCase().includes(b.toLowerCase())) return a; if (b.toLowerCase().includes(a.toLowerCase())) return b; return `${a} | ${b}`; }
-
-    function getRestoredZoneForEmp(emp) {
-      let l = (emp.lastLineId && lines.some(x => x.id === emp.lastLineId)) ? emp.lastLineId : ((emp.mainLines && emp.mainLines.length > 0 && lines.some(x => x.id === emp.mainLines[0])) ? emp.mainLines[0] : null);
-      if (emp.noRotation && emp.lastShiftId && l) return `${l}_${emp.lastShiftId}`;
-      if (emp.team === shiftRotation.frueh && l && !emp.noRotation) return `${l}_frueh`;
-      if (emp.team === shiftRotation.spaet && l && !emp.noRotation) return `${l}_spaet`;
-      if (emp.team === shiftRotation.nacht && l && !emp.noRotation) return `${l}_nacht`;
-      return "pool";
-    }
-
-    async function safeUpdateBoard(mutatorFn) {
-      let snap;
-      try { snap = await boardRef.get({ source: "server" }); } catch(e) { snap = await boardRef.get(); }
-      const latest = snap.exists ? snap.data() : {};
-      const patch = mutatorFn(latest);
-      await boardRef.set(patch, { merge: true });
-    }
-
-    window.addEventListener("DOMContentLoaded", () => {
-      const today = getTodayIso();
-      $("sickStartDate").value = $("sickEndDate").value = $("earlyReturnDate").value = $("leaveStartDate").value = $("leaveEndDate").value = $("extraDate").value = today;
-      document.addEventListener("click", e => { if ($("nameSearchGroup") && !$("nameSearchGroup").contains(e.target)) $("loginSuggestions").style.display = "none"; });
-    });
-
-    boardRef.onSnapshot(doc => {
-      if (doc.exists) {
-        const d = doc.data();
-        lines = d.lines || [];
-        sickLeaves = Array.isArray(d.sickLeaves) ? d.sickLeaves : [];
-        leaveRequests = Array.isArray(d.leaveRequests) ? d.leaveRequests : [];
-        extraShifts = Array.isArray(d.extraShifts) ? d.extraShifts : [];
-        shiftRotation = d.shiftRotation || {};
-        employees = (d.employees || []).map(e => {
-          if (!e.firstName && e.name) { const p = e.name.split(" "); e.firstName = p[0]||""; e.lastName = p.slice(1).join(" ")||""; }
-          e.password = e.password || "1234"; if (e.mustChangePw === undefined) e.mustChangePw = (e.password === "1234");
-          if (e.noRotation === undefined) e.noRotation = false;
-          return e;
-        });
-        if (loggedInEmpId) { const emp = employees.find(e => e.id === loggedInEmpId); emp ? routeAuthenticatedEmp(emp) : logoutEmp(); }
+    // 1 Stunde Inaktivitäts-Logout für das Mitarbeiter-Portal
+    const PORTAL_INACTIVITY_MS = 60 * 60 * 1000;
+    let portalLastActivityTime = Date.now();
+    function resetPortalActivity() { portalLastActivityTime = Date.now(); }
+    setInterval(function() {
+      if (currentEmpId && (Date.now() - portalLastActivityTime > PORTAL_INACTIVITY_MS)) {
+        logoutPortal();
+        alert("🔒 Wegen Inaktivität (1 Stunde) wurdest du im Portal automatisch abgemeldet.");
       }
+    }, 60000);
+
+    window.addEventListener("DOMContentLoaded", function() {
+      const savedId = sessionStorage.getItem("portal_emp_id");
+      if (savedId) {
+        boardRef.get().then(function(doc) {
+          if (doc.exists) {
+            globalDbData = doc.data();
+            const emps = globalDbData.employees || [];
+            const found = emps.find(function(e) { return e.id === savedId; });
+            if (found) {
+              currentEmpId = found.id;
+              currentEmpData = found;
+              showPortalMainView();
+            }
+          }
+        });
+      }
+
+      ["mousemove", "mousedown", "keypress", "scroll", "touchstart"].forEach(function(evt) {
+        document.addEventListener(evt, resetPortalActivity, { passive: true });
+      });
+
+      const today = new Date().toISOString().split("T")[0];
+      const sInp = document.getElementById("portalStartDate"), eInp = document.getElementById("portalEndDate");
+      if (sInp) sInp.value = today;
+      if (eInp) eInp.value = today;
     });
 
-    function onNameInput(val) {
-      selectedLoginEmpId = null; const box = $("loginSuggestions"), q = val.trim().toLowerCase();
-      if (!q) { box.style.display = "none"; return; }
-      const m = employees.filter(e => fullName(e).toLowerCase().includes(q) || `${e.lastName} ${e.firstName}`.toLowerCase().includes(q));
-      if (!m.length) { box.style.display = "none"; return; }
-      box.innerHTML = m.map(e => `<div class="suggestion-item" onclick="selectLoginEmp('${e.id}')"><span><b>${fullName(e)}</b></span><small style="color:#64748b;">${e.role}</small></div>`).join("");
+    function showPortalAlert(msg, type) {
+      const box = document.getElementById("portalAlertBox");
+      if (!box) return;
+      if (alertTimer) clearTimeout(alertTimer);
+      box.className = "alert alert-" + (type || "success");
+      box.textContent = msg;
       box.style.display = "block";
-    }
-    function selectLoginEmp(id) { const e = employees.find(x => x.id === id); if (e) { selectedLoginEmpId = e.id; $("loginEmpInput").value = fullName(e); $("loginSuggestions").style.display = "none"; $("loginPassword").focus(); } }
-
-    function loginEmp() {
-      const q = $("loginEmpInput").value.trim().toLowerCase(), pass = $("loginPassword").value.trim();
-      let emp = selectedLoginEmpId ? employees.find(e => e.id === selectedLoginEmpId) : employees.find(e => fullName(e).toLowerCase() === q);
-      if (!emp && q) { const p = employees.filter(e => fullName(e).toLowerCase().includes(q)); if (p.length === 1) emp = p[0]; }
-      if (!emp || (emp.password || "1234") !== pass) { $("loginError").style.display = "block"; return; }
-      $("loginError").style.display = "none"; loggedInEmpId = emp.id;
-      localStorage.setItem("portal_emp_id", emp.id); localStorage.setItem("portal_login_time", Date.now());
-      $("loginPassword").value = ""; routeAuthenticatedEmp(emp);
+      alertTimer = setTimeout(function() {
+        box.style.display = "none";
+      }, 5000);
     }
 
-    function routeAuthenticatedEmp(emp) {
-      $("loginView").style.display = "none"; $("logoutBtn").style.display = "inline-block";
-      if (emp.mustChangePw || emp.password === "1234") { $("portalView").style.display = "none"; $("changePasswordView").style.display = "block"; $("cpEmpName").textContent = fullName(emp); }
-      else { $("changePasswordView").style.display = "none"; showPortalFor(emp); }
-    }
+    function verifyPortalLogin() {
+      const nameVal = document.getElementById("portalLoginName").value.trim().toLowerCase();
+      const pinVal = document.getElementById("portalLoginPin").value.trim();
+      const errBox = document.getElementById("portalLoginError");
+      errBox.style.display = "none";
 
-    function saveNewPassword() {
-      const p1 = $("newPasswordInput").value.trim(), p2 = $("newPasswordConfirm").value.trim(), err = $("cpError");
-      if (p1.length < 4) { err.textContent = "Mindestens 4 Zeichen erforderlich!"; err.style.display = "block"; return; }
-      if (p1 === "1234") { err.textContent = "Bitte nicht die Standard-PIN 1234 verwenden!"; err.style.display = "block"; return; }
-      if (p1 !== p2) { err.textContent = "Passwörter stimmen nicht überein!"; err.style.display = "block"; return; }
-      const emp = employees.find(e => e.id === loggedInEmpId); if (!emp) return;
-      err.style.display = "none";
-      safeUpdateBoard(latest => {
-        const list = (latest.employees || employees).map(e => e.id === loggedInEmpId ? { ...e, password: p1, mustChangePw: false } : e);
-        return { employees: list };
-      }).then(() => { $("newPasswordInput").value = $("newPasswordConfirm").value = ""; routeAuthenticatedEmp(emp); });
-    }
-
-    function logoutEmp() { loggedInEmpId = selectedLoginEmpId = null; localStorage.removeItem("portal_emp_id"); localStorage.removeItem("portal_login_time"); $("loginEmpInput").value = ""; $("portalView").style.display = $("changePasswordView").style.display = $("logoutBtn").style.display = "none"; $("loginView").style.display = "block"; }
-
-    function showPortalFor(emp) {
-      $("portalView").style.display = "block"; $("empWelcomeName").textContent = fullName(emp);
-      let bHtml = emp.role; if (emp.ersthelfer) bHtml += " (+ Ersthelfer)"; if (emp.noRotation) bHtml += " ⚓ (Fix)";
-      $("empRoleBadge").textContent = bHtml;
-
-      const sb = $("empCurrentStatus"), today = getTodayIso();
-      const myActiveAbsences = sickLeaves.filter(s => s.empId === emp.id && s.endDate >= today);
-      const currentlyAbsent = myActiveAbsences.find(s => s.startDate <= today && s.endDate >= today);
-
-      if (emp.zone === "absent" || currentlyAbsent) {
-        sb.className = "status-box status-absent";
-        sb.innerHTML = `<div style="font-size:1.05rem;">🛑 Status: Abwesend (${currentlyAbsent?.category || 'Krank/Urlaub'})</div><div style="font-size:0.83rem; font-weight:normal;">${currentlyAbsent ? `Bis einschließlich <b>${formatDateDe(currentlyAbsent.endDate)}</b> eingetragen.` : `Heute als abwesend eingetragen.`}</div>`;
-      } else if (emp.zone === "extra") {
-        sb.className = "status-box status-assigned";
-        sb.innerHTML = `<div style="font-size:1.05rem;">➕ Status: Bringschicht / Zusatzschicht</div><div style="font-size:0.83rem; font-weight:normal;">Du stehst im Zusatzschicht-Fenster bereit und wirst vom Planer einer Linie zugeteilt.</div>`;
-      } else if (!emp.zone || emp.zone === "pool") {
-        sb.className = "status-box status-pool";
-        sb.innerHTML = `<div style="font-size:1.05rem;">🏖️ Status: Schichtfrei / Pool</div><div style="font-size:0.83rem; font-weight:normal;">Du hast heute Schichtfrei (oder wartest auf Einteilung).</div>`;
-      } else {
-        const shId = emp.zone.split("_").pop(), lObj = lines.find(l => l.id === extractLineId(emp.zone));
-        sb.className = "status-box status-assigned";
-        sb.innerHTML = `<div style="font-size:0.8rem; text-transform:uppercase;">Heute eingeteilt an:</div><div style="font-size:1.3rem; font-weight:800;">✅ ${lObj ? lObj.name : emp.zone} – ${shiftsMap[shId] || shId}</div>${lObj?.note ? `<div style="font-size:0.8rem; font-weight:normal; margin-top:4px;">📌 Linien-Info: ${lObj.note}</div>` : ''}`;
-      }
-
-      const mySickOnly = myActiveAbsences.filter(s => !s.category || s.category.includes("Krank"));
-      $("earlyReturnBox").style.display = mySickOnly.length > 0 ? "block" : "none";
-
-      const mList = (emp.mainLines||[]).map(id => lines.find(l => l.id===id)).filter(Boolean), sList = (emp.secLines||[]).map(id => lines.find(l => l.id===id)).filter(Boolean);
-      $("empPrioLines").innerHTML = mList.length ? mList.map(l => `<span class="line-badge badge-prio">${l.name}</span>`).join("") : `<span style="font-size:0.8rem; color:#94a3b8;">Keine hinterlegt</span>`;
-      $("empSecLines").innerHTML = sList.length ? sList.map(l => `<span class="line-badge badge-sec">${l.name}</span>`).join("") : `<span style="font-size:0.8rem; color:#94a3b8;">Keine hinterlegt</span>`;
-      
-      $("mySickLeavesHistory").innerHTML = !myActiveAbsences.length ? "" : `<div style="font-size:0.82rem; font-weight:700; margin-bottom:6px;">Aktuell aktive Zeiträume im Plan:</div>` + myActiveAbsences.map(s => `
-        <div class="req-item">
-          <div style="display:flex; justify-content:space-between;">
-            <b>📅 ${formatDateDe(s.startDate)} bis ${formatDateDe(s.endDate)}</b>
-            <span style="color:#16a34a; font-weight:700;">✓ ${s.category || 'Krank'}</span>
-          </div>
-          ${s.returnRequestPending ? `<div style="color:#d97706; font-weight:700; margin-top:3px;">⚠️ Rückkehr-Anfrage für ${formatDateDe(s.returnRequestDate)} in Prüfung</div>` : ''}
-          ${s.reason ? `<div style="color:#64748b; margin-top:2px;">Notiz: ${s.reason}</div>` : ''}
-          ${s.approvedBy ? `<div class="stamp-tag"><span>✍️ Bestätigt durch: <b>${s.approvedBy}</b> (${s.approvedAt || ''})</span></div>` : ''}
-        </div>`).join("");
-
-      const myLeaves = leaveRequests.filter(lr => lr.empId === emp.id && !lr.hiddenForEmp).sort((a,b) => (b.createdAt||"").localeCompare(a.createdAt||""));
-      $("myLeaveRequestsList").innerHTML = !myLeaves.length ? "" : `<div style="font-size:0.82rem; font-weight:700; margin-bottom:6px;">Meine Anträge:</div>` + myLeaves.map(lr => {
-        let effectiveStatus = lr.status || "pending";
-        if ((effectiveStatus === "approved" || effectiveStatus === "accepted_counter") && lr.endDate >= today) {
-          const stillInSickLeaves = sickLeaves.some(s => s.requestId === lr.id || s.id === lr.linkedSickLeaveId || (s.empId === emp.id && s.startDate <= lr.endDate && s.endDate >= lr.startDate && (!s.category || !s.category.includes("Krank"))));
-          if (!stillInSickLeaves) effectiveStatus = "cancelled_by_planner";
+      boardRef.get().then(function(doc) {
+        if (!doc.exists) {
+          errBox.textContent = "❌ Verbindung zur Datenbank fehlgeschlagen."; errBox.style.display = "block"; return;
         }
-
-        let statusBadge = `<span style="background:#fef3c7; color:#b45309; padding:2px 6px; border-radius:4px; font-weight:700;">⏳ In Bearbeitung</span>`;
-        let actionBtnHtml = `<button class="btn-sm-danger" onclick="cancelOrDeleteLeave('${lr.id}', '${effectiveStatus}')">🗑️ Antrag zurückziehen</button>`;
-
-        if (effectiveStatus === "approved" || effectiveStatus === "accepted_counter") {
-          statusBadge = `<span style="background:#dcfce7; color:#166534; padding:2px 6px; border-radius:4px; font-weight:700;">✅ Genehmigt</span>`;
-          actionBtnHtml = `<button class="btn-sm-danger" onclick="cancelOrDeleteLeave('${lr.id}', '${effectiveStatus}')">🗑️ Termin stornieren</button>`;
-        } else if (effectiveStatus === "rejected") {
-          statusBadge = `<span style="background:#fee2e2; color:#b91c1c; padding:2px 6px; border-radius:4px; font-weight:700;">❌ Abgelehnt</span>`;
-          actionBtnHtml = `<button class="btn-sm-danger" onclick="cancelOrDeleteLeave('${lr.id}', '${effectiveStatus}')">✖ Entfernen</button>`;
-        } else if (effectiveStatus === "cancelled_by_planner") {
-          statusBadge = `<span style="background:#fee2e2; color:#991b1b; padding:2px 6px; border-radius:4px; font-weight:700;">🚫 Vom Planer beendet/storniert</span>`;
-          actionBtnHtml = `<button class="btn-sm-danger" onclick="cancelOrDeleteLeave('${lr.id}', '${effectiveStatus}')">✖ Entfernen</button>`;
-        } else if (effectiveStatus === "cancelled_by_emp") {
-          statusBadge = `<span style="background:#f1f5f9; color:#64748b; padding:2px 6px; border-radius:4px; font-weight:700;">🚫 Von dir storniert</span>`;
-          actionBtnHtml = `<button class="btn-sm-danger" onclick="cancelOrDeleteLeave('${lr.id}', '${effectiveStatus}')">✖ Entfernen</button>`;
-        } else if (effectiveStatus === "declined_counter") {
-          statusBadge = `<span style="background:#f1f5f9; color:#64748b; padding:2px 6px; border-radius:4px; font-weight:700;">Gegenvorschlag abgelehnt</span>`;
-          actionBtnHtml = `<button class="btn-sm-danger" onclick="cancelOrDeleteLeave('${lr.id}', '${effectiveStatus}')">✖ Entfernen</button>`;
-        } else if (effectiveStatus === "counter_offered") {
-          statusBadge = `<span style="background:#e0f2fe; color:#0369a1; padding:2px 6px; border-radius:4px; font-weight:700;">⚖️ Vorschlag vom Planer</span>`;
-          actionBtnHtml = "";
-        }
-
-        let counterHtml = "";
-        if (effectiveStatus === "counter_offered" && lr.proposedRanges) {
-          const rangesText = lr.proposedRanges.map((r, i) => `<div>• Zeitraum ${i+1}: <b>${formatDateDe(r.startDate)} bis ${formatDateDe(r.endDate)}</b></div>`).join("");
-          counterHtml = `
-            <div style="background:#f0f9ff; border:1px solid #7dd3fc; border-radius:6px; padding:10px; margin-top:8px;">
-              <div style="font-weight:700; color:#0369a1; margin-bottom:4px;">⚖️ Der Planer kann folgende Zeiträume genehmigen:</div>
-              ${rangesText}
-              ${lr.plannerNote ? `<div style="margin-top:4px; color:#334155;">💬 Info vom Planer: "${lr.plannerNote}"</div>` : ''}
-              <div style="display:flex; gap:8px; margin-top:8px;">
-                <button class="btn btn-primary" style="background:#16a34a; padding:7px; font-size:0.8rem;" onclick="acceptCounterOffer('${lr.id}')">✓ Vorschlag annehmen</button>
-                <button class="btn btn-outline" style="color:#ef4444; border-color:#fca5a5; flex:1;" onclick="declineCounterOffer('${lr.id}')">✖ Ablehnen</button>
-              </div>
-            </div>`;
-        }
-
-        return `
-          <div class="req-item">
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;">
-              <b>${lr.type}: ${formatDateDe(lr.startDate)} – ${formatDateDe(lr.endDate)}</b>
-              ${statusBadge}
-            </div>
-            ${lr.reason ? `<div style="color:#64748b; margin-top:2px;">Bemerkung: ${lr.reason}</div>` : ''}
-            ${counterHtml}
-            <div class="stamp-tag">
-              <span>${lr.approvedBy ? `✍️ Geprüft durch: <b>${lr.approvedBy}</b> (${lr.approvedAt || ''})` : `🕒 Eingereicht: ${lr.createdAt || '-'}`}</span>
-              ${actionBtnHtml}
-            </div>
-          </div>`;
-      }).join("");
-
-      const myExtras = extraShifts.filter(es => es.empId === emp.id && !es.hiddenForEmp).sort((a,b) => b.date.localeCompare(a.date));
-      $("myExtraShiftsList").innerHTML = !myExtras.length ? "" : `<div style="font-size:0.82rem; font-weight:700; margin-bottom:6px;">Gemeldete Bringschichten:</div>` + myExtras.map(es => {
-        let st = `<span style="background:#fef3c7; color:#b45309; padding:2px 6px; border-radius:4px; font-weight:700;">⏳ In Bearbeitung</span>`;
-        let btnHtml = `<button class="btn-sm-danger" onclick="cancelOrDeleteExtra('${es.id}', '${es.status}')">🗑️ Zurückziehen</button>`;
-        if (es.status === "approved") {
-          st = `<span style="background:#dcfce7; color:#166534; padding:2px 6px; border-radius:4px; font-weight:700;">✅ Bestätigt</span>`;
-          btnHtml = `<button class="btn-sm-danger" onclick="cancelOrDeleteExtra('${es.id}', '${es.status}')">🗑️ Absagen / Stornieren</button>`;
-        } else if (es.status === "rejected") {
-          st = `<span style="background:#fee2e2; color:#b91c1c; padding:2px 6px; border-radius:4px; font-weight:700;">❌ Abgelehnt</span>`;
-          btnHtml = `<button class="btn-sm-danger" onclick="cancelOrDeleteExtra('${es.id}', '${es.status}')">✖ Entfernen</button>`;
-        } else if (es.status === "cancelled_by_emp") {
-          st = `<span style="background:#f1f5f9; color:#64748b; padding:2px 6px; border-radius:4px; font-weight:700;">🚫 Von dir abgesagt</span>`;
-          btnHtml = `<button class="btn-sm-danger" onclick="cancelOrDeleteExtra('${es.id}', '${es.status}')">✖ Entfernen</button>`;
-        }
-        return `
-          <div class="req-item">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <b>📅 ${formatDateDe(es.date)} – ${shiftsMap[es.shift] || es.shift} (${es.note || 'BS'})</b>
-              ${st}
-            </div>
-            <div class="stamp-tag">
-              <span>${es.approvedBy ? `✍️ Bestätigt durch: <b>${es.approvedBy}</b> (${es.approvedAt || ''})` : `🕒 Angefragt: ${es.createdAt || '-'}`}</span>
-              ${btnHtml}
-            </div>
-          </div>`;
-      }).join("");
-    }
-
-    function submitLeaveRequest() {
-      const emp = employees.find(e => e.id === loggedInEmpId); if (!emp) return;
-      const type = $("leaveType").value, sD = $("leaveStartDate").value, eD = $("leaveEndDate").value, r = $("leaveReason").value.trim();
-      const err = $("leaveErrorBanner"), succ = $("leaveSuccessBanner"), btn = $("leaveSubmitBtn");
-      err.style.display = "none"; succ.style.display = "none";
-      if (!sD || !eD || eD < sD) { err.textContent = "Bitte einen gültigen Zeitraum (Von - Bis) wählen!"; err.style.display = "block"; return; }
-
-      const hasOverlap = leaveRequests.some(lr => lr.empId === emp.id && ["pending","counter_offered"].includes(lr.status) && sD <= lr.endDate && eD >= lr.startDate) ||
-                         sickLeaves.some(sl => sl.empId === emp.id && sD <= sl.endDate && eD >= sl.startDate);
-      if (hasOverlap) {
-        err.textContent = "⚠️ Für diesen Zeitraum liegt bereits ein offener Antrag oder eine genehmigte Abwesenheit vor!";
-        err.style.display = "block"; return;
-      }
-
-      btn.disabled = true;
-      safeUpdateBoard(latest => {
-        const list = Array.isArray(latest.leaveRequests) ? [...latest.leaveRequests] : [];
-        list.push({
-          id: "lr_" + Date.now(), empId: emp.id, empName: fullName(emp),
-          type, startDate: sD, endDate: eD, reason: r, status: "pending",
-          createdAt: new Date().toLocaleString('de-DE')
+        globalDbData = doc.data();
+        const emps = globalDbData.employees || [];
+        const emp = emps.find(function(e) {
+          const f = ((e.firstName || "") + " " + (e.lastName || "")).trim().toLowerCase();
+          const l = ((e.lastName || "") + " " + (e.firstName || "")).trim().toLowerCase();
+          return f === nameVal || l === nameVal || e.id === nameVal;
         });
-        return { leaveRequests: list };
-      }).then(() => {
-        $("leaveReason").value = ""; succ.textContent = "✅ Dein Antrag wurde zur Prüfung an den Planer gesendet!"; succ.style.display = "block";
-      }).finally(() => { btn.disabled = false; });
+
+        if (!emp || (emp.password || "1234") !== pinVal) {
+          errBox.textContent = "❌ Name oder PIN nicht korrekt!"; errBox.style.display = "block"; return;
+        }
+
+        currentEmpId = emp.id;
+        currentEmpData = emp;
+        sessionStorage.setItem("portal_emp_id", emp.id);
+        showPortalMainView();
+      }).catch(function() {
+        errBox.textContent = "❌ Netzwerkfehler beim Login."; errBox.style.display = "block";
+      });
     }
 
-    window.acceptCounterOffer = function(reqId) {
-      const emp = employees.find(e => e.id === loggedInEmpId); if (!emp) return;
-      const today = getTodayIso(), nowStr = new Date().toLocaleString('de-DE');
-      safeUpdateBoard(latest => {
-        const lrs = Array.isArray(latest.leaveRequests) ? [...latest.leaveRequests] : [...leaveRequests];
-        const sls = Array.isArray(latest.sickLeaves) ? [...latest.sickLeaves] : [...sickLeaves];
-        const emps = Array.isArray(latest.employees) ? [...latest.employees] : [...employees];
-        const idx = lrs.findIndex(r => r.id === reqId);
-        if (idx === -1) return {};
-        const req = { ...lrs[idx], status: "accepted_counter" };
-        lrs[idx] = req;
-        let touchesToday = false;
-        (req.proposedRanges || []).forEach((rg, i) => {
-          if (rg.startDate <= today && rg.endDate >= today) touchesToday = true;
-          sls.push({
-            id: "sl_" + Date.now() + "_" + i, requestId: req.id, empId: emp.id, empName: fullName(emp),
-            category: req.type, startDate: rg.startDate, endDate: rg.endDate,
-            reason: req.reason || req.type, createdAt: nowStr, readByPlanner: true,
-            approvedBy: req.approvedBy, approvedAt: req.approvedAt
+    function showPortalMainView() {
+      document.getElementById("portalLoginCard").style.display = "none";
+      document.getElementById("portalMain").style.display = "block";
+      document.getElementById("logoutBtn").style.display = "inline-block";
+      const fName = ((currentEmpData.firstName || "") + " " + (currentEmpData.lastName || "")).trim();
+      document.getElementById("welcomeEmpTitle").textContent = "Willkommen, " + fName + "!";
+      document.getElementById("welcomeEmpSub").textContent = "Team: " + (currentEmpData.team || '-') + " | Rolle: " + (currentEmpData.role || '-');
+      renderMyRequests();
+      resetPortalActivity();
+    }
+
+    function logoutPortal() {
+      currentEmpId = null; currentEmpData = null;
+      sessionStorage.removeItem("portal_emp_id");
+      document.getElementById("portalMain").style.display = "none";
+      document.getElementById("logoutBtn").style.display = "none";
+      document.getElementById("portalLoginCard").style.display = "block";
+      document.getElementById("portalLoginName").value = "";
+      document.getElementById("portalLoginPin").value = "";
+    }
+
+    function submitPortalRequest() {
+      const cat = document.getElementById("portalCategory").value;
+      const sD = document.getElementById("portalStartDate").value;
+      const eD = document.getElementById("portalEndDate").value;
+      const r = document.getElementById("portalReason").value.trim();
+
+      if (!sD || !eD || eD < sD) {
+        showPortalAlert("Bitte gib einen gültigen Zeitraum (Start- und Enddatum) an!", "error");
+        return;
+      }
+
+      boardRef.get().then(function(doc) {
+        if (!doc.exists) return;
+        const d = doc.data();
+        const lr = Array.isArray(d.leaveRequests) ? d.leaveRequests : [];
+        const sl = Array.isArray(d.sickLeaves) ? d.sickLeaves : [];
+        const nowStr = new Date().toLocaleString("de-DE");
+        const fName = ((currentEmpData.firstName || "") + " " + (currentEmpData.lastName || "")).trim();
+
+        if (cat.indexOf("Krank") !== -1) {
+          const slId = "sl_" + Date.now();
+          sl.push({
+            id: slId, empId: currentEmpData.id, empName: fName,
+            category: cat, startDate: sD, endDate: eD, reason: r || cat,
+            createdAt: nowStr, readByPlanner: false
           });
-        });
-        const updatedEmp = emps.map(e => {
-          if (e.id === emp.id && touchesToday && e.zone !== "absent") {
-            const l = extractLineId(e.zone), s = extractShiftIdFromZone(e.zone);
-            return { ...e, lastLineId: l || e.lastLineId, lastShiftId: s || e.lastShiftId, zone: "absent" };
-          }
-          return e;
-        });
-        return { employees: updatedEmp, sickLeaves: sls, leaveRequests: lrs };
-      });
-    };
-
-    window.declineCounterOffer = function(reqId) {
-      safeUpdateBoard(latest => {
-        const lrs = Array.isArray(latest.leaveRequests) ? [...latest.leaveRequests] : [...leaveRequests];
-        const idx = lrs.findIndex(r => r.id === reqId);
-        if (idx !== -1) lrs[idx] = { ...lrs[idx], status: "declined_counter" };
-        return { leaveRequests: lrs };
-      });
-    };
-
-    window.cancelOrDeleteLeave = function(reqId, effectiveStatus) {
-      const emp = employees.find(e => e.id === loggedInEmpId); if (!emp) return;
-      const today = getTodayIso(), nowStr = new Date().toLocaleString('de-DE');
-
-      if (effectiveStatus === "approved" || effectiveStatus === "accepted_counter") {
-        if (!confirm("Möchtest du diesen bereits genehmigten Termin wirklich stornieren?\n\nDer Planer erhält automatisch eine Benachrichtigung über deine Stornierung.")) return;
-        safeUpdateBoard(latest => {
-          const lrs = Array.isArray(latest.leaveRequests) ? [...latest.leaveRequests] : [...leaveRequests];
-          const sls = Array.isArray(latest.sickLeaves) ? [...latest.sickLeaves] : [...sickLeaves];
-          const emps = Array.isArray(latest.employees) ? [...latest.employees] : [...employees];
-          const idx = lrs.findIndex(r => r.id === reqId);
-          if (idx === -1) return {};
-          const lr = lrs[idx];
-          const updatedSl = sls.filter(s => !(s.requestId === lr.id || s.id === lr.linkedSickLeaveId || (s.empId === emp.id && s.startDate === lr.startDate && s.endDate === lr.endDate)));
-          const stillAbsentToday = updatedSl.some(s => s.empId === emp.id && s.startDate <= today && s.endDate >= today);
-          const updatedEmp = emps.map(e => (e.id === emp.id && e.zone === "absent" && !stillAbsentToday) ? { ...e, zone: getRestoredZoneForEmp(e) } : e);
-          lrs[idx] = { ...lr, status: "cancelled_by_emp", cancelUnreadByPlanner: true, cancelledAt: nowStr };
-          return { employees: updatedEmp, sickLeaves: updatedSl, leaveRequests: lrs };
-        });
-      } else {
-        if (effectiveStatus === "pending" && !confirm("Deinen offenen Antrag wirklich zurückziehen?")) return;
-        safeUpdateBoard(latest => {
-          let lrs = Array.isArray(latest.leaveRequests) ? [...latest.leaveRequests] : [...leaveRequests];
-          const idx = lrs.findIndex(r => r.id === reqId);
-          if (idx !== -1) {
-            if (lrs[idx].cancelUnreadByPlanner) lrs[idx] = { ...lrs[idx], hiddenForEmp: true };
-            else lrs = lrs.filter(r => r.id !== reqId);
-          }
-          return { leaveRequests: lrs };
-        });
-      }
-    };
-
-    function submitExtraShift() {
-      const emp = employees.find(e => e.id === loggedInEmpId); if (!emp) return;
-      const d = $("extraDate").value, sh = $("extraShift").value, note = $("extraNote").value.trim() || "BS";
-      const err = $("extraErrorBanner"), succ = $("extraSuccessBanner"), btn = $("extraSubmitBtn");
-      err.style.display = "none"; succ.style.display = "none";
-      if (!d) { err.textContent = "Bitte ein Datum wählen!"; err.style.display = "block"; return; }
-
-      const duplicate = extraShifts.some(es => es.empId === emp.id && es.date === d && ["pending","approved"].includes(es.status));
-      if (duplicate) { err.textContent = "⚠️ Für diesen Tag hast du bereits eine Bringschicht gemeldet!"; err.style.display = "block"; return; }
-
-      btn.disabled = true;
-      safeUpdateBoard(latest => {
-        const list = Array.isArray(latest.extraShifts) ? [...latest.extraShifts] : [];
-        list.push({
-          id: "es_" + Date.now(), empId: emp.id, empName: fullName(emp),
-          date: d, shift: sh, note, status: "pending",
-          createdAt: new Date().toLocaleString('de-DE')
-        });
-        return { extraShifts: list };
-      }).then(() => {
-        succ.textContent = "✅ Deine Bringschicht wurde beim Planer angefragt!"; succ.style.display = "block";
-      }).finally(() => { btn.disabled = false; });
-    }
-
-    window.cancelOrDeleteExtra = function(esId, status) {
-      const emp = employees.find(e => e.id === loggedInEmpId); if (!emp) return;
-      const today = getTodayIso(), nowStr = new Date().toLocaleString('de-DE');
-
-      if (status === "approved") {
-        if (!confirm("Möchtest du diese bestätigte Bringschicht wirklich absagen?\n\nDer Planer wird im Postfach über deine Absage informiert.")) return;
-        safeUpdateBoard(latest => {
-          const ess = Array.isArray(latest.extraShifts) ? [...latest.extraShifts] : [...extraShifts];
-          const emps = Array.isArray(latest.employees) ? [...latest.employees] : [...employees];
-          const idx = ess.findIndex(x => x.id === esId);
-          if (idx === -1) return {};
-          ess[idx] = { ...ess[idx], status: "cancelled_by_emp", cancelUnreadByPlanner: true, cancelledAt: nowStr };
-          const hasOtherExtraToday = ess.some(x => x.id !== esId && x.empId === emp.id && x.status === "approved" && x.date === today);
-          const updatedEmp = emps.map(e => (e.id === emp.id && e.zone === "extra" && !hasOtherExtraToday) ? { ...e, zone: getRestoredZoneForEmp(e) } : e);
-          return { employees: updatedEmp, extraShifts: ess };
-        });
-      } else {
-        if (status === "pending" && !confirm("Bringschicht-Anfrage wirklich zurückziehen?")) return;
-        safeUpdateBoard(latest => {
-          let ess = Array.isArray(latest.extraShifts) ? [...latest.extraShifts] : [...extraShifts];
-          const idx = ess.findIndex(x => x.id === esId);
-          if (idx !== -1) {
-            if (ess[idx].cancelUnreadByPlanner) ess[idx] = { ...ess[idx], hiddenForEmp: true };
-            else ess = ess.filter(x => x.id !== esId);
-          }
-          return { extraShifts: ess };
-        });
-      }
-    };
-
-    function submitEarlyReturn() {
-      const emp = employees.find(e => e.id === loggedInEmpId); if (!emp) return;
-      const rDate = $("earlyReturnDate").value, today = getTodayIso();
-      const errBox = $("earlyReturnError"), succBox = $("earlyReturnSuccess"), btn = $("earlyReturnBtn");
-      errBox.style.display = "none"; succBox.style.display = "none";
-      const activeSlIndex = sickLeaves.findIndex(s => s.empId === emp.id && (!s.category || s.category.includes("Krank")) && s.endDate >= today);
-      if (activeSlIndex === -1) return;
-      const currentSl = sickLeaves[activeSlIndex];
-      if (!rDate || rDate <= currentSl.startDate) { errBox.textContent = `Das Rückkehrdatum muss nach dem Startdatum (${formatDateDe(currentSl.startDate)}) liegen!`; errBox.style.display = "block"; return; }
-      if (rDate > currentSl.endDate) { errBox.textContent = `Du bist nur bis zum ${formatDateDe(currentSl.endDate)} gemeldet!`; errBox.style.display = "block"; return; }
-      btn.disabled = true;
-      safeUpdateBoard(latest => {
-        const sls = Array.isArray(latest.sickLeaves) ? [...latest.sickLeaves] : [...sickLeaves];
-        const idx = sls.findIndex(s => s.id === currentSl.id);
-        if (idx !== -1) sls[idx] = { ...sls[idx], returnRequestDate: rDate, returnRequestPending: true, readByPlanner: false, returnRequestCreatedAt: new Date().toLocaleString('de-DE') };
-        return { sickLeaves: sls };
-      }).then(() => { succBox.style.display = "block"; }).finally(() => { btn.disabled = false; });
-    }
-
-    function submitSickLeave() {
-      const emp = employees.find(e => e.id === loggedInEmpId); if (!emp) return;
-      const sD = $("sickStartDate").value, eD = $("sickEndDate").value, r = $("sickReason").value.trim(), today = getTodayIso();
-      const errBanner = $("sickErrorBanner"), succBanner = $("sickSuccessBanner"), btn = $("sickSubmitBtn");
-      errBanner.style.display = "none"; succBanner.style.display = "none";
-      if (!sD || !eD || eD < sD) { errBanner.textContent = "Bitte einen korrekten Zeitraum (Von - Bis) wählen!"; errBanner.style.display = "block"; return; }
-
-      const existingIdx = sickLeaves.findIndex(s => s.empId === emp.id && (!s.category || s.category.includes("Krank")) && canMergeDateRanges(s.startDate, s.endDate, sD, eD));
-      if (existingIdx !== -1) {
-        const ex = sickLeaves[existingIdx];
-        if (sD >= ex.startDate && eD <= ex.endDate) {
-          errBanner.innerHTML = `⚠️ Du bist in diesem Zeitraum bereits bis zum <b>${formatDateDe(ex.endDate)}</b> krankgemeldet! Für eine frühere Rückkehr nutze bitte oben die <b>„Gesundmeldung“</b>.`;
-          errBanner.style.display = "block"; return;
-        }
-      }
-
-      btn.disabled = true;
-      const nowStr = new Date().toLocaleString('de-DE');
-      let finalStart = sD, finalEnd = eD;
-
-      safeUpdateBoard(latest => {
-        const sls = Array.isArray(latest.sickLeaves) ? [...latest.sickLeaves] : [...sickLeaves];
-        const emps = Array.isArray(latest.employees) ? [...latest.employees] : [...employees];
-        const idx = sls.findIndex(s => s.empId === emp.id && (!s.category || s.category.includes("Krank")) && canMergeDateRanges(s.startDate, s.endDate, sD, eD));
-        if (idx !== -1) {
-          const ex = { ...sls[idx] };
-          if (sD < ex.startDate) ex.startDate = sD;
-          if (eD > ex.endDate) ex.endDate = eD;
-          ex.reason = mergeReasonsText(ex.reason, r); ex.createdAt = nowStr; ex.readByPlanner = false;
-          sls[idx] = ex; finalStart = ex.startDate; finalEnd = ex.endDate;
+          d.sickLeaves = sl;
+          boardRef.set(d, { merge: true }).then(function() {
+            showPortalAlert("✅ Deine Krankmeldung (" + sD.split("-").reverse().join(".") + " bis " + eD.split("-").reverse().join(".") + ") wurde übermittelt!", "success");
+            document.getElementById("portalReason").value = "";
+            globalDbData = d;
+            renderMyRequests();
+          });
         } else {
-          sls.push({ id: "sl_"+Date.now(), empId: emp.id, empName: fullName(emp), category: "Arbeitsunfähigkeit (Krank)", startDate: sD, endDate: eD, reason: r, createdAt: nowStr, readByPlanner: false });
+          const reqId = "lr_" + Date.now();
+          lr.push({
+            id: reqId, empId: currentEmpData.id, empName: fName,
+            type: cat, startDate: sD, endDate: eD, reason: r,
+            status: "pending", createdAt: nowStr
+          });
+          d.leaveRequests = lr;
+          boardRef.set(d, { merge: true }).then(function() {
+            showPortalAlert("✅ Dein Urlaubs-/Antrag wurde eingereicht und an den Planer übermittelt!", "success");
+            document.getElementById("portalReason").value = "";
+            globalDbData = d;
+            renderMyRequests();
+          });
         }
-        const updatedEmp = emps.map(e => {
-          if (e.id === emp.id && finalStart <= today && finalEnd >= today && e.zone !== "absent") {
-            const l = extractLineId(e.zone), s = extractShiftIdFromZone(e.zone);
-            return { ...e, lastLineId: l || e.lastLineId, lastShiftId: s || e.lastShiftId, zone: "absent" };
-          }
-          return e;
-        });
-        return { employees: updatedEmp, sickLeaves: sls };
-      }).then(() => {
-        $("sickReason").value = ""; succBanner.innerHTML = `✅ Deine Krankmeldung (${formatDateDe(finalStart)} bis ${formatDateDe(finalEnd)}) wurde übermittelt!`; succBanner.style.display = "block";
-      }).finally(() => { btn.disabled = false; });
+      });
+    }
+
+    function renderMyRequests() {
+      const listEl = document.getElementById("myRequestsList");
+      if (!globalDbData || !currentEmpId) { list.innerHTML = "Keine Daten."; return; }
+
+      const myLr = (globalDbData.leaveRequests || []).filter(function(r) { return r.empId === currentEmpId; });
+      const mySl = (globalDbData.sickLeaves || []).filter(function(s) { return s.empId === currentEmpId; });
+
+      let html = "";
+      myLr.forEach(function(lr) {
+        let statusBadge = '<span style="color:#d97706; font-weight:700;">⏳ In Prüfung beim Planer</span>';
+        if (lr.status === "approved") statusBadge = '<span style="color:#16a34a; font-weight:700;">✓ Genehmigt</span>';
+        else if (lr.status === "rejected") statusBadge = '<span style="color:#dc2626; font-weight:700;">✖ Abgelehnt</span>';
+        else if (lr.status === "cancelled_by_planner") statusBadge = '<span style="color:#dc2626; font-weight:700;">🚫 Vom Planer beendet/storniert</span>';
+
+        html += '<div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:6px; padding:10px; margin-bottom:8px;">' +
+          '<div style="display:flex; justify-content:space-between; align-items:center;">' +
+            '<b>' + lr.type + '</b>' + statusBadge +
+          '</div>' +
+          '<div style="font-size:0.78rem; margin-top:3px;">📅 ' + lr.startDate.split("-").reverse().join(".") + ' bis ' + lr.endDate.split("-").reverse().join(".") + '</div>' +
+          (lr.reason ? '<div style="font-size:0.78rem; color:#475569; margin-top:2px;">Notiz: ' + lr.reason + '</div>' : '') +
+        '</div>';
+      });
+
+      mySl.forEach(function(sl) {
+        html += '<div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:6px; padding:10px; margin-bottom:8px;">' +
+          '<div style="display:flex; justify-content:space-between; align-items:center;">' +
+            '<b>' + (sl.category || 'Krank') + '</b><span style="color:#166534; font-weight:700;">✓ Aktiv / Erfasst</span>' +
+          '</div>' +
+          '<div style="font-size:0.78rem; margin-top:3px;">📅 ' + sl.startDate.split("-").reverse().join(".") + ' bis ' + sl.endDate.split("-").reverse().join(".") + '</div>' +
+        '</div>';
+      });
+
+      listEl.innerHTML = html || '<div style="color:#64748b; font-size:0.83rem;">Du hast aktuell keine offenen Anträge oder aktiven Abwesenheiten.</div>';
     }
   </script>
 </body>
