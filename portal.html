@@ -190,8 +190,9 @@
       messagingSenderId: "152929285194", appId: "1:152929285194:web:00b73aa6058a70aed3a2b3"
     });
     const db = firebase.firestore();
+    const boardRef = db.collection("shiftplan").doc("live_board");
     const shiftsMap = { frueh: "Frühschicht", spaet: "Spätschicht", nacht: "Nachtschicht" };
-    let lines = [], employees = [], sickLeaves = [], leaveRequests = [], extraShifts = [], shiftRotation = {}, rawDocData = {};
+    let lines = [], employees = [], sickLeaves = [], leaveRequests = [], extraShifts = [], shiftRotation = {};
     
     const SESSION_TIMEOUT_MS = 12 * 60 * 60 * 1000;
     let loggedInEmpId = localStorage.getItem("portal_emp_id") || null;
@@ -221,21 +222,30 @@
       return "pool";
     }
 
+    // Holt vor jedem Speichern den neuesten Serverstand und speichert nur die geänderten Felder mit merge:true
+    async function safeUpdateBoard(mutatorFn) {
+      let snap;
+      try { snap = await boardRef.get({ source: "server" }); } catch(e) { snap = await boardRef.get(); }
+      const latest = snap.exists ? snap.data() : {};
+      const patch = mutatorFn(latest);
+      await boardRef.set(patch, { merge: true });
+    }
+
     window.addEventListener("DOMContentLoaded", () => {
       const today = getTodayIso();
       $("sickStartDate").value = $("sickEndDate").value = $("earlyReturnDate").value = $("leaveStartDate").value = $("leaveEndDate").value = $("extraDate").value = today;
       document.addEventListener("click", e => { if ($("nameSearchGroup") && !$("nameSearchGroup").contains(e.target)) $("loginSuggestions").style.display = "none"; });
     });
 
-    db.collection("shiftplan").doc("live_board").onSnapshot(doc => {
+    boardRef.onSnapshot(doc => {
       if (doc.exists) {
-        rawDocData = doc.data();
-        lines = rawDocData.lines || [];
-        sickLeaves = rawDocData.sickLeaves || [];
-        leaveRequests = rawDocData.leaveRequests || [];
-        extraShifts = rawDocData.extraShifts || [];
-        shiftRotation = rawDocData.shiftRotation || {};
-        employees = (rawDocData.employees || []).map(e => {
+        const d = doc.data();
+        lines = d.lines || [];
+        sickLeaves = Array.isArray(d.sickLeaves) ? d.sickLeaves : [];
+        leaveRequests = Array.isArray(d.leaveRequests) ? d.leaveRequests : [];
+        extraShifts = Array.isArray(d.extraShifts) ? d.extraShifts : [];
+        shiftRotation = d.shiftRotation || {};
+        employees = (d.employees || []).map(e => {
           if (!e.firstName && e.name) { const p = e.name.split(" "); e.firstName = p[0]||""; e.lastName = p.slice(1).join(" ")||""; }
           e.password = e.password || "1234"; if (e.mustChangePw === undefined) e.mustChangePw = (e.password === "1234");
           if (e.noRotation === undefined) e.noRotation = false;
@@ -277,8 +287,11 @@
       if (p1 === "1234") { err.textContent = "Bitte nicht die Standard-PIN 1234 verwenden!"; err.style.display = "block"; return; }
       if (p1 !== p2) { err.textContent = "Passwörter stimmen nicht überein!"; err.style.display = "block"; return; }
       const emp = employees.find(e => e.id === loggedInEmpId); if (!emp) return;
-      err.style.display = "none"; emp.password = p1; emp.mustChangePw = false;
-      db.collection("shiftplan").doc("live_board").set({ ...rawDocData, employees }).then(() => { $("newPasswordInput").value = $("newPasswordConfirm").value = ""; routeAuthenticatedEmp(emp); });
+      err.style.display = "none";
+      safeUpdateBoard(latest => {
+        const list = (latest.employees || employees).map(e => e.id === loggedInEmpId ? { ...e, password: p1, mustChangePw: false } : e);
+        return { employees: list };
+      }).then(() => { $("newPasswordInput").value = $("newPasswordConfirm").value = ""; });
     }
 
     function logoutEmp() { loggedInEmpId = selectedLoginEmpId = null; localStorage.removeItem("portal_emp_id"); localStorage.removeItem("portal_login_time"); $("loginEmpInput").value = ""; $("portalView").style.display = $("changePasswordView").style.display = $("logoutBtn").style.display = "none"; $("loginView").style.display = "block"; }
@@ -314,7 +327,6 @@
       $("empPrioLines").innerHTML = mList.length ? mList.map(l => `<span class="line-badge badge-prio">${l.name}</span>`).join("") : `<span style="font-size:0.8rem; color:#94a3b8;">Keine hinterlegt</span>`;
       $("empSecLines").innerHTML = sList.length ? sList.map(l => `<span class="line-badge badge-sec">${l.name}</span>`).join("") : `<span style="font-size:0.8rem; color:#94a3b8;">Keine hinterlegt</span>`;
       
-      // 1. Aktive Krankmeldungen / Abwesenheiten rendern
       $("mySickLeavesHistory").innerHTML = !myActiveAbsences.length ? "" : `<div style="font-size:0.82rem; font-weight:700; margin-bottom:6px;">Aktuell aktive Zeiträume im Plan:</div>` + myActiveAbsences.map(s => `
         <div class="req-item">
           <div style="display:flex; justify-content:space-between;">
@@ -326,12 +338,10 @@
           ${s.approvedBy ? `<div class="stamp-tag"><span>✍️ Bestätigt durch: <b>${s.approvedBy}</b> (${s.approvedAt || ''})</span></div>` : ''}
         </div>`).join("");
 
-      // 2. Meine Urlaubsanträge rendern (inkl. Erkennung gelöschter Planer-Termine & Storno-Buttons)
       const myLeaves = leaveRequests.filter(lr => lr.empId === emp.id && !lr.hiddenForEmp).sort((a,b) => (b.createdAt||"").localeCompare(a.createdAt||""));
       $("myLeaveRequestsList").innerHTML = !myLeaves.length ? "" : `<div style="font-size:0.82rem; font-weight:700; margin-bottom:6px;">Meine Anträge:</div>` + myLeaves.map(lr => {
-        // Prüfen, ob ein genehmigter Urlaub vom Planer aus den aktiven Abwesenheiten gelöscht wurde
-        let effectiveStatus = lr.status;
-        if ((lr.status === "approved" || lr.status === "accepted_counter") && lr.endDate >= today) {
+        let effectiveStatus = lr.status || "pending";
+        if ((effectiveStatus === "approved" || effectiveStatus === "accepted_counter") && lr.endDate >= today) {
           const stillInSickLeaves = sickLeaves.some(s => s.requestId === lr.id || s.id === lr.linkedSickLeaveId || (s.empId === emp.id && s.startDate <= lr.endDate && s.endDate >= lr.startDate && (!s.category || !s.category.includes("Krank"))));
           if (!stillInSickLeaves) effectiveStatus = "cancelled_by_planner";
         }
@@ -389,7 +399,6 @@
           </div>`;
       }).join("");
 
-      // 3. Meine Bringschichten rendern (inkl. Storno-Button)
       const myExtras = extraShifts.filter(es => es.empId === emp.id && !es.hiddenForEmp).sort((a,b) => b.date.localeCompare(a.date));
       $("myExtraShiftsList").innerHTML = !myExtras.length ? "" : `<div style="font-size:0.82rem; font-weight:700; margin-bottom:6px;">Gemeldete Bringschichten:</div>` + myExtras.map(es => {
         let st = `<span style="background:#fef3c7; color:#b45309; padding:2px 6px; border-radius:4px; font-weight:700;">⏳ In Bearbeitung</span>`;
@@ -418,7 +427,6 @@
       }).join("");
     }
 
-    // --- AKTIONEN: URLAUBSANTRAG, GEGENVORSCHLAG & STORNIERUNG ---
     function submitLeaveRequest() {
       const emp = employees.find(e => e.id === loggedInEmpId); if (!emp) return;
       const type = $("leaveType").value, sD = $("leaveStartDate").value, eD = $("leaveEndDate").value, r = $("leaveReason").value.trim();
@@ -426,7 +434,6 @@
       err.style.display = "none"; succ.style.display = "none";
       if (!sD || !eD || eD < sD) { err.textContent = "Bitte einen gültigen Zeitraum (Von - Bis) wählen!"; err.style.display = "block"; return; }
 
-      // Doppel-Prüfung
       const hasOverlap = leaveRequests.some(lr => lr.empId === emp.id && ["pending","counter_offered"].includes(lr.status) && sD <= lr.endDate && eD >= lr.startDate) ||
                          sickLeaves.some(sl => sl.empId === emp.id && sD <= sl.endDate && eD >= sl.startDate);
       if (hasOverlap) {
@@ -435,83 +442,95 @@
       }
 
       btn.disabled = true;
-      const updated = [...leaveRequests, {
-        id: "lr_" + Date.now(), empId: emp.id, empName: fullName(emp),
-        type, startDate: sD, endDate: eD, reason: r, status: "pending",
-        createdAt: new Date().toLocaleString('de-DE')
-      }];
-      db.collection("shiftplan").doc("live_board").set({ ...rawDocData, leaveRequests: updated }).then(() => {
+      safeUpdateBoard(latest => {
+        const list = Array.isArray(latest.leaveRequests) ? [...latest.leaveRequests] : [];
+        list.push({
+          id: "lr_" + Date.now(), empId: emp.id, empName: fullName(emp),
+          type, startDate: sD, endDate: eD, reason: r, status: "pending",
+          createdAt: new Date().toLocaleString('de-DE')
+        });
+        return { leaveRequests: list };
+      }).then(() => {
         $("leaveReason").value = ""; succ.textContent = "✅ Dein Antrag wurde zur Prüfung an den Planer gesendet!"; succ.style.display = "block";
+      }).catch(() => {
+        err.textContent = "❌ Fehler beim Senden."; err.style.display = "block";
       }).finally(() => { btn.disabled = false; });
     }
 
     window.acceptCounterOffer = function(reqId) {
       const emp = employees.find(e => e.id === loggedInEmpId); if (!emp) return;
-      const idx = leaveRequests.findIndex(r => r.id === reqId); if (idx === -1) return;
-      const req = { ...leaveRequests[idx] }, today = getTodayIso(), nowStr = new Date().toLocaleString('de-DE');
-      req.status = "accepted_counter";
-      const updatedLr = [...leaveRequests]; updatedLr[idx] = req;
-      const updatedSl = [...sickLeaves];
-      let touchesToday = false;
-      (req.proposedRanges || []).forEach((rg, i) => {
-        if (rg.startDate <= today && rg.endDate >= today) touchesToday = true;
-        updatedSl.push({
-          id: "sl_" + Date.now() + "_" + i, requestId: req.id, empId: emp.id, empName: fullName(emp),
-          category: req.type, startDate: rg.startDate, endDate: rg.endDate,
-          reason: req.reason || req.type, createdAt: nowStr, readByPlanner: true,
-          approvedBy: req.approvedBy, approvedAt: req.approvedAt
+      const today = getTodayIso(), nowStr = new Date().toLocaleString('de-DE');
+      safeUpdateBoard(latest => {
+        const lrs = Array.isArray(latest.leaveRequests) ? [...latest.leaveRequests] : [...leaveRequests];
+        const sls = Array.isArray(latest.sickLeaves) ? [...latest.sickLeaves] : [...sickLeaves];
+        const emps = Array.isArray(latest.employees) ? [...latest.employees] : [...employees];
+        const idx = lrs.findIndex(r => r.id === reqId);
+        if (idx === -1) return {};
+        const req = { ...lrs[idx], status: "accepted_counter" };
+        lrs[idx] = req;
+        let touchesToday = false;
+        (req.proposedRanges || []).forEach((rg, i) => {
+          if (rg.startDate <= today && rg.endDate >= today) touchesToday = true;
+          sls.push({
+            id: "sl_" + Date.now() + "_" + i, requestId: req.id, empId: emp.id, empName: fullName(emp),
+            category: req.type, startDate: rg.startDate, endDate: rg.endDate,
+            reason: req.reason || req.type, createdAt: nowStr, readByPlanner: true,
+            approvedBy: req.approvedBy, approvedAt: req.approvedAt
+          });
         });
+        const updatedEmp = emps.map(e => {
+          if (e.id === emp.id && touchesToday && e.zone !== "absent") {
+            const l = extractLineId(e.zone), s = extractShiftIdFromZone(e.zone);
+            return { ...e, lastLineId: l || e.lastLineId, lastShiftId: s || e.lastShiftId, zone: "absent" };
+          }
+          return e;
+        });
+        return { employees: updatedEmp, sickLeaves: sls, leaveRequests: lrs };
       });
-      const updatedEmp = employees.map(e => {
-        if (e.id === emp.id && touchesToday && e.zone !== "absent") {
-          const l = extractLineId(e.zone), s = extractShiftIdFromZone(e.zone);
-          return { ...e, lastLineId: l || e.lastLineId, lastShiftId: s || e.lastShiftId, zone: "absent" };
-        }
-        return e;
-      });
-      db.collection("shiftplan").doc("live_board").set({ ...rawDocData, employees: updatedEmp, sickLeaves: updatedSl, leaveRequests: updatedLr });
     };
 
     window.declineCounterOffer = function(reqId) {
-      const idx = leaveRequests.findIndex(r => r.id === reqId); if (idx === -1) return;
-      const updatedLr = [...leaveRequests];
-      updatedLr[idx] = { ...updatedLr[idx], status: "declined_counter" };
-      db.collection("shiftplan").doc("live_board").set({ ...rawDocData, leaveRequests: updatedLr });
+      safeUpdateBoard(latest => {
+        const lrs = Array.isArray(latest.leaveRequests) ? [...latest.leaveRequests] : [...leaveRequests];
+        const idx = lrs.findIndex(r => r.id === reqId);
+        if (idx !== -1) lrs[idx] = { ...lrs[idx], status: "declined_counter" };
+        return { leaveRequests: lrs };
+      });
     };
 
     window.cancelOrDeleteLeave = function(reqId, effectiveStatus) {
       const emp = employees.find(e => e.id === loggedInEmpId); if (!emp) return;
-      const idx = leaveRequests.findIndex(r => r.id === reqId); if (idx === -1) return;
-      const lr = leaveRequests[idx], today = getTodayIso(), nowStr = new Date().toLocaleString('de-DE');
+      const today = getTodayIso(), nowStr = new Date().toLocaleString('de-DE');
 
-      // Fall 1: Genehmigter Urlaub wird vom Mitarbeiter storniert -> Planer informieren & aus Kalender löschen
       if (effectiveStatus === "approved" || effectiveStatus === "accepted_counter") {
         if (!confirm("Möchtest du diesen bereits genehmigten Termin wirklich stornieren?\n\nDer Planer erhält automatisch eine Benachrichtigung über deine Stornierung.")) return;
-        const updatedSl = sickLeaves.filter(s => !(s.requestId === lr.id || s.id === lr.linkedSickLeaveId || (s.empId === emp.id && s.startDate === lr.startDate && s.endDate === lr.endDate)));
-        const stillAbsentToday = updatedSl.some(s => s.empId === emp.id && s.startDate <= today && s.endDate >= today);
-        const updatedEmp = employees.map(e => {
-          if (e.id === emp.id && e.zone === "absent" && !stillAbsentToday) return { ...e, zone: getRestoredZoneForEmp(e) };
-          return e;
+        safeUpdateBoard(latest => {
+          const lrs = Array.isArray(latest.leaveRequests) ? [...latest.leaveRequests] : [...leaveRequests];
+          const sls = Array.isArray(latest.sickLeaves) ? [...latest.sickLeaves] : [...sickLeaves];
+          const emps = Array.isArray(latest.employees) ? [...latest.employees] : [...employees];
+          const idx = lrs.findIndex(r => r.id === reqId);
+          if (idx === -1) return {};
+          const lr = lrs[idx];
+          const updatedSl = sls.filter(s => !(s.requestId === lr.id || s.id === lr.linkedSickLeaveId || (s.empId === emp.id && s.startDate === lr.startDate && s.endDate === lr.endDate)));
+          const stillAbsentToday = updatedSl.some(s => s.empId === emp.id && s.startDate <= today && s.endDate >= today);
+          const updatedEmp = emps.map(e => (e.id === emp.id && e.zone === "absent" && !stillAbsentToday) ? { ...e, zone: getRestoredZoneForEmp(e) } : e);
+          lrs[idx] = { ...lr, status: "cancelled_by_emp", cancelUnreadByPlanner: true, cancelledAt: nowStr };
+          return { employees: updatedEmp, sickLeaves: updatedSl, leaveRequests: lrs };
         });
-        const updatedLr = [...leaveRequests];
-        updatedLr[idx] = { ...lr, status: "cancelled_by_emp", cancelUnreadByPlanner: true, cancelledAt: nowStr };
-        db.collection("shiftplan").doc("live_board").set({ ...rawDocData, employees: updatedEmp, sickLeaves: updatedSl, leaveRequests: updatedLr });
-      }
-      // Fall 2: Offener Antrag oder erledigter Eintrag wird entfernt
-      else {
+      } else {
         if (effectiveStatus === "pending" && !confirm("Deinen offenen Antrag wirklich zurückziehen?")) return;
-        let updatedLr;
-        if (lr.cancelUnreadByPlanner) {
-          updatedLr = [...leaveRequests];
-          updatedLr[idx] = { ...lr, hiddenForEmp: true };
-        } else {
-          updatedLr = leaveRequests.filter(r => r.id !== reqId);
-        }
-        db.collection("shiftplan").doc("live_board").set({ ...rawDocData, leaveRequests: updatedLr });
+        safeUpdateBoard(latest => {
+          let lrs = Array.isArray(latest.leaveRequests) ? [...latest.leaveRequests] : [...leaveRequests];
+          const idx = lrs.findIndex(r => r.id === reqId);
+          if (idx !== -1) {
+            if (lrs[idx].cancelUnreadByPlanner) lrs[idx] = { ...lrs[idx], hiddenForEmp: true };
+            else lrs = lrs.filter(r => r.id !== reqId);
+          }
+          return { leaveRequests: lrs };
+        });
       }
     };
 
-    // --- AKTIONEN: BRINGSCHICHTEN & STORNIERUNG ---
     function submitExtraShift() {
       const emp = employees.find(e => e.id === loggedInEmpId); if (!emp) return;
       const d = $("extraDate").value, sh = $("extraShift").value, note = $("extraNote").value.trim() || "BS";
@@ -523,45 +542,49 @@
       if (duplicate) { err.textContent = "⚠️ Für diesen Tag hast du bereits eine Bringschicht gemeldet!"; err.style.display = "block"; return; }
 
       btn.disabled = true;
-      const updated = [...extraShifts, {
-        id: "es_" + Date.now(), empId: emp.id, empName: fullName(emp),
-        date: d, shift: sh, note, status: "pending",
-        createdAt: new Date().toLocaleString('de-DE')
-      }];
-      db.collection("shiftplan").doc("live_board").set({ ...rawDocData, extraShifts: updated }).then(() => {
+      safeUpdateBoard(latest => {
+        const list = Array.isArray(latest.extraShifts) ? [...latest.extraShifts] : [];
+        list.push({
+          id: "es_" + Date.now(), empId: emp.id, empName: fullName(emp),
+          date: d, shift: sh, note, status: "pending",
+          createdAt: new Date().toLocaleString('de-DE')
+        });
+        return { extraShifts: list };
+      }).then(() => {
         succ.textContent = "✅ Deine Bringschicht wurde beim Planer angefragt!"; succ.style.display = "block";
       }).finally(() => { btn.disabled = false; });
     }
 
     window.cancelOrDeleteExtra = function(esId, status) {
       const emp = employees.find(e => e.id === loggedInEmpId); if (!emp) return;
-      const idx = extraShifts.findIndex(x => x.id === esId); if (idx === -1) return;
-      const es = extraShifts[idx], today = getTodayIso(), nowStr = new Date().toLocaleString('de-DE');
+      const today = getTodayIso(), nowStr = new Date().toLocaleString('de-DE');
 
       if (status === "approved") {
         if (!confirm("Möchtest du diese bestätigte Bringschicht wirklich absagen?\n\nDer Planer wird im Postfach über deine Absage informiert.")) return;
-        const updatedEs = [...extraShifts];
-        updatedEs[idx] = { ...es, status: "cancelled_by_emp", cancelUnreadByPlanner: true, cancelledAt: nowStr };
-        const hasOtherExtraToday = updatedEs.some(x => x.id !== esId && x.empId === emp.id && x.status === "approved" && x.date === today);
-        const updatedEmp = employees.map(e => {
-          if (e.id === emp.id && e.zone === "extra" && !hasOtherExtraToday) return { ...e, zone: getRestoredZoneForEmp(e) };
-          return e;
+        safeUpdateBoard(latest => {
+          const ess = Array.isArray(latest.extraShifts) ? [...latest.extraShifts] : [...extraShifts];
+          const emps = Array.isArray(latest.employees) ? [...latest.employees] : [...employees];
+          const idx = ess.findIndex(x => x.id === esId);
+          if (idx === -1) return {};
+          ess[idx] = { ...ess[idx], status: "cancelled_by_emp", cancelUnreadByPlanner: true, cancelledAt: nowStr };
+          const hasOtherExtraToday = ess.some(x => x.id !== esId && x.empId === emp.id && x.status === "approved" && x.date === today);
+          const updatedEmp = emps.map(e => (e.id === emp.id && e.zone === "extra" && !hasOtherExtraToday) ? { ...e, zone: getRestoredZoneForEmp(e) } : e);
+          return { employees: updatedEmp, extraShifts: ess };
         });
-        db.collection("shiftplan").doc("live_board").set({ ...rawDocData, employees: updatedEmp, extraShifts: updatedEs });
       } else {
         if (status === "pending" && !confirm("Bringschicht-Anfrage wirklich zurückziehen?")) return;
-        let updatedEs;
-        if (es.cancelUnreadByPlanner) {
-          updatedEs = [...extraShifts];
-          updatedEs[idx] = { ...es, hiddenForEmp: true };
-        } else {
-          updatedEs = extraShifts.filter(x => x.id !== esId);
-        }
-        db.collection("shiftplan").doc("live_board").set({ ...rawDocData, extraShifts: updatedEs });
+        safeUpdateBoard(latest => {
+          let ess = Array.isArray(latest.extraShifts) ? [...latest.extraShifts] : [...extraShifts];
+          const idx = ess.findIndex(x => x.id === esId);
+          if (idx !== -1) {
+            if (ess[idx].cancelUnreadByPlanner) ess[idx] = { ...ess[idx], hiddenForEmp: true };
+            else ess = ess.filter(x => x.id !== esId);
+          }
+          return { extraShifts: ess };
+        });
       }
     };
 
-    // --- AKTIONEN: GESUND- & KRANKMELDUNG ---
     function submitEarlyReturn() {
       const emp = employees.find(e => e.id === loggedInEmpId); if (!emp) return;
       const rDate = $("earlyReturnDate").value, today = getTodayIso();
@@ -573,9 +596,12 @@
       if (!rDate || rDate <= currentSl.startDate) { errBox.textContent = `Das Rückkehrdatum muss nach dem Startdatum (${formatDateDe(currentSl.startDate)}) liegen!`; errBox.style.display = "block"; return; }
       if (rDate > currentSl.endDate) { errBox.textContent = `Du bist nur bis zum ${formatDateDe(currentSl.endDate)} gemeldet!`; errBox.style.display = "block"; return; }
       btn.disabled = true;
-      const updatedSickLeaves = [...sickLeaves];
-      updatedSickLeaves[activeSlIndex] = { ...currentSl, returnRequestDate: rDate, returnRequestPending: true, readByPlanner: false, returnRequestCreatedAt: new Date().toLocaleString('de-DE') };
-      db.collection("shiftplan").doc("live_board").set({ ...rawDocData, sickLeaves: updatedSickLeaves }).then(() => { succBox.style.display = "block"; }).finally(() => { btn.disabled = false; });
+      safeUpdateBoard(latest => {
+        const sls = Array.isArray(latest.sickLeaves) ? [...latest.sickLeaves] : [...sickLeaves];
+        const idx = sls.findIndex(s => s.id === currentSl.id);
+        if (idx !== -1) sls[idx] = { ...sls[idx], returnRequestDate: rDate, returnRequestPending: true, readByPlanner: false, returnRequestCreatedAt: new Date().toLocaleString('de-DE') };
+        return { sickLeaves: sls };
+      }).then(() => { succBox.style.display = "block"; }).finally(() => { btn.disabled = false; });
     }
 
     function submitSickLeave() {
@@ -585,10 +611,9 @@
       errBanner.style.display = "none"; succBanner.style.display = "none";
       if (!sD || !eD || eD < sD) { errBanner.textContent = "Bitte einen korrekten Zeitraum (Von - Bis) wählen!"; errBanner.style.display = "block"; return; }
 
-      const updatedSickLeaves = [...sickLeaves];
-      const existingIdx = updatedSickLeaves.findIndex(s => s.empId === emp.id && (!s.category || s.category.includes("Krank")) && canMergeDateRanges(s.startDate, s.endDate, sD, eD));
+      const existingIdx = sickLeaves.findIndex(s => s.empId === emp.id && (!s.category || s.category.includes("Krank")) && canMergeDateRanges(s.startDate, s.endDate, sD, eD));
       if (existingIdx !== -1) {
-        const ex = updatedSickLeaves[existingIdx];
+        const ex = sickLeaves[existingIdx];
         if (sD >= ex.startDate && eD <= ex.endDate) {
           errBanner.innerHTML = `⚠️ Du bist in diesem Zeitraum bereits bis zum <b>${formatDateDe(ex.endDate)}</b> krankgemeldet! Für eine frühere Rückkehr nutze bitte oben die <b>„Gesundmeldung“</b>.`;
           errBanner.style.display = "block"; return;
@@ -598,25 +623,29 @@
       btn.disabled = true;
       const nowStr = new Date().toLocaleString('de-DE');
       let finalStart = sD, finalEnd = eD;
-      if (existingIdx !== -1) {
-        const ex = { ...updatedSickLeaves[existingIdx] };
-        if (sD < ex.startDate) ex.startDate = sD;
-        if (eD > ex.endDate) ex.endDate = eD;
-        ex.reason = mergeReasonsText(ex.reason, r); ex.createdAt = nowStr; ex.readByPlanner = false;
-        updatedSickLeaves[existingIdx] = ex; finalStart = ex.startDate; finalEnd = ex.endDate;
-      } else {
-        updatedSickLeaves.push({ id: "sl_"+Date.now(), empId: emp.id, empName: fullName(emp), category: "Arbeitsunfähigkeit (Krank)", startDate: sD, endDate: eD, reason: r, createdAt: nowStr, readByPlanner: false });
-      }
-      
-      const updatedEmployees = employees.map(e => {
-        if (e.id === emp.id && finalStart <= today && finalEnd >= today && e.zone !== "absent") {
-          const l = extractLineId(e.zone), s = extractShiftIdFromZone(e.zone);
-          return { ...e, lastLineId: l || e.lastLineId, lastShiftId: s || e.lastShiftId, zone: "absent" };
-        }
-        return e;
-      });
 
-      db.collection("shiftplan").doc("live_board").set({ ...rawDocData, employees: updatedEmployees, sickLeaves: updatedSickLeaves }).then(() => {
+      safeUpdateBoard(latest => {
+        const sls = Array.isArray(latest.sickLeaves) ? [...latest.sickLeaves] : [...sickLeaves];
+        const emps = Array.isArray(latest.employees) ? [...latest.employees] : [...employees];
+        const idx = sls.findIndex(s => s.empId === emp.id && (!s.category || s.category.includes("Krank")) && canMergeDateRanges(s.startDate, s.endDate, sD, eD));
+        if (idx !== -1) {
+          const ex = { ...sls[idx] };
+          if (sD < ex.startDate) ex.startDate = sD;
+          if (eD > ex.endDate) ex.endDate = eD;
+          ex.reason = mergeReasonsText(ex.reason, r); ex.createdAt = nowStr; ex.readByPlanner = false;
+          sls[idx] = ex; finalStart = ex.startDate; finalEnd = ex.endDate;
+        } else {
+          sls.push({ id: "sl_"+Date.now(), empId: emp.id, empName: fullName(emp), category: "Arbeitsunfähigkeit (Krank)", startDate: sD, endDate: eD, reason: r, createdAt: nowStr, readByPlanner: false });
+        }
+        const updatedEmp = emps.map(e => {
+          if (e.id === emp.id && finalStart <= today && finalEnd >= today && e.zone !== "absent") {
+            const l = extractLineId(e.zone), s = extractShiftIdFromZone(e.zone);
+            return { ...e, lastLineId: l || e.lastLineId, lastShiftId: s || e.lastShiftId, zone: "absent" };
+          }
+          return e;
+        });
+        return { employees: updatedEmp, sickLeaves: sls };
+      }).then(() => {
         $("sickReason").value = ""; succBanner.innerHTML = `✅ Deine Krankmeldung (${formatDateDe(finalStart)} bis ${formatDateDe(finalEnd)}) wurde übermittelt!`; succBanner.style.display = "block";
       }).finally(() => { btn.disabled = false; });
     }
