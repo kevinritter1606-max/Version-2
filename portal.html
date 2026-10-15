@@ -222,7 +222,6 @@
       return "pool";
     }
 
-    // Holt vor jedem Speichern den neuesten Serverstand und speichert nur die geänderten Felder mit merge:true
     async function safeUpdateBoard(mutatorFn) {
       let snap;
       try { snap = await boardRef.get({ source: "server" }); } catch(e) { snap = await boardRef.get(); }
@@ -291,7 +290,7 @@
       safeUpdateBoard(latest => {
         const list = (latest.employees || employees).map(e => e.id === loggedInEmpId ? { ...e, password: p1, mustChangePw: false } : e);
         return { employees: list };
-      }).then(() => { $("newPasswordInput").value = $("newPasswordConfirm").value = ""; });
+      }).then(() => { $("newPasswordInput").value = $("newPasswordConfirm").value = ""; routeAuthenticatedEmp(emp); });
     }
 
     function logoutEmp() { loggedInEmpId = selectedLoginEmpId = null; localStorage.removeItem("portal_emp_id"); localStorage.removeItem("portal_login_time"); $("loginEmpInput").value = ""; $("portalView").style.display = $("changePasswordView").style.display = $("logoutBtn").style.display = "none"; $("loginView").style.display = "block"; }
@@ -452,8 +451,6 @@
         return { leaveRequests: list };
       }).then(() => {
         $("leaveReason").value = ""; succ.textContent = "✅ Dein Antrag wurde zur Prüfung an den Planer gesendet!"; succ.style.display = "block";
-      }).catch(() => {
-        err.textContent = "❌ Fehler beim Senden."; err.style.display = "block";
       }).finally(() => { btn.disabled = false; });
     }
 
