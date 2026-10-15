@@ -530,7 +530,6 @@
       });
     };
 
-    // NEU: Nutzt merge:true, damit niemals fremde Felder überschrieben werden!
     function saveToFirebase() {
       boardRef.set({ lines, roles, employees, teamsConfig, sickLeaves, leaveRequests, extraShifts, shiftRotation }, { merge: true });
     }
@@ -678,8 +677,8 @@
       const badge = document.getElementById("inboxBadge");
       if (!badge) return;
       const c1 = sickLeaves.filter(sl => !sl.readByPlanner || sl.returnRequestPending).length;
-      const c2 = leaveRequests.filter(lr => lr.status === "pending" || lr.cancelUnreadByPlanner).length;
-      const c3 = extraShifts.filter(es => es.status === "pending" || es.cancelUnreadByPlanner).length;
+      const c2 = leaveRequests.filter(lr => (!lr.status || lr.status === "pending") || lr.cancelUnreadByPlanner).length;
+      const c3 = extraShifts.filter(es => (!es.status || es.status === "pending") || es.cancelUnreadByPlanner).length;
       const total = c1 + c2 + c3;
       badge.textContent = total;
       badge.style.display = total > 0 ? "inline-flex" : "none";
@@ -891,9 +890,9 @@
     function renderInboxModal() {
       const unreadC = document.getElementById("unreadSickList"), activeC = document.getElementById("activeSickList"), btnMark = document.getElementById("btnMarkAllRead"), today = getTodayIso();
       const unreadSl = sickLeaves.filter(sl => !sl.readByPlanner || sl.returnRequestPending);
-      const pendingLr = leaveRequests.filter(lr => !lr.status || lr.status === "pending");
+      const pendingLr = leaveRequests.filter(lr => (!lr.status || lr.status === "pending"));
       const cancelledLr = leaveRequests.filter(lr => lr.cancelUnreadByPlanner);
-      const pendingEs = extraShifts.filter(es => !es.status || es.status === "pending");
+      const pendingEs = extraShifts.filter(es => (!es.status || es.status === "pending"));
       const cancelledEs = extraShifts.filter(es => es.cancelUnreadByPlanner);
       btnMark.style.display = unreadSl.length > 0 ? "inline-block" : "none";
 
@@ -1473,4 +1472,3 @@
   </script>
 </body>
 </html>
-```!]
