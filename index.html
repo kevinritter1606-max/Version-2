@@ -106,7 +106,7 @@
   <div class="brand-gradient"></div>
   <header>
     <div class="header-left">
-      <div class="bayer-logo-btn" onclick="handleLogoClick()"><img src="logo.png" alt="Bayer Logo"></div>
+      <div class="bayer-logo-btn" onclick="handleLogoClick()"><img src="logo.png" alt="Bayer Logo" onerror="this.style.display='none'"></div>
       <div class="header-title">
         <h1>Schicht- und Linienübersicht</h1>
         <span id="plannerStatusBadge" class="status-badge">Planer-Modus aktiv</span>
@@ -367,8 +367,9 @@
     const boardRef = db.collection("shiftplan").doc("live_board");
     const shifts = [{ id: "frueh", name: "Früh" }, { id: "spaet", name: "Spät" }, { id: "nacht", name: "Nacht" }];
     const shiftsLabel = { frueh: "Früh", spaet: "Spät", nacht: "Nacht" };
+    const defaultLines = ["32","33","34","09","22","39","36","37","38","54"].map(n => ({ id: "L"+n, name: "Linie "+n, prio: "", tag: "", note: "" }));
     let shiftRotation = { frueh: "team-1", spaet: "team-2", nacht: "team-3", frei: "team-4" };
-    let lines = ["32","33","34","09","22","39","36","37","38","54"].map(n => ({ id: "L"+n, name: "Linie "+n, prio: "", tag: "", note: "" }));
+    let lines = [...defaultLines];
     let roles = ["Bediener", "LOP", "TL", "Schichtexperte", "Waschraumoperator"];
     let employees = [], sickLeaves = [], leaveRequests = [], extraShifts = [], cachedHistoryData = [];
     let teamsConfig = {
@@ -413,8 +414,11 @@
     window.deletePin = function(id) { const emp = employees.find(e => e.id === id); if (emp) { delete emp.lastLineId; saveToFirebase(); renderEmployees(); } };
 
     window.addEventListener("DOMContentLoaded", () => {
+      Object.keys(teamsConfig).forEach(k => { activeTeamFilters[k] = true; });
+      roles.forEach(r => { activeRoleFilters[r] = true; });
       const savedName = sessionStorage.getItem("planner_name"), savedLvl = Number(sessionStorage.getItem("planner_level") || 0);
       if (savedName && savedLvl >= 2) applyPlannerLoginState(savedName, savedLvl);
+      initBoard();
       document.addEventListener("click", (e) => {
         const g1 = document.getElementById("manualSickSearchGroup"); if (g1 && !g1.contains(e.target)) document.getElementById("manualSickSuggestions").style.display = "none";
         const g2 = document.getElementById("plannerLoginSearchGroup"); if (g2 && !g2.contains(e.target)) document.getElementById("plannerLoginSuggestions").style.display = "none";
@@ -489,53 +493,69 @@
 
     function applyIncomingDocData(d) {
       if (!d) return;
-      if (d.lines) lines = d.lines;
-      if (d.roles) roles = d.roles;
-      sickLeaves = Array.isArray(d.sickLeaves) ? d.sickLeaves : [];
-      leaveRequests = Array.isArray(d.leaveRequests) ? d.leaveRequests : [];
-      extraShifts = Array.isArray(d.extraShifts) ? d.extraShifts : [];
-      if (d.shiftRotation) shiftRotation = d.shiftRotation;
-      
-      let memoryUpdated = false;
-      if (d.employees) {
-        employees = d.employees.map(e => {
-          if (!e.firstName && e.name) { const p = e.name.split(" "); e.firstName = p[0] || ""; e.lastName = p.slice(1).join(" ") || ""; }
-          if (!e.mainLines) e.mainLines = [];
-          if (!e.secLines) e.secLines = [];
-          if (!e.password) e.password = "1234";
-          if (e.mustChangePw === undefined) e.mustChangePw = (e.password === "1234");
-          if (e.noRotation === undefined) e.noRotation = false;
-          if (!e.accessLevel) e.accessLevel = 1;
-          if (e.zone && e.zone.endsWith("_frei")) { const lId = extractLineIdFromZone(e.zone); if (lId) e.lastLineId = lId; e.zone = "pool"; memoryUpdated = true; }
-          const cLine = extractLineIdFromZone(e.zone), cShift = extractShiftIdFromZone(e.zone);
-          if (!["pool","absent","extra"].includes(e.zone) && cShift) e.lastShiftId = cShift;
-          if (cLine && (!e.lastLineId || (cShift && shiftRotation[cShift] === e.team))) { if (e.lastLineId !== cLine) { e.lastLineId = cLine; memoryUpdated = true; } }
-          return e;
-        });
-      }
-      if (d.teamsConfig) {
-        teamsConfig = {};
-        Object.keys(d.teamsConfig).forEach(k => {
-          const t = d.teamsConfig[k];
-          teamsConfig[k] = { name: t.name, color: t.color, rotates: t.rotates !== undefined ? t.rotates : true };
-        });
-      }
-      Object.keys(teamsConfig).forEach(k => { if (activeTeamFilters[k] === undefined) activeTeamFilters[k] = true; });
-      roles.forEach(r => { if (activeRoleFilters[r] === undefined) activeRoleFilters[r] = true; });
+      try {
+        if (Array.isArray(d.lines) && d.lines.length > 0) lines = d.lines;
+        if (Array.isArray(d.roles) && d.roles.length > 0) roles = d.roles;
+        sickLeaves = Array.isArray(d.sickLeaves) ? d.sickLeaves : [];
+        leaveRequests = Array.isArray(d.leaveRequests) ? d.leaveRequests : [];
+        extraShifts = Array.isArray(d.extraShifts) ? d.extraShifts : [];
+        if (d.shiftRotation && typeof d.shiftRotation === "object") shiftRotation = d.shiftRotation;
+        
+        if (d.teamsConfig && typeof d.teamsConfig === "object" && Object.keys(d.teamsConfig).length > 0) {
+          const cleanTeams = {};
+          Object.keys(d.teamsConfig).forEach(k => {
+            const t = d.teamsConfig[k];
+            if (t && typeof t === "object") {
+              cleanTeams[k] = {
+                name: t.name || k,
+                color: t.color || "#0091df",
+                rotates: t.rotates !== undefined ? !!t.rotates : true
+              };
+            }
+          });
+          if (Object.keys(cleanTeams).length > 0) teamsConfig = cleanTeams;
+        }
 
-      const autoChanged = processSickLeavesAutomation();
-      if (memoryUpdated || autoChanged) saveToFirebase();
+        let memoryUpdated = false;
+        if (Array.isArray(d.employees)) {
+          employees = d.employees.filter(Boolean).map(e => {
+            if (!e.firstName && e.name) { const p = String(e.name).split(" "); e.firstName = p[0] || ""; e.lastName = p.slice(1).join(" ") || ""; }
+            if (!Array.isArray(e.mainLines)) e.mainLines = [];
+            if (!Array.isArray(e.secLines)) e.secLines = [];
+            if (!e.password) e.password = "1234";
+            if (e.mustChangePw === undefined) e.mustChangePw = (e.password === "1234");
+            if (e.noRotation === undefined) e.noRotation = false;
+            if (!e.accessLevel) e.accessLevel = 1;
+            if (e.zone && e.zone.endsWith("_frei")) { const lId = extractLineIdFromZone(e.zone); if (lId) e.lastLineId = lId; e.zone = "pool"; memoryUpdated = true; }
+            const cLine = extractLineIdFromZone(e.zone), cShift = extractShiftIdFromZone(e.zone);
+            if (!["pool","absent","extra"].includes(e.zone) && cShift) e.lastShiftId = cShift;
+            if (cLine && (!e.lastLineId || (cShift && shiftRotation[cShift] === e.team))) { if (e.lastLineId !== cLine) { e.lastLineId = cLine; memoryUpdated = true; } }
+            return e;
+          });
+        }
 
-      applyTeamStyles(); updateTeamDropdowns(); renderTeamFilterCheckboxes(); renderRoleFilterCheckboxes(); updateInboxBadge();
-      if (document.getElementById("inboxModal").style.display === "flex") renderInboxModal();
-      if (document.getElementById("settingsModal").style.display === "flex") renderSettingsLists();
-      if (!backupDoneToday) createDailyBackup(d);
+        Object.keys(teamsConfig).forEach(k => { if (activeTeamFilters[k] === undefined) activeTeamFilters[k] = true; });
+        roles.forEach(r => { if (activeRoleFilters[r] === undefined) activeRoleFilters[r] = true; });
+
+        const autoChanged = processSickLeavesAutomation();
+        if (memoryUpdated || autoChanged) saveToFirebase();
+
+        applyTeamStyles(); updateTeamDropdowns(); renderTeamFilterCheckboxes(); renderRoleFilterCheckboxes(); updateInboxBadge();
+        if (document.getElementById("inboxModal").style.display === "flex") renderInboxModal();
+        if (document.getElementById("settingsModal").style.display === "flex") renderSettingsLists();
+        if (!backupDoneToday && employees.length > 0) createDailyBackup(d);
+      } catch (err) {
+        console.error("Fehler beim Verarbeiten der Daten:", err);
+      }
       initBoard();
     }
 
     boardRef.onSnapshot((doc) => {
       if (doc.exists) applyIncomingDocData(doc.data());
       else saveToFirebase();
+    }, (err) => {
+      console.error("Firebase Snapshot-Fehler:", err);
+      initBoard();
     });
 
     window.forceRefreshFromServer = function() {
@@ -1222,8 +1242,8 @@
       db.collection("shiftplan_backups").doc(todayIso).get().then(snap => {
         if (!snap.exists) {
           db.collection("shiftplan_backups").doc(todayIso).set({
-            date: todayIso, displayDate: todayDe, lines: data.lines || [], roles: data.roles || [],
-            employees: data.employees || [], teamsConfig: data.teamsConfig || teamsConfig,
+            date: todayIso, displayDate: todayDe, lines: data.lines || lines, roles: data.roles || roles,
+            employees: data.employees || employees, teamsConfig: data.teamsConfig || teamsConfig,
             sickLeaves: data.sickLeaves || [], leaveRequests: data.leaveRequests || [],
             extraShifts: data.extraShifts || [], shiftRotation: data.shiftRotation || shiftRotation
           }).then(() => {
@@ -1231,14 +1251,14 @@
           });
         }
         backupDoneToday = true;
-      });
+      }).catch(()=>{});
     }
 
     function renderBackups() {
       const list = document.getElementById("backupList"); list.innerHTML = "Lade Backups...";
       db.collection("shiftplan_backups").orderBy("date", "desc").get().then(snap => {
         if (snap.empty) { list.innerHTML = "Noch keine Backups vorhanden."; return; }
-        list.innerHTML = ""; snap.forEach(doc => { const b = doc.data(); list.innerHTML += `<div class="item-row"><span>Stand vom <b>${b.displayDate}</b></span><button class="btn btn-outline" style="padding:4px 10px; color:var(--bayer-blue);" onclick="restoreBackup('${doc.id}')">Wiederherstellen</button></div>`; });
+        list.innerHTML = ""; snap.forEach(doc => { const b = doc.data(); list.innerHTML += `<div class="item-row"><span>Stand vom <b>${b.displayDate}</b> (${(b.employees||[]).length} Mitarbeiter)</span><button class="btn btn-outline" style="padding:4px 10px; color:var(--bayer-blue);" onclick="restoreBackup('${doc.id}')">Wiederherstellen</button></div>`; });
       });
     }
 
@@ -1248,9 +1268,13 @@
         if (snap.exists) {
           const b = snap.data();
           boardRef.set({
-            lines: b.lines, roles: b.roles, employees: b.employees,
-            teamsConfig: b.teamsConfig || teamsConfig, sickLeaves: b.sickLeaves || [],
-            leaveRequests: b.leaveRequests || [], extraShifts: b.extraShifts || [],
+            lines: (b.lines && b.lines.length) ? b.lines : defaultLines,
+            roles: (b.roles && b.roles.length) ? b.roles : roles,
+            employees: b.employees || [],
+            teamsConfig: b.teamsConfig || teamsConfig,
+            sickLeaves: b.sickLeaves || [],
+            leaveRequests: b.leaveRequests || [],
+            extraShifts: b.extraShifts || [],
             shiftRotation: b.shiftRotation || shiftRotation
           }, { merge: true });
           closeModal('settingsModal');
@@ -1260,6 +1284,9 @@
 
     function initBoard() {
       const headerRow = document.getElementById("headerRow");
+      if (!headerRow) return;
+      if (!Array.isArray(lines) || lines.length === 0) lines = [...defaultLines];
+
       headerRow.innerHTML = `<th class="shift-header"><div>Schicht</div><div class="shift-controls"><button class="shift-rotate-btn" onclick="rotateAllShifts()">🔄 Rotieren</button><button class="shift-clear-btn" onclick="clearEntireBoard()">🧹 Alle leeren</button></div></th>`;
       lines.forEach(line => {
         const th = document.createElement("th"); th.className = "line-header";
