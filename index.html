@@ -44,6 +44,8 @@
     body.planner-active .employee-card { cursor: grab; }
     .card-name { font-size: 0.8rem; font-weight: 700; color: #1e293b; line-height: 1.15; word-break: break-word; }
     .card-role { font-size: 0.68rem; padding: 2px 5px; background: #f1f5f9; border-radius: 4px; color: #475569; font-weight: 600; }
+    .card-fix-tag { display: none; font-size: 0.62rem; padding: 1px 5px; background: #fef08a; color: #854d0e; border-radius: 4px; font-weight: 700; }
+    body.planner-active .card-fix-tag { display: inline-block; }
     .card-lines-info { display: none; font-size: 0.65rem; color: #64748b; margin-top: 1px; line-height: 1.25; overflow-wrap: break-word; }
     body.planner-active .card-lines-info { display: block; }
     .card-sick-tag { display: none; font-size: 0.62rem; color: #b91c1c; background: #fee2e2; padding: 1px 5px; border-radius: 4px; font-weight: 700; margin-top: 1px; align-self: flex-start; }
@@ -329,15 +331,18 @@
       </div>
 
       <div id="tabTeams" class="tab-content">
-        <div style="background:#f8fafc; padding:14px; border-radius:8px; margin-bottom:16px;">
-          <label style="font-size:0.85rem; font-weight:600; display:block;">Neues Team</label>
-          <div style="display:flex; gap:10px; align-items:center;">
+        <div style="background:#f8fafc; padding:14px; border-radius:8px; margin-bottom:16px; border:1px solid #e2e8f0;">
+          <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:6px;">Neues Team hinzufügen (z.B. Team 5 / Tagschicht)</label>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
             <input type="color" id="newTeamColor" value="#3b82f6" style="width:40px; height:38px; border:none; cursor:pointer;">
-            <input type="text" id="newTeamName" class="form-control" placeholder="Team-Name">
-            <button class="btn btn-primary" onclick="addTeam()">Hinzufügen</button>
+            <input type="text" id="newTeamName" class="form-control" placeholder="Team-Name" style="flex:1; min-width:140px;">
+            <label style="display:flex; align-items:center; gap:5px; font-size:0.82rem; font-weight:600; cursor:pointer; background:#fff; padding:7px 10px; border-radius:6px; border:1px solid #cbd5e1;">
+              <input type="checkbox" id="newTeamRotates" checked> 🔄 Rotiert
+            </label>
+            <button class="btn btn-primary" onclick="addTeam()">+ Hinzufügen</button>
           </div>
         </div>
-        <div id="teamSettingsList" style="max-height: 220px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
+        <div id="teamSettingsList" style="max-height: 240px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
       </div>
 
       <div id="tabHistory" class="tab-content">
@@ -366,7 +371,12 @@
     let lines = ["32","33","34","09","22","39","36","37","38","54"].map(n => ({ id: "L"+n, name: "Linie "+n, prio: "", tag: "", note: "" }));
     let roles = ["Bediener", "LOP", "TL", "Schichtexperte", "Waschraumoperator"];
     let employees = [], sickLeaves = [], leaveRequests = [], extraShifts = [], cachedHistoryData = [];
-    let teamsConfig = { "team-1": { name: "Team 1", color: "#0091df" }, "team-2": { name: "Team 2", color: "#f59e0b" }, "team-3": { name: "Team 3", color: "#10b981" }, "team-4": { name: "Team 4", color: "#f43f5e" } };
+    let teamsConfig = {
+      "team-1": { name: "Team 1", color: "#0091df", rotates: true },
+      "team-2": { name: "Team 2", color: "#f59e0b", rotates: true },
+      "team-3": { name: "Team 3", color: "#10b981", rotates: true },
+      "team-4": { name: "Team 4", color: "#f43f5e", rotates: true }
+    };
     let activeTeamFilters = {}, activeRoleFilters = {}, poolSearchQuery = "";
     let selectedManualSickEmpId = null, selectedLoginPlannerId = null;
     let isPlanner = false, plannerLevel = 0, currentPlannerName = "";
@@ -374,14 +384,16 @@
 
     const getTodayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
     const formatDateDe = s => s && s.includes("-") ? s.split("-").reverse().join(".") : (s || "");
-    const fullName = e => `${e.firstName || ''} ${e.lastName || ''}`.trim();
+    const fullName = e => `${e.firstName \vert{}\vert{} ''}${e.lastName || ''}`.trim();
     const extractLineIdFromZone = z => (!z || ["pool","absent","extra"].includes(z) || !z.includes("_")) ? null : z.split("_").slice(0,-1).join("_");
     const extractShiftIdFromZone = z => (!z || ["pool","absent","extra"].includes(z) || !z.includes("_")) ? null : z.split("_").pop();
+    const isTeamRotating = teamKey => teamsConfig[teamKey] ? (teamsConfig[teamKey].rotates !== false) : true;
+    const isEmpProtectedFromRotation = emp => !!(emp.noRotation || !isTeamRotating(emp.team));
 
     function parseIsoLocal(iso) { if (!iso || !iso.includes("-")) return 0; const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d, 12, 0, 0).getTime(); }
     function canMergeDateRanges(s1, e1, s2, e2) { const msDay = 86400000, tS1 = parseIsoLocal(s1), tE1 = parseIsoLocal(e1), tS2 = parseIsoLocal(s2), tE2 = parseIsoLocal(e2); return (tS1 && tE1 && tS2 && tE2) ? (tS1 <= tE2 + msDay * 1.1) && (tS2 <= tE1 + msDay * 1.1) : false; }
     function calcSickDays(s, e) { const diff = Math.round((parseIsoLocal(e) - parseIsoLocal(s)) / 86400000) + 1; return diff > 0 ? diff : 1; }
-    function mergeReasonsText(r1, r2) { const a = (r1 || "").trim(), b = (r2 || "").trim(); if (!a || a === "Vom Planer eingetragen") return b || a; if (!b || b === "Vom Planer eingetragen") return a; if (a.toLowerCase().includes(b.toLowerCase())) return a; if (b.toLowerCase().includes(a.toLowerCase())) return b; return `${a} | ${b}`; }
+    function mergeReasonsText(r1, r2) { const a = (r1 || "").trim(), b = (r2 || "").trim(); if (!a || a === "Vom Planer eingetragen") return b || a; if (!b || b === "Vom Planer eingetragen") return a; if (a.toLowerCase().includes(b.toLowerCase())) return a; if (b.toLowerCase().includes(a.toLowerCase())) return b; return `${a} \vert{}${b}`; }
 
     function getPredeterminedLineForEmp(emp) {
       if (emp.lastLineId && lines.some(l => l.id === emp.lastLineId)) return emp.lastLineId;
@@ -391,10 +403,10 @@
 
     function returnEmpFromAbsentOrExtra(emp) {
       const l = getPredeterminedLineForEmp(emp);
-      if (emp.noRotation && emp.lastShiftId && l) emp.zone = `${l}_${emp.lastShiftId}`;
-      else if (emp.team === shiftRotation.frueh && l && !emp.noRotation) emp.zone = `${l}_frueh`;
-      else if (emp.team === shiftRotation.spaet && l && !emp.noRotation) emp.zone = `${l}_spaet`;
-      else if (emp.team === shiftRotation.nacht && l && !emp.noRotation) emp.zone = `${l}_nacht`;
+      if (isEmpProtectedFromRotation(emp) && emp.lastShiftId && l) emp.zone = `${l}_${emp.lastShiftId}`;
+      else if (emp.team === shiftRotation.frueh && l && !isEmpProtectedFromRotation(emp)) emp.zone = `${l}_frueh`;
+      else if (emp.team === shiftRotation.spaet && l && !isEmpProtectedFromRotation(emp)) emp.zone = `${l}_spaet`;
+      else if (emp.team === shiftRotation.nacht && l && !isEmpProtectedFromRotation(emp)) emp.zone = `${l}_nacht`;
       else emp.zone = "pool";
     }
 
@@ -424,7 +436,7 @@
       selectedLoginPlannerId = null;
       const box = document.getElementById("plannerLoginSuggestions"), q = val.trim().toLowerCase();
       if (!q) { box.style.display = "none"; return; }
-      const matches = employees.filter(e => fullName(e).toLowerCase().includes(q) || `${e.lastName} ${e.firstName}`.toLowerCase().includes(q));
+      const matches = employees.filter(e => fullName(e).toLowerCase().includes(q) || `${e.lastName}${e.firstName}`.toLowerCase().includes(q));
       if (!matches.length) { box.style.display = "none"; return; }
       box.innerHTML = matches.map(e => `<div class="suggestion-item" onclick="selectPlannerLogin('${e.id}')"><span><b>${fullName(e)}</b></span><small style="color:#64748b;">Stufe ${e.accessLevel || 1}</small></div>`).join("");
       box.style.display = "block";
@@ -465,7 +477,7 @@
       sessionStorage.setItem("planner_name", name); sessionStorage.setItem("planner_level", lvl);
       document.body.classList.add("planner-active");
       document.body.classList.toggle("planner-lvl-3", lvl === 3);
-      document.getElementById("plannerStatusBadge").textContent = `👤 ${name} (Stufe ${lvl})`;
+      document.getElementById("plannerStatusBadge").textContent = `👤 ${name} (Stufe${lvl})`;
     }
 
     function logoutPlanner() {
@@ -501,7 +513,13 @@
           return e;
         });
       }
-      if (d.teamsConfig) teamsConfig = d.teamsConfig;
+      if (d.teamsConfig) {
+        teamsConfig = {};
+        Object.keys(d.teamsConfig).forEach(k => {
+          const t = d.teamsConfig[k];
+          teamsConfig[k] = { name: t.name, color: t.color, rotates: t.rotates !== undefined ? t.rotates : true };
+        });
+      }
       Object.keys(teamsConfig).forEach(k => { if (activeTeamFilters[k] === undefined) activeTeamFilters[k] = true; });
       roles.forEach(r => { if (activeRoleFilters[r] === undefined) activeRoleFilters[r] = true; });
 
@@ -535,17 +553,37 @@
     }
 
     function rotateAllShifts() {
-      const oldF = shiftRotation.frueh, oldS = shiftRotation.spaet, oldN = shiftRotation.nacht, oldFr = shiftRotation.frei;
-      if (!confirm(`Teams rotieren?\n\n• ${teamsConfig[oldF]?.name}: Früh ➔ Spät\n• ${teamsConfig[oldS]?.name}: Spät ➔ Nacht\n• ${teamsConfig[oldN]?.name}: Nacht ➔ Frei (Pool)\n• ${teamsConfig[oldFr]?.name}: Frei ➔ Früh`)) return;
+      const slotOrder = ["frueh", "spaet", "nacht", "frei"];
+      const slotLabel = { frueh: "Früh", spaet: "Spät", nacht: "Nacht", frei: "Frei (Pool)" };
+      const activeSlots = slotOrder.filter(s => shiftRotation[s] && isTeamRotating(shiftRotation[s]));
+
+      if (activeSlots.length < 2) {
+        alert("Für die Rotation müssen mindestens 2 Schichten mit rotierenden Teams (Haken 'Rotiert' in den Einstellungen) besetzt sein.");
+        return;
+      }
+
+      const nextShiftRotation = { ...shiftRotation };
+      const summaryLines = [];
+      activeSlots.forEach((fromSlot, idx) => {
+        const toSlot = activeSlots[(idx + 1) % activeSlots.length];
+        const tKey = shiftRotation[fromSlot];
+        nextShiftRotation[toSlot] = tKey;
+        summaryLines.push(`• ${teamsConfig[tKey]?.name || tKey}: ${slotLabel[fromSlot]} ➔${slotLabel[toSlot]}`);
+      });
+
+      if (!confirm(`Rotierende Teams weiterschalten?\n\n${summaryLines.join("\n")}\n\n(Teams ohne Rotations-Haken sowie Mitarbeiter mit ⚓ Fix bleiben unverändert)`)) return;
+
       const today = getTodayIso();
       employees.forEach(emp => {
-        if (emp.noRotation) return;
+        if (isEmpProtectedFromRotation(emp)) return;
         const cL = extractLineIdFromZone(emp.zone), cS = extractShiftIdFromZone(emp.zone);
         if (cL && (!emp.lastLineId || (cS && shiftRotation[cS] === emp.team))) emp.lastLineId = cL;
       });
-      shiftRotation = { frueh: oldFr, spaet: oldF, nacht: oldS, frei: oldN };
+
+      shiftRotation = nextShiftRotation;
+
       employees.forEach(emp => {
-        if (emp.noRotation) return;
+        if (isEmpProtectedFromRotation(emp)) return;
         const isSick = sickLeaves.some(sl => sl.empId === emp.id && sl.startDate <= today && sl.endDate >= today);
         if (emp.zone === "absent" || emp.zone === "extra" || isSick) return;
         if (emp.team === shiftRotation.frueh) { const l = getPredeterminedLineForEmp(emp); emp.zone = l ? `${l}_frueh` : "pool"; }
@@ -579,7 +617,7 @@
         if (emp.team === newTeamKey) {
           if (slotKey === "frei") { const l = extractLineIdFromZone(emp.zone); if (l) emp.lastLineId = l; emp.zone = "pool"; }
           else { const l = getPredeterminedLineForEmp(emp); emp.zone = l ? `${l}_${slotKey}` : "pool"; }
-        } else if (newTeamKey !== oldTeamInSlot && emp.team === oldTeamInSlot) {
+        } else if (newTeamKey !== oldTeamInSlot && emp.team === oldTeamInSlot && isTeamRotating(oldTeamInSlot)) {
           if (swappedSlot === "frei") { const l = extractLineIdFromZone(emp.zone); if (l) emp.lastLineId = l; emp.zone = "pool"; }
           else if (swappedSlot) { const l = getPredeterminedLineForEmp(emp); emp.zone = l ? `${l}_${swappedSlot}` : "pool"; }
         }
@@ -588,17 +626,17 @@
     }
 
     function clearShiftRow(shiftId, shiftName) {
-      const inShift = employees.filter(e => e.zone && e.zone.endsWith(`_${shiftId}`) && !e.noRotation);
+      const inShift = employees.filter(e => e.zone && e.zone.endsWith(`_${shiftId}`) && !isEmpProtectedFromRotation(e));
       if (!inShift.length) { alert(`Keine rotierenden Mitarbeiter in der ${shiftName}-Schicht.`); return; }
-      if (!confirm(`${shiftName}-Schicht (${inShift.length} Mitarbeiter) in den Pool leeren? (Fixierte bleiben erhalten)`)) return;
+      if (!confirm(`${shiftName}-Schicht (${inShift.length} rotierende Mitarbeiter) in den Pool leeren?\n(Mitarbeiter mit ⚓ Fix und nicht-rotierende Teams bleiben erhalten)`)) return;
       inShift.forEach(emp => { const l = extractLineIdFromZone(emp.zone); if (l && (!emp.lastLineId || shiftRotation[shiftId] === emp.team)) emp.lastLineId = l; emp.zone = "pool"; });
       saveToFirebase(); initBoard();
     }
 
     function clearEntireBoard() {
-      const onBoard = employees.filter(e => e.zone && !["pool","absent","extra"].includes(e.zone) && !e.noRotation);
+      const onBoard = employees.filter(e => e.zone && !["pool","absent","extra"].includes(e.zone) && !isEmpProtectedFromRotation(e));
       if (!onBoard.length) { alert("Keine rotierenden Mitarbeiter auf dem Board."); return; }
-      if (!confirm(`Alle ${onBoard.length} rotierenden Mitarbeiter in den Pool leeren?\n(Mitarbeiter mit ⚓ Fix bleiben stehen)`)) return;
+      if (!confirm(`Alle ${onBoard.length} rotierenden Mitarbeiter in den Pool leeren?\n(Mitarbeiter mit ⚓ Fix und nicht-rotierende Teams bleiben stehen)`)) return;
       onBoard.forEach(emp => { const l = extractLineIdFromZone(emp.zone), s = extractShiftIdFromZone(emp.zone); if (l && (!emp.lastLineId || (s && shiftRotation[s] === emp.team))) emp.lastLineId = l; emp.zone = "pool"; });
       saveToFirebase(); initBoard();
     }
@@ -840,7 +878,7 @@
       selectedManualSickEmpId = null;
       const box = document.getElementById("manualSickSuggestions"), q = val.trim().toLowerCase();
       if (!q) { box.style.display = "none"; return; }
-      const matches = employees.filter(e => fullName(e).toLowerCase().includes(q) || `${e.lastName} ${e.firstName}`.toLowerCase().includes(q));
+      const matches = employees.filter(e => fullName(e).toLowerCase().includes(q) || `${e.lastName}${e.firstName}`.toLowerCase().includes(q));
       if (!matches.length) { box.style.display = "none"; return; }
       box.innerHTML = matches.map(e => `<div class="suggestion-item" onclick="selectManualSickEmp('${e.id}')"><span><b>${fullName(e)}</b></span><small style="color:#64748b;">${e.role}</small></div>`).join("");
       box.style.display = "block";
@@ -898,7 +936,7 @@
 
       const syncInfo = document.getElementById("serverSyncInfo");
       if (syncInfo) {
-        syncInfo.firstElementChild.innerHTML = `✅ Live-Stand: <b>${pendingLr.length}</b> offene Urlaubsanträge | <b>${pendingEs.length}</b> Bringschichten | <b>${unreadSl.length}</b> Krankmeldungen`;
+        syncInfo.firstElementChild.innerHTML = `✅ Live-Stand: <b>${pendingLr.length}</b> offene Urlaubsanträge | <b>${pendingEs.length}</b> Bringschichten \vert{} <b>${unreadSl.length}</b> Krankmeldungen`;
       }
 
       let html = "";
@@ -908,7 +946,7 @@
             <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
               <div>
                 <div style="font-weight:700; color:#9f1239;">🚫 Stornierung durch Mitarbeiter: ${lr.empName}</div>
-                <div style="font-size:0.8rem; margin-top:3px;">Der Mitarbeiter hat seinen <b>${lr.type} (${formatDateDe(lr.startDate)} – ${formatDateDe(lr.endDate)})</b> storniert.</div>
+                <div style="font-size:0.8rem; margin-top:3px;">Der Mitarbeiter hat seinen <b>${lr.type} (${formatDateDe(lr.startDate)} –${formatDateDe(lr.endDate)})</b> storniert.</div>
                 <div style="font-size:0.65rem; color:#64748b; margin-top:2px;">🕒 Storniert am: ${lr.cancelledAt || '-'}</div>
               </div>
               <button class="btn btn-primary" style="padding:5px 10px; font-size:0.75rem;" onclick="acknowledgeLeaveCancel('${lr.id}')">✓ Gelesen</button>
@@ -936,10 +974,9 @@
           <div class="sick-card" style="background:#f0f9ff; border-left-color:#0284c7; border-color:#bae6fd;">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
               <div style="flex:1;">
-                <div style="font-weight:700; color:#0369a1;">🌴 Antrag (${lr.type}): ${lr.empName}</div>
+                <div style="font-weight:700; color:#0369a1;">🌴 Antrag (${lr.type}):${lr.empName}</div>
                 <div style="font-size:0.65rem; color:#0284c7; margin-top:2px;">🕒 Eingereicht am: ${lr.createdAt || '-'}</div>
-                <div style="font-size:0.84rem; font-weight:700; margin-top:4px;">📅 Gewünscht: ${formatDateDe(lr.startDate)} bis ${formatDateDe(lr.endDate)} (${days} ${days===1?'Tag':'Tage'})</div>
-                ${lr.reason ? `<div style="font-size:0.8rem; margin-top:4px; color:#334155;">💬 "${lr.reason}"</div>` : ''}
+                <div style="font-size:0.84rem; font-weight:700; margin-top:4px;">📅 Gewünscht: ${formatDateDe(lr.startDate)} bis ${formatDateDe(lr.endDate)} (${days} ${days===1?'Tag':'Tage'})</div>${lr.reason ? `<div style="font-size:0.8rem; margin-top:4px; color:#334155;">💬 "${lr.reason}"</div>` : ''}
                 <div id="partialBox_${lr.id}" style="display:none; background:#fff; padding:10px; border-radius:6px; border:1px solid #93c5fd; margin-top:8px;">
                   <div style="font-size:0.78rem; font-weight:700; color:#1e3a8a; margin-bottom:6px;">⚖️ Gegenvorschlag (Genehmigte Teil-Zeiträume angeben):</div>
                   <div id="partialRanges_${lr.id}">
@@ -969,7 +1006,7 @@
               <div>
                 <div style="font-weight:700; color:#166534;">➕ Bringschicht-Anfrage: ${es.empName}</div>
                 <div style="font-size:0.65rem; color:#15803d; margin-top:2px;">🕒 Eingereicht am: ${es.createdAt || '-'}</div>
-                <div style="font-size:0.84rem; font-weight:700; margin-top:4px;">📅 Datum: ${formatDateDe(es.date)} | Schicht: ${shiftsLabel[es.shift] || es.shift}</div>
+                <div style="font-size:0.84rem; font-weight:700; margin-top:4px;">📅 Datum: ${formatDateDe(es.date)} \vert{} Schicht:${shiftsLabel[es.shift] || es.shift}</div>
                 <div style="font-size:0.8rem; color:#334155; margin-top:2px;">Bemerkung: <b>${es.note || 'BS/ZS'}</b></div>
               </div>
               <div style="display:flex; flex-direction:column; gap:5px;">
@@ -1007,7 +1044,7 @@
                 <div>
                   <div style="font-weight:700; color:#9f1239;">🏥 Krankmeldung: ${sl.empName}</div>
                   <div style="font-size:0.65rem; color:#9f1239; margin-top:2px;">🕒 Eingereicht am: ${sl.createdAt || '-'}</div>
-                  <div style="font-size:0.82rem; font-weight:600; margin-top:2px;">📅 Zeitraum: ${formatDateDe(sl.startDate)} bis ${formatDateDe(sl.endDate)} (${days} ${days===1?'Tag':'Tage'})</div>
+                  <div style="font-size:0.82rem; font-weight:600; margin-top:2px;">📅 Zeitraum: ${formatDateDe(sl.startDate)} bis${formatDateDe(sl.endDate)} (${days}${days===1?'Tag':'Tage'})</div>
                   <div style="font-size:0.8rem; margin-top:4px; background:#fff; padding:5px 8px; border-radius:4px; border:1px solid #fecdd3;"><b>Notiz:</b> ${sl.reason || '<i>Keine Angabe</i>'}</div>
                 </div>
                 <button class="btn btn-primary" style="padding:5px 10px; font-size:0.78rem;" onclick="markSickLeaveRead('${sl.id}')">✓ Bestätigen</button>
@@ -1031,9 +1068,9 @@
               <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
                 <div style="flex:1;">
                   <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;"><span style="font-weight:700; color:#0f172a;">${sl.empName}</span>${catBadge}${badge}</div>
-                  <div style="font-size:0.65rem; color:#64748b; margin-top:2px;">🕒 Eingereicht: ${sl.createdAt || '-'} ${sl.approvedBy ? `| ✍️ <b>Bestätigt durch: ${sl.approvedBy}</b>` : ''}</div>
+                  <div style="font-size:0.65rem; color:#64748b; margin-top:2px;">🕒 Eingereicht: ${sl.createdAt \vert{}\vert{} '-'}${sl.approvedBy ? `| ✍️ <b>Bestätigt durch: ${sl.approvedBy}</b>` : ''}</div>
                   <div style="font-size:0.8rem; margin-top:2px;">
-                    Zeitraum: <b>${formatDateDe(sl.startDate)}</b> bis <b>${formatDateDe(sl.endDate)}</b> (${days} ${days===1?'Tag':'Tage'})
+                    Zeitraum: <b>${formatDateDe(sl.startDate)}</b> bis <b>${formatDateDe(sl.endDate)}</b> (${days}${days===1?'Tag':'Tage'})
                     <button class="btn btn-outline" style="padding:1px 6px; font-size:0.7rem; margin-left:6px; color:var(--bayer-blue);" onclick="toggleEditSickDate('${sl.id}')">✏️ Zeitraum ändern</button>
                   </div>
                   <div id="editDateBox_${sl.id}" style="display:none; align-items:center; flex-wrap:wrap; gap:6px; margin-top:6px; background:#fff; padding:6px; border-radius:6px; border:1px solid #cbd5e1;">
@@ -1122,12 +1159,12 @@
             <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
               <b>${h.empName} <span style="font-size:0.72rem; color:#0369a1;">(${h.category || 'Krank'})</span></b>
               <div style="display:flex; align-items:center; gap:8px;">
-                <span style="font-size:0.75rem; font-weight:600;">📅 ${formatDateDe(h.startDate)} – ${formatDateDe(h.endDate)} <span style="color:var(--bayer-blue);">(${days} ${days===1?'Tag':'Tage'})</span></span>
+                <span style="font-size:0.75rem; font-weight:600;">📅 ${formatDateDe(h.startDate)} –${formatDateDe(h.endDate)} <span style="color:var(--bayer-blue);">(${days}${days===1?'Tag':'Tage'})</span></span>
                 <button onclick="deleteHistoryEntry('${h.docId || h.id}')" style="border:none; background:none; cursor:pointer; font-size:0.8rem;" title="Löschen">🗑️</button>
               </div>
             </div>
             <div style="font-size:0.78rem; color:#475569;">Notiz: ${h.reason || 'Keine Angabe'}</div>
-            <div style="font-size:0.68rem; color:#94a3b8;">Eingereicht: ${h.createdAt || '-'} ${h.approvedBy ? `| ✍️ Bestätigt durch: <b>${h.approvedBy}</b>` : ''}</div>
+            <div style="font-size:0.68rem; color:#94a3b8;">Eingereicht: ${h.createdAt \vert{}\vert{} '-'}${h.approvedBy ? `| ✍️ Bestätigt durch: <b>${h.approvedBy}</b>` : ''}</div>
           </div>`;
       }).join("");
     }
@@ -1141,15 +1178,15 @@
     function applyTeamStyles() {
       let st = document.getElementById("dynamicTeamStyles");
       if (!st) { st = document.createElement("style"); st.id = "dynamicTeamStyles"; document.head.appendChild(st); }
-      st.textContent = Object.keys(teamsConfig).sort().map(k => `.employee-card.${k} { border-left-color: ${teamsConfig[k].color} !important; }`).join("\n");
+      st.textContent = Object.keys(teamsConfig).sort().map(k => `.employee-card.${k} { border-left-color:${teamsConfig[k].color} !important; }`).join("\n");
     }
 
     function updateTeamDropdowns() {
       const keys = Object.keys(teamsConfig).sort();
       const newEmpTeam = document.getElementById("newEmpTeam");
-      if (newEmpTeam) newEmpTeam.innerHTML = keys.map(k => `<option value="${k}">${teamsConfig[k].name}</option>`).join("");
+      if (newEmpTeam) newEmpTeam.innerHTML = keys.map(k => `<option value="${k}">${teamsConfig[k].name}${isTeamRotating(k) ? ' 🔄' : ''}</option>`).join("");
       const freiSel = document.getElementById("teamSelect_frei");
-      if (freiSel) freiSel.innerHTML = keys.map(k => `<option value="${k}" ${shiftRotation.frei === k ? 'selected' : ''}>🏖️ Frei: ${teamsConfig[k].name}</option>`).join("");
+      if (freiSel) freiSel.innerHTML = keys.map(k => `<option value="${k}" ${shiftRotation.frei === k ? 'selected' : ''}>🏖️ Frei: ${teamsConfig[k].name}${isTeamRotating(k) ? ' 🔄' : ''}</option>`).join("");
     }
 
     function updatePoolSearch(val) {
@@ -1161,7 +1198,10 @@
 
     function renderTeamFilterCheckboxes() {
       const c = document.getElementById("teamFilterContainer"); if (!c) return;
-      c.innerHTML = Object.keys(teamsConfig).sort().map(k => `<label style="display:flex; align-items:center; gap:4px; cursor:pointer; font-size:0.75rem;"><input type="checkbox" ${activeTeamFilters[k] ? 'checked' : ''} onchange="activeTeamFilters['${k}']=this.checked; renderEmployees();"><span style="color:${teamsConfig[k].color}; font-weight:700;">■</span> ${teamsConfig[k].name}</label>`).join("");
+      c.innerHTML = Object.keys(teamsConfig).sort().map(k => {
+        const rotIcon = isTeamRotating(k) ? `<span style="font-size:0.65rem; opacity:0.65;" title="Rotiert automatisch">🔄</span>` : ``;
+        return `<label style="display:flex; align-items:center; gap:4px; cursor:pointer; font-size:0.75rem;"><input type="checkbox" ${activeTeamFilters[k] ? 'checked' : ''} onchange="activeTeamFilters['${k}']=this.checked; renderEmployees();"><span style="color:${teamsConfig[k].color}; font-weight:700;">■</span> ${teamsConfig[k].name}${rotIcon}</label>`;
+      }).join("");
     }
     function toggleAllTeamFilters(s) { Object.keys(teamsConfig).forEach(k => activeTeamFilters[k] = s); renderTeamFilterCheckboxes(); renderEmployees(); }
 
@@ -1233,7 +1273,7 @@
       const keys = Object.keys(teamsConfig).sort();
       shifts.forEach(shift => {
         const curKey = shiftRotation[shift.id] || keys[0], curObj = teamsConfig[curKey] || { name: "Team", color: "#0091df" };
-        const opts = keys.map(k => `<option value="${k}" ${k === curKey ? 'selected' : ''}>${teamsConfig[k].name}</option>`).join("");
+        const opts = keys.map(k => `<option value="${k}" ${k === curKey ? 'selected' : ''}>${teamsConfig[k].name}${isTeamRotating(k) ? ' 🔄' : ''}</option>`).join("");
         const tr = document.createElement("tr"), thS = document.createElement("th");
         thS.className = "shift-header";
         thS.innerHTML = `<div>${shift.name}</div><div class="shift-team-badge"><span style="color:${curObj.color};">■</span> ${curObj.name}</div><div class="shift-controls"><div style="display:flex; gap:4px;"><select id="teamSelect_${shift.id}" class="shift-team-select" style="flex:1;">${opts}</select><button class="shift-clear-btn" style="width:26px; padding:0; color:var(--bayer-blue); border-color:var(--bayer-blue);" onclick="loadTeamToShift('${shift.id}')" title="Team auf Linien laden">📥</button></div><button class="shift-clear-btn" onclick="clearShiftRow('${shift.id}', '${shift.name}')">🧹 Leeren</button></div>`;
@@ -1283,6 +1323,7 @@
         if (emp.mainLines?.length) parts.push(`<b>Prio:</b> ${emp.mainLines.map(id => lines.find(x=>x.id===id)?.name.replace(/Linie\s*/i, '')).filter(Boolean).join(", ")}`);
         if (emp.secLines?.length) parts.push(`<span style="color:#94a3b8;">Sek:</span> ${emp.secLines.map(id => lines.find(x=>x.id===id)?.name.replace(/Linie\s*/i, '')).filter(Boolean).join(", ")}`);
 
+        const fixHtml = emp.noRotation ? `<span class="card-fix-tag" title="Fixiert (rotiert nicht)">⚓ Fix</span>` : '';
         const activeSl = sickLeaves.find(sl => sl.empId === emp.id && sl.startDate <= today && sl.endDate >= today);
         const sickHtml = activeSl ? `<span class="card-sick-tag">${activeSl.category && activeSl.category.includes('Urlaub') ? '🌴' : '🏥'} Bis ${formatDateDe(activeSl.endDate)}</span>` : '';
         const activeEs = extraShifts.find(es => es.empId === emp.id && es.status === "approved" && es.date >= today);
@@ -1291,8 +1332,9 @@
         card.innerHTML = `
           <div class="card-name">${fName}</div>
           <div style="display:flex; justify-content:space-between; align-items:center; gap:4px;">
-            <div style="display:flex; gap:4px; align-items:center;">
+            <div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap;">
               <span class="card-role">${emp.role}</span>
+              ${fixHtml}
             </div>
             <div style="display:flex; align-items:center; gap:3px;">
               <button class="quick-sick-btn" onclick="openInboxModal('${emp.id}')" title="Abwesenheit eintragen">🏥</button>
@@ -1334,7 +1376,8 @@
             if (emp) {
               emp.zone = newZone;
               const nL = extractLineIdFromZone(newZone), nS = extractShiftIdFromZone(newZone);
-              if (nL && (!emp.lastLineId || (nS && shiftRotation[nS] === emp.team))) emp.lastLineId = nL;
+              if (nL && nS) emp.lastShiftId = nS;
+              if (nL && (!emp.lastLineId || (nS && shiftRotation[nS] === emp.team) || isEmpProtectedFromRotation(emp))) emp.lastLineId = nL;
               saveToFirebase(); renderEmployees();
             }
           }
@@ -1376,15 +1419,33 @@
     }
 
     function addTeam() {
-      const name = document.getElementById("newTeamName").value.trim(), color = document.getElementById("newTeamColor").value;
+      const name = document.getElementById("newTeamName").value.trim();
+      const color = document.getElementById("newTeamColor").value;
+      const rotates = document.getElementById("newTeamRotates").checked;
       if (!name) return;
-      const k = "team_" + Date.now(); teamsConfig[k] = { name, color }; activeTeamFilters[k] = true;
-      document.getElementById("newTeamName").value = ""; saveToFirebase(); renderSettingsLists(); initBoard();
+      const k = "team_" + Date.now();
+      teamsConfig[k] = { name, color, rotates };
+      activeTeamFilters[k] = true;
+      document.getElementById("newTeamName").value = "";
+      document.getElementById("newTeamRotates").checked = true;
+      saveToFirebase(); renderSettingsLists(); initBoard();
     }
 
+    window.toggleTeamRotation = function(k, isChecked) {
+      if (!teamsConfig[k]) return;
+      teamsConfig[k].rotates = !!isChecked;
+      saveToFirebase();
+      initBoard();
+    };
+
     function updateTeam(k) {
-      const name = document.getElementById(`teamNameInput_${k}`)?.value.trim(), color = document.getElementById(`teamColorInput_${k}`)?.value;
-      if (name && teamsConfig[k]) { teamsConfig[k] = { name, color }; saveToFirebase(); initBoard(); alert("Team aktualisiert!"); }
+      const name = document.getElementById(`teamNameInput_${k}`)?.value.trim();
+      const color = document.getElementById(`teamColorInput_${k}`)?.value;
+      const rotates = document.getElementById(`teamRotatesInput_${k}`) ? document.getElementById(`teamRotatesInput_${k}`).checked : true;
+      if (name && teamsConfig[k]) {
+        teamsConfig[k] = { name, color, rotates };
+        saveToFirebase(); renderSettingsLists(); initBoard(); alert("Team aktualisiert!");
+      }
     }
 
     function deleteTeam(k) {
@@ -1401,10 +1462,23 @@
         const fName = fullName(e), lvl = Number(e.accessLevel) || 1;
         const lvlBadge = `<span style="background:#f1f5f9; color:#475569; font-size:0.68rem; padding:1px 5px; border-radius:4px; font-weight:700;">Stufe ${lvl}</span>`;
         const pwBadge = (e.mustChangePw || !e.password || e.password === "1234") ? `<span style="font-size:0.7rem; color:#d97706;">⏳ PIN: 1234</span>` : `<span style="font-size:0.7rem; color:#15803d;">🔒 Eigenes PW</span>`;
-        return `<div class="item-row"><div style="flex:1;"><b>${fName}</b> <small>(${e.role})</small> ${lvlBadge} ${pwBadge}</div><div style="display:flex; gap:5px;"><button class="btn btn-outline" style="padding:4px 8px; font-size:0.75rem; color:#0284c7;" onclick="resetEmpPassword('${e.id}')">🔄 PIN</button><button class="btn btn-outline" style="padding:4px 8px; font-size:0.75rem;" onclick="editEmployee('${e.id}')">Bearbeiten</button><button class="btn btn-outline" style="padding:4px 8px; font-size:0.75rem; color:#ef4444;" onclick="deleteEmployee('${e.id}')">Löschen</button></div></div>`;
+        const fixBadge = e.noRotation ? `<span style="background:#fef08a; color:#854d0e; font-size:0.68rem; padding:1px 5px; border-radius:4px; font-weight:700;">⚓ Fix</span>` : '';
+        return `<div class="item-row"><div style="flex:1;"><b>${fName}</b> <small>(${e.role})</small> ${fixBadge} ${lvlBadge} ${pwBadge}</div><div style="display:flex; gap:5px;"><button class="btn btn-outline" style="padding:4px 8px; font-size:0.75rem; color:#0284c7;" onclick="resetEmpPassword('${e.id}')">🔄 PIN</button><button class="btn btn-outline" style="padding:4px 8px; font-size:0.75rem;" onclick="editEmployee('${e.id}')">Bearbeiten</button><button class="btn btn-outline" style="padding:4px 8px; font-size:0.75rem; color:#ef4444;" onclick="deleteEmployee('${e.id}')">Löschen</button></div></div>`;
       }).join("");
       document.getElementById("lineSettingsList").innerHTML = lines.map((l, i) => `<div class="item-row"><span><b>${l.name}</b></span><div style="display:flex; gap:6px;"><button class="btn btn-outline" style="padding:2px 8px;" ${i===0?'disabled':''} onclick="moveLine(${i},-1)">▲</button><button class="btn btn-outline" style="padding:2px 8px;" ${i===lines.length-1?'disabled':''} onclick="moveLine(${i},1)">▼</button><button class="btn btn-outline" style="padding:4px 10px; color:#ef4444;" onclick="deleteLine('${l.id}')">Löschen</button></div></div>`).join("");
-      document.getElementById("teamSettingsList").innerHTML = Object.keys(teamsConfig).sort().map(k => `<div class="item-row"><input type="color" id="teamColorInput_${k}" value="${teamsConfig[k].color}" style="width:36px; height:32px; border:none;"><input type="text" id="teamNameInput_${k}" class="form-control" value="${teamsConfig[k].name}" style="flex:1; padding:6px;"><button class="btn btn-outline" style="padding:6px 10px; color:var(--bayer-blue);" onclick="updateTeam('${k}')">Speichern</button><button class="btn btn-outline" style="padding:6px 10px; color:#ef4444;" onclick="deleteTeam('${k}')">Löschen</button></div>`).join("");
+      document.getElementById("teamSettingsList").innerHTML = Object.keys(teamsConfig).sort().map(k => {
+        const rotChecked = isTeamRotating(k) ? "checked" : "";
+        return `
+          <div class="item-row" style="flex-wrap:wrap;">
+            <input type="color" id="teamColorInput_${k}" value="${teamsConfig[k].color}" style="width:36px; height:32px; border:none; cursor:pointer;">
+            <input type="text" id="teamNameInput_${k}" class="form-control" value="${teamsConfig[k].name}" style="flex:1; min-width:120px; padding:6px;">
+            <label style="display:flex; align-items:center; gap:5px; font-size:0.8rem; font-weight:600; cursor:pointer; background:#f8fafc; padding:5px 8px; border-radius:6px; border:1px solid #cbd5e1;" title="Haken gesetzt = Team rotiert automatisch mit">
+              <input type="checkbox" id="teamRotatesInput_${k}" ${rotChecked} onchange="toggleTeamRotation('${k}', this.checked)"> 🔄 Rotiert
+            </label>
+            <button class="btn btn-outline" style="padding:6px 10px; color:var(--bayer-blue);" onclick="updateTeam('${k}')">Speichern</button>
+            <button class="btn btn-outline" style="padding:6px 10px; color:#ef4444;" onclick="deleteTeam('${k}')">Löschen</button>
+          </div>`;
+      }).join("");
     }
 
     function resetEmpPassword(id) {
