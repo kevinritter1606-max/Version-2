@@ -197,10 +197,14 @@
   <!-- POSTFACH & ANTRÄGE MODAL (STUFE 3) -->
   <div id="inboxModal" class="modal-overlay">
     <div class="modal" style="max-width: 660px;">
-      <h3 style="display:flex; justify-content:space-between; align-items:center; color:var(--bayer-blue); margin-bottom:14px;">
+      <h3 style="display:flex; justify-content:space-between; align-items:center; color:var(--bayer-blue); margin-bottom:8px;">
         <span>📬 Postfach, Urlaub & Bringschichten</span>
         <button onclick="closeModal('inboxModal')" style="border:none; background:none; font-size:1.5rem; cursor:pointer;">&times;</button>
       </h3>
+      <div id="serverSyncInfo" style="font-size:0.74rem; background:#f1f5f9; color:#475569; padding:6px 10px; border-radius:6px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+        <span>🔄 Prüfe Live-Datenbank...</span>
+        <button class="btn btn-outline" style="padding:2px 8px; font-size:0.7rem;" onclick="forceRefreshFromServer()">🔄 Jetzt abrufen</button>
+      </div>
 
       <div style="margin-bottom: 18px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
@@ -355,6 +359,7 @@
       messagingSenderId: "152929285194", appId: "1:152929285194:web:00b73aa6058a70aed3a2b3"
     });
     const db = firebase.firestore();
+    const boardRef = db.collection("shiftplan").doc("live_board");
     const shifts = [{ id: "frueh", name: "Früh" }, { id: "spaet", name: "Spät" }, { id: "nacht", name: "Nacht" }];
     const shiftsLabel = { frueh: "Früh", spaet: "Spät", nacht: "Nacht" };
     let shiftRotation = { frueh: "team-1", spaet: "team-2", nacht: "team-3", frei: "team-4" };
@@ -470,49 +475,64 @@
       initBoard();
     }
 
-    db.collection("shiftplan").doc("live_board").onSnapshot((doc) => {
-      if (doc.exists) {
-        const d = doc.data();
-        if (d.lines) lines = d.lines;
-        if (d.roles) roles = d.roles;
-        sickLeaves = d.sickLeaves || [];
-        leaveRequests = d.leaveRequests || [];
-        extraShifts = d.extraShifts || [];
-        if (d.shiftRotation) shiftRotation = d.shiftRotation;
-        
-        let memoryUpdated = false;
-        if (d.employees) {
-          employees = d.employees.map(e => {
-            if (!e.firstName && e.name) { const p = e.name.split(" "); e.firstName = p[0] || ""; e.lastName = p.slice(1).join(" ") || ""; }
-            if (!e.mainLines) e.mainLines = [];
-            if (!e.secLines) e.secLines = [];
-            if (!e.password) e.password = "1234";
-            if (e.mustChangePw === undefined) e.mustChangePw = (e.password === "1234");
-            if (e.noRotation === undefined) e.noRotation = false;
-            if (!e.accessLevel) e.accessLevel = 1;
-            if (e.zone && e.zone.endsWith("_frei")) { const lId = extractLineIdFromZone(e.zone); if (lId) e.lastLineId = lId; e.zone = "pool"; memoryUpdated = true; }
-            const cLine = extractLineIdFromZone(e.zone), cShift = extractShiftIdFromZone(e.zone);
-            if (!["pool","absent","extra"].includes(e.zone) && cShift) e.lastShiftId = cShift;
-            if (cLine && (!e.lastLineId || (cShift && shiftRotation[cShift] === e.team))) { if (e.lastLineId !== cLine) { e.lastLineId = cLine; memoryUpdated = true; } }
-            return e;
-          });
-          if (memoryUpdated) saveToFirebase();
-        }
-        if (d.teamsConfig) teamsConfig = d.teamsConfig;
-        Object.keys(teamsConfig).forEach(k => { if (activeTeamFilters[k] === undefined) activeTeamFilters[k] = true; });
-        roles.forEach(r => { if (activeRoleFilters[r] === undefined) activeRoleFilters[r] = true; });
+    function applyIncomingDocData(d) {
+      if (!d) return;
+      if (d.lines) lines = d.lines;
+      if (d.roles) roles = d.roles;
+      sickLeaves = Array.isArray(d.sickLeaves) ? d.sickLeaves : [];
+      leaveRequests = Array.isArray(d.leaveRequests) ? d.leaveRequests : [];
+      extraShifts = Array.isArray(d.extraShifts) ? d.extraShifts : [];
+      if (d.shiftRotation) shiftRotation = d.shiftRotation;
+      
+      let memoryUpdated = false;
+      if (d.employees) {
+        employees = d.employees.map(e => {
+          if (!e.firstName && e.name) { const p = e.name.split(" "); e.firstName = p[0] || ""; e.lastName = p.slice(1).join(" ") || ""; }
+          if (!e.mainLines) e.mainLines = [];
+          if (!e.secLines) e.secLines = [];
+          if (!e.password) e.password = "1234";
+          if (e.mustChangePw === undefined) e.mustChangePw = (e.password === "1234");
+          if (e.noRotation === undefined) e.noRotation = false;
+          if (!e.accessLevel) e.accessLevel = 1;
+          if (e.zone && e.zone.endsWith("_frei")) { const lId = extractLineIdFromZone(e.zone); if (lId) e.lastLineId = lId; e.zone = "pool"; memoryUpdated = true; }
+          const cLine = extractLineIdFromZone(e.zone), cShift = extractShiftIdFromZone(e.zone);
+          if (!["pool","absent","extra"].includes(e.zone) && cShift) e.lastShiftId = cShift;
+          if (cLine && (!e.lastLineId || (cShift && shiftRotation[cShift] === e.team))) { if (e.lastLineId !== cLine) { e.lastLineId = cLine; memoryUpdated = true; } }
+          return e;
+        });
+      }
+      if (d.teamsConfig) teamsConfig = d.teamsConfig;
+      Object.keys(teamsConfig).forEach(k => { if (activeTeamFilters[k] === undefined) activeTeamFilters[k] = true; });
+      roles.forEach(r => { if (activeRoleFilters[r] === undefined) activeRoleFilters[r] = true; });
 
-        if (processSickLeavesAutomation()) saveToFirebase();
-        applyTeamStyles(); updateTeamDropdowns(); renderTeamFilterCheckboxes(); renderRoleFilterCheckboxes(); updateInboxBadge();
-        if (document.getElementById("inboxModal").style.display === "flex") renderInboxModal();
-        if (document.getElementById("settingsModal").style.display === "flex") renderSettingsLists();
-        if (!backupDoneToday) createDailyBackup(d);
-      } else { saveToFirebase(); }
+      const autoChanged = processSickLeavesAutomation();
+      if (memoryUpdated || autoChanged) saveToFirebase();
+
+      applyTeamStyles(); updateTeamDropdowns(); renderTeamFilterCheckboxes(); renderRoleFilterCheckboxes(); updateInboxBadge();
+      if (document.getElementById("inboxModal").style.display === "flex") renderInboxModal();
+      if (document.getElementById("settingsModal").style.display === "flex") renderSettingsLists();
+      if (!backupDoneToday) createDailyBackup(d);
       initBoard();
+    }
+
+    boardRef.onSnapshot((doc) => {
+      if (doc.exists) applyIncomingDocData(doc.data());
+      else saveToFirebase();
     });
 
+    window.forceRefreshFromServer = function() {
+      const info = document.getElementById("serverSyncInfo");
+      if (info) info.firstElementChild.textContent = "⏳ Lade frisch vom Server...";
+      boardRef.get({ source: "server" }).then(doc => {
+        if (doc.exists) applyIncomingDocData(doc.data());
+      }).catch(() => {
+        boardRef.get().then(doc => { if (doc.exists) applyIncomingDocData(doc.data()); });
+      });
+    };
+
+    // NEU: Nutzt merge:true, damit niemals fremde Felder überschrieben werden!
     function saveToFirebase() {
-      db.collection("shiftplan").doc("live_board").set({ lines, roles, employees, teamsConfig, sickLeaves, leaveRequests, extraShifts, shiftRotation });
+      boardRef.set({ lines, roles, employees, teamsConfig, sickLeaves, leaveRequests, extraShifts, shiftRotation }, { merge: true });
     }
 
     function rotateAllShifts() {
@@ -627,7 +647,6 @@
         }
       });
 
-      // Abgelaufene Bringschichten archivieren und Board aufräumen
       const expiredEs = extraShifts.filter(es => es.date < today && es.status === "approved");
       if (expiredEs.length > 0) {
         expiredEs.forEach(exp => {
@@ -646,7 +665,6 @@
         changed = true;
       }
 
-      // Bringschicht-Automatik: Nur GENAU am Tag der Bringschicht in die Extra-Box legen
       extraShifts.forEach(es => {
         if (es.status === "approved" && es.date === today && !es.placedOnBoard) {
           const emp = employees.find(e => e.id === es.empId);
@@ -667,7 +685,6 @@
       badge.style.display = total > 0 ? "inline-flex" : "none";
     }
 
-    // --- URLAUBSANTRÄGE, STORNO-MELDUNGEN & BRINGSCHICHTEN AKTIONEN (STUFE 3) ---
     window.approveLeaveRequest = function(reqId) {
       const req = leaveRequests.find(r => r.id === reqId);
       if (!req) return;
@@ -782,7 +799,6 @@
       if (sl) { sl.returnRequestPending = false; sl.readByPlanner = true; sl.approvedBy = currentPlannerName; saveToFirebase(); renderInboxModal(); updateInboxBadge(); }
     };
 
-    // NEU: SOWOHL START- ALS AUCH ENDDATUM ÄNDERN + SYNCHRONISATION MIT PORTAL & BOARD
     window.toggleEditSickDate = function(id) {
       const box = document.getElementById("editDateBox_" + id);
       if (box) box.style.display = (box.style.display === "none") ? "flex" : "none";
@@ -803,7 +819,6 @@
       sl.approvedBy = currentPlannerName;
       sl.approvedAt = new Date().toLocaleString('de-DE');
 
-      // Verknüpften Urlaubsantrag im Mitarbeiter-Portal synchronisieren
       const linkedReq = leaveRequests.find(r => r.id === sl.requestId || r.linkedSickLeaveId === sl.id || (r.empId === sl.empId && r.startDate === oldStart && r.endDate === oldEnd && r.status === "approved"));
       if (linkedReq) {
         linkedReq.startDate = sl.startDate;
@@ -812,20 +827,14 @@
         linkedReq.approvedAt = sl.approvedAt;
       }
 
-      // Prüfen, ob Mitarbeiter heute noch abwesend ist oder zurück aufs Board muss
       const today = getTodayIso();
       const emp = employees.find(e => e.id === sl.empId);
       if (emp) {
         const stillAbsentToday = sickLeaves.some(x => x.empId === emp.id && x.startDate <= today && x.endDate >= today);
-        if (!stillAbsentToday && emp.zone === "absent") {
-          returnEmpFromAbsentOrExtra(emp);
-        }
+        if (!stillAbsentToday && emp.zone === "absent") returnEmpFromAbsentOrExtra(emp);
       }
 
-      processSickLeavesAutomation();
-      saveToFirebase();
-      renderInboxModal();
-      renderEmployees();
+      processSickLeavesAutomation(); saveToFirebase(); renderInboxModal(); renderEmployees();
     };
 
     function onManualSickNameInput(val) {
@@ -850,6 +859,7 @@
       const today = getTodayIso();
       document.getElementById("manualSickStart").value = today;
       document.getElementById("manualSickEnd").value = today;
+      forceRefreshFromServer();
       renderInboxModal();
     }
 
@@ -881,14 +891,18 @@
     function renderInboxModal() {
       const unreadC = document.getElementById("unreadSickList"), activeC = document.getElementById("activeSickList"), btnMark = document.getElementById("btnMarkAllRead"), today = getTodayIso();
       const unreadSl = sickLeaves.filter(sl => !sl.readByPlanner || sl.returnRequestPending);
-      const pendingLr = leaveRequests.filter(lr => lr.status === "pending");
+      const pendingLr = leaveRequests.filter(lr => !lr.status || lr.status === "pending");
       const cancelledLr = leaveRequests.filter(lr => lr.cancelUnreadByPlanner);
-      const pendingEs = extraShifts.filter(es => es.status === "pending");
+      const pendingEs = extraShifts.filter(es => !es.status || es.status === "pending");
       const cancelledEs = extraShifts.filter(es => es.cancelUnreadByPlanner);
       btnMark.style.display = unreadSl.length > 0 ? "inline-block" : "none";
 
+      const syncInfo = document.getElementById("serverSyncInfo");
+      if (syncInfo) {
+        syncInfo.firstElementChild.innerHTML = `✅ Live-Stand: <b>${pendingLr.length}</b> offene Urlaubsanträge | <b>${pendingEs.length}</b> Bringschichten | <b>${unreadSl.length}</b> Krankmeldungen`;
+      }
+
       let html = "";
-      // 0. Storno-Meldungen vom Mitarbeiter (Urlaub & Bringschicht)
       cancelledLr.forEach(lr => {
         html += `
           <div class="sick-card unread" style="border-left-color:#dc2626;">
@@ -917,7 +931,6 @@
           </div>`;
       });
 
-      // 1. Offene Urlaubsanträge
       pendingLr.forEach(lr => {
         const days = calcSickDays(lr.startDate, lr.endDate);
         html += `
@@ -950,7 +963,6 @@
           </div>`;
       });
 
-      // 2. Offene Bringschichten
       pendingEs.forEach(es => {
         html += `
           <div class="sick-card" style="background:#f0fdf4; border-left-color:#16a34a; border-color:#bbf7d0;">
@@ -969,7 +981,6 @@
           </div>`;
       });
 
-      // 3. Ungelesene Krank- & Gesundmeldungen
       unreadSl.forEach(sl => {
         if (sl.returnRequestPending) {
           html += `
@@ -1057,7 +1068,6 @@
       if (!confirm("Abwesenheit beenden / löschen? Der Eintrag wird auch beim Mitarbeiter im Portal als storniert markiert.")) return;
       const sl = sickLeaves.find(x => x.id === id), today = getTodayIso(), nowStr = new Date().toLocaleString('de-DE');
       if (sl) {
-        // Verknüpften Urlaubsantrag beim Mitarbeiter auf "cancelled_by_planner" setzen
         leaveRequests.forEach(r => {
           if (r.id === sl.requestId || r.linkedSickLeaveId === sl.id || (r.empId === sl.empId && r.startDate === sl.startDate && r.endDate === sl.endDate && (r.status === "approved" || r.status === "accepted_counter"))) {
             r.status = "cancelled_by_planner";
@@ -1068,9 +1078,7 @@
 
         const emp = employees.find(e => e.id === sl.empId);
         const hasOtherActive = sickLeaves.some(x => x.id !== id && x.empId === sl.empId && x.startDate <= today && x.endDate >= today);
-        if (emp && emp.zone === "absent" && !hasOtherActive) {
-          returnEmpFromAbsentOrExtra(emp);
-        }
+        if (emp && emp.zone === "absent" && !hasOtherActive) returnEmpFromAbsentOrExtra(emp);
       }
       sickLeaves = sickLeaves.filter(x => x.id !== id);
       saveToFirebase(); renderInboxModal(); updateInboxBadge(); renderEmployees();
@@ -1200,12 +1208,12 @@
       db.collection("shiftplan_backups").doc(docId).get().then(snap => {
         if (snap.exists) {
           const b = snap.data();
-          db.collection("shiftplan").doc("live_board").set({
+          boardRef.set({
             lines: b.lines, roles: b.roles, employees: b.employees,
             teamsConfig: b.teamsConfig || teamsConfig, sickLeaves: b.sickLeaves || [],
             leaveRequests: b.leaveRequests || [], extraShifts: b.extraShifts || [],
             shiftRotation: b.shiftRotation || shiftRotation
-          });
+          }, { merge: true });
           closeModal('settingsModal');
         }
       });
