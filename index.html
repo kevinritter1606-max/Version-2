@@ -196,7 +196,7 @@
 
   <!-- POSTFACH & ANTRÄGE MODAL (STUFE 3) -->
   <div id="inboxModal" class="modal-overlay">
-    <div class="modal" style="max-width: 650px;">
+    <div class="modal" style="max-width: 660px;">
       <h3 style="display:flex; justify-content:space-between; align-items:center; color:var(--bayer-blue); margin-bottom:14px;">
         <span>📬 Postfach, Urlaub & Bringschichten</span>
         <button onclick="closeModal('inboxModal')" style="border:none; background:none; font-size:1.5rem; cursor:pointer;">&times;</button>
@@ -204,7 +204,7 @@
 
       <div style="margin-bottom: 18px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
-          <h4 style="font-size:0.92rem; color:#dc2626;">🔔 Offene Anträge & Meldungen zur Genehmigung</h4>
+          <h4 style="font-size:0.92rem; color:#dc2626;">🔔 Offene Anträge, Stornos & Meldungen</h4>
           <button id="btnMarkAllRead" class="btn btn-outline" style="padding:4px 10px; font-size:0.75rem; display:none;" onclick="markAllSickLeavesRead()">Krankmeldungen gelesen</button>
         </div>
         <div id="unreadSickList"></div>
@@ -384,6 +384,15 @@
       return null;
     }
 
+    function returnEmpFromAbsentOrExtra(emp) {
+      const l = getPredeterminedLineForEmp(emp);
+      if (emp.noRotation && emp.lastShiftId && l) emp.zone = `${l}_${emp.lastShiftId}`;
+      else if (emp.team === shiftRotation.frueh && l && !emp.noRotation) emp.zone = `${l}_frueh`;
+      else if (emp.team === shiftRotation.spaet && l && !emp.noRotation) emp.zone = `${l}_spaet`;
+      else if (emp.team === shiftRotation.nacht && l && !emp.noRotation) emp.zone = `${l}_nacht`;
+      else emp.zone = "pool";
+    }
+
     window.deletePin = function(id) { const emp = employees.find(e => e.id === id); if (emp) { delete emp.lastLineId; saveToFirebase(); renderEmployees(); } };
 
     window.addEventListener("DOMContentLoaded", () => {
@@ -427,33 +436,23 @@
       const errBox = document.getElementById("loginModalError");
       errBox.style.display = "none";
 
-      // Master-Notfall-Login
       if ((nameVal === "admin" || nameVal === "planer") && pinVal === "1234") {
-        applyPlannerLoginState("Admin", 3);
-        closeModal("pinModal");
-        initBoard();
-        return;
+        applyPlannerLoginState("Admin", 3); closeModal("pinModal"); initBoard(); return;
       }
 
       let emp = selectedLoginPlannerId ? employees.find(e => e.id === selectedLoginPlannerId) : employees.find(e => fullName(e).toLowerCase() === nameVal);
       if (!emp && nameVal) { const p = employees.filter(e => fullName(e).toLowerCase().includes(nameVal)); if (p.length === 1) emp = p[0]; }
 
       if (!emp || (emp.password || "1234") !== pinVal) {
-        errBox.textContent = "❌ Name oder PIN nicht korrekt!";
-        errBox.style.display = "block";
-        return;
+        errBox.textContent = "❌ Name oder PIN nicht korrekt!"; errBox.style.display = "block"; return;
       }
 
       const lvl = Number(emp.accessLevel) || 1;
       if (lvl <= 1) {
-        errBox.textContent = "⛔ Bitte kontaktiere deinen Vorgesetzten für Administrationsrechte (Aktuell: Stufe 1).";
-        errBox.style.display = "block";
-        return;
+        errBox.textContent = "⛔ Bitte kontaktiere deinen Vorgesetzten für Administrationsrechte (Aktuell: Stufe 1)."; errBox.style.display = "block"; return;
       }
 
-      applyPlannerLoginState(fullName(emp), lvl);
-      closeModal("pinModal");
-      initBoard();
+      applyPlannerLoginState(fullName(emp), lvl); closeModal("pinModal"); initBoard();
     }
 
     function applyPlannerLoginState(name, lvl) {
@@ -529,7 +528,7 @@
       employees.forEach(emp => {
         if (emp.noRotation) return;
         const isSick = sickLeaves.some(sl => sl.empId === emp.id && sl.startDate <= today && sl.endDate >= today);
-        if (emp.zone === "absent" || isSick) return;
+        if (emp.zone === "absent" || emp.zone === "extra" || isSick) return;
         if (emp.team === shiftRotation.frueh) { const l = getPredeterminedLineForEmp(emp); emp.zone = l ? `${l}_frueh` : "pool"; }
         else if (emp.team === shiftRotation.spaet) { const l = getPredeterminedLineForEmp(emp); emp.zone = l ? `${l}_spaet` : "pool"; }
         else if (emp.team === shiftRotation.nacht) { const l = getPredeterminedLineForEmp(emp); emp.zone = l ? `${l}_nacht` : "pool"; }
@@ -557,7 +556,7 @@
       employees.forEach(emp => {
         if (emp.noRotation) return;
         const isSick = sickLeaves.some(sl => sl.empId === emp.id && sl.startDate <= today && sl.endDate >= today);
-        if (emp.zone === "absent" || isSick) return;
+        if (emp.zone === "absent" || emp.zone === "extra" || isSick) return;
         if (emp.team === newTeamKey) {
           if (slotKey === "frei") { const l = extractLineIdFromZone(emp.zone); if (l) emp.lastLineId = l; emp.zone = "pool"; }
           else { const l = getPredeterminedLineForEmp(emp); emp.zone = l ? `${l}_${slotKey}` : "pool"; }
@@ -610,14 +609,7 @@
           db.collection("shiftplan_history").doc(exp.id).set({ ...exp, archivedAt: new Date().toISOString() }).catch(()=>{});
           const emp = employees.find(e => e.id === exp.empId);
           const hasOther = sickLeaves.some(sl => sl.id !== exp.id && sl.empId === exp.empId && sl.startDate <= today && sl.endDate >= today);
-          if (emp && emp.zone === "absent" && !hasOther) {
-            const l = getPredeterminedLineForEmp(emp);
-            if (emp.noRotation && emp.lastShiftId && l) emp.zone = `${l}_${emp.lastShiftId}`;
-            else if (emp.team === shiftRotation.frueh && l && !emp.noRotation) emp.zone = `${l}_frueh`;
-            else if (emp.team === shiftRotation.spaet && l && !emp.noRotation) emp.zone = `${l}_spaet`;
-            else if (emp.team === shiftRotation.nacht && l && !emp.noRotation) emp.zone = `${l}_nacht`;
-            else emp.zone = "pool";
-          }
+          if (emp && emp.zone === "absent" && !hasOther) returnEmpFromAbsentOrExtra(emp);
         });
         sickLeaves = sickLeaves.filter(sl => sl.endDate >= today);
         changed = true;
@@ -635,7 +627,26 @@
         }
       });
 
-      // Bringschicht-Automatik: Wenn heute eine bestätigte Bringschicht ansteht und MA im Pool ist -> in Extra-Box legen
+      // Abgelaufene Bringschichten archivieren und Board aufräumen
+      const expiredEs = extraShifts.filter(es => es.date < today && es.status === "approved");
+      if (expiredEs.length > 0) {
+        expiredEs.forEach(exp => {
+          db.collection("shiftplan_history").doc(exp.id).set({
+            id: exp.id, empId: exp.empId, empName: exp.empName,
+            category: "Bringschicht (" + (shiftsLabel[exp.shift] || exp.shift) + ")",
+            startDate: exp.date, endDate: exp.date, reason: exp.note || "BS",
+            createdAt: exp.createdAt, approvedBy: exp.approvedBy, approvedAt: exp.approvedAt,
+            archivedAt: new Date().toISOString()
+          }).catch(()=>{});
+          const emp = employees.find(e => e.id === exp.empId);
+          const hasOtherEs = extraShifts.some(x => x.id !== exp.id && x.empId === exp.empId && x.status === "approved" && x.date === today);
+          if (emp && emp.zone === "extra" && !hasOtherEs) returnEmpFromAbsentOrExtra(emp);
+        });
+        extraShifts = extraShifts.filter(es => !(es.date < today && es.status === "approved"));
+        changed = true;
+      }
+
+      // Bringschicht-Automatik: Nur GENAU am Tag der Bringschicht in die Extra-Box legen
       extraShifts.forEach(es => {
         if (es.status === "approved" && es.date === today && !es.placedOnBoard) {
           const emp = employees.find(e => e.id === es.empId);
@@ -649,21 +660,22 @@
       const badge = document.getElementById("inboxBadge");
       if (!badge) return;
       const c1 = sickLeaves.filter(sl => !sl.readByPlanner || sl.returnRequestPending).length;
-      const c2 = leaveRequests.filter(lr => lr.status === "pending").length;
-      const c3 = extraShifts.filter(es => es.status === "pending").length;
+      const c2 = leaveRequests.filter(lr => lr.status === "pending" || lr.cancelUnreadByPlanner).length;
+      const c3 = extraShifts.filter(es => es.status === "pending" || es.cancelUnreadByPlanner).length;
       const total = c1 + c2 + c3;
       badge.textContent = total;
       badge.style.display = total > 0 ? "inline-flex" : "none";
     }
 
-    // --- URLAUBSANTRÄGE & BRINGSCHICHTEN AKTIONEN (STUFE 3) ---
+    // --- URLAUBSANTRÄGE, STORNO-MELDUNGEN & BRINGSCHICHTEN AKTIONEN (STUFE 3) ---
     window.approveLeaveRequest = function(reqId) {
       const req = leaveRequests.find(r => r.id === reqId);
       if (!req) return;
       const nowStr = new Date().toLocaleString('de-DE');
-      req.status = "approved"; req.approvedBy = currentPlannerName; req.approvedAt = nowStr;
+      const slId = "sl_" + Date.now();
+      req.status = "approved"; req.approvedBy = currentPlannerName; req.approvedAt = nowStr; req.linkedSickLeaveId = slId;
       sickLeaves.push({
-        id: "sl_" + Date.now(), empId: req.empId, empName: req.empName,
+        id: slId, requestId: req.id, empId: req.empId, empName: req.empName,
         category: req.type || "Urlaub - bezahlt", startDate: req.startDate, endDate: req.endDate,
         reason: req.reason || req.type, createdAt: req.createdAt, readByPlanner: true,
         approvedBy: currentPlannerName, approvedAt: nowStr
@@ -676,6 +688,16 @@
       if (!req) return;
       req.status = "rejected"; req.approvedBy = currentPlannerName; req.approvedAt = new Date().toLocaleString('de-DE');
       saveToFirebase(); renderInboxModal(); updateInboxBadge();
+    };
+
+    window.acknowledgeLeaveCancel = function(reqId) {
+      const req = leaveRequests.find(r => r.id === reqId);
+      if (req) { req.cancelUnreadByPlanner = false; saveToFirebase(); renderInboxModal(); updateInboxBadge(); }
+    };
+
+    window.acknowledgeExtraCancel = function(esId) {
+      const es = extraShifts.find(x => x.id === esId);
+      if (es) { es.cancelUnreadByPlanner = false; saveToFirebase(); renderInboxModal(); updateInboxBadge(); }
     };
 
     window.togglePartialLeaveBox = function(reqId) {
@@ -704,20 +726,18 @@
       }
       if (!ranges.length) return;
       const note = document.getElementById("partialNote_" + reqId).value.trim();
-      req.status = "counter_offered";
-      req.proposedRanges = ranges;
-      req.plannerNote = note;
-      req.approvedBy = currentPlannerName;
-      req.approvedAt = new Date().toLocaleString('de-DE');
+      req.status = "counter_offered"; req.proposedRanges = ranges; req.plannerNote = note;
+      req.approvedBy = currentPlannerName; req.approvedAt = new Date().toLocaleString('de-DE');
       saveToFirebase(); renderInboxModal(); updateInboxBadge();
     };
 
     window.approveExtraShift = function(esId) {
       const es = extraShifts.find(x => x.id === esId);
       if (!es) return;
+      const today = getTodayIso();
       es.status = "approved"; es.approvedBy = currentPlannerName; es.approvedAt = new Date().toLocaleString('de-DE');
       const emp = employees.find(e => e.id === es.empId);
-      if (emp && emp.zone === "pool") { emp.zone = "extra"; es.placedOnBoard = true; }
+      if (emp && emp.zone === "pool" && es.date === today) { emp.zone = "extra"; es.placedOnBoard = true; }
       saveToFirebase(); renderInboxModal(); updateInboxBadge(); renderEmployees();
     };
 
@@ -736,6 +756,11 @@
     };
 
     window.deleteExtraShift = function(esId) {
+      const es = extraShifts.find(x => x.id === esId);
+      if (es) {
+        const emp = employees.find(e => e.id === es.empId);
+        if (emp && emp.zone === "extra") returnEmpFromAbsentOrExtra(emp);
+      }
       extraShifts = extraShifts.filter(x => x.id !== esId);
       saveToFirebase(); renderEmployees();
     };
@@ -748,7 +773,7 @@
         sl.endDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
         sl.returnRequestPending = false; sl.readByPlanner = true;
         sl.approvedBy = currentPlannerName; sl.approvedAt = new Date().toLocaleString('de-DE');
-        saveToFirebase(); renderInboxModal(); updateInboxBadge();
+        processSickLeavesAutomation(); saveToFirebase(); renderInboxModal(); updateInboxBadge(); renderEmployees();
       }
     };
 
@@ -757,14 +782,50 @@
       if (sl) { sl.returnRequestPending = false; sl.readByPlanner = true; sl.approvedBy = currentPlannerName; saveToFirebase(); renderInboxModal(); updateInboxBadge(); }
     };
 
-    window.toggleEditSickDate = function(id) { const box = document.getElementById("editDateBox_" + id); if (box) box.style.display = (box.style.display === "none") ? "flex" : "none"; };
-    window.saveSickLeaveEndDate = function(id) {
-      const input = document.getElementById("newEndDate_" + id);
-      if (!input || !input.value) return;
+    // NEU: SOWOHL START- ALS AUCH ENDDATUM ÄNDERN + SYNCHRONISATION MIT PORTAL & BOARD
+    window.toggleEditSickDate = function(id) {
+      const box = document.getElementById("editDateBox_" + id);
+      if (box) box.style.display = (box.style.display === "none") ? "flex" : "none";
+    };
+
+    window.saveSickLeaveDates = function(id) {
+      const startInp = document.getElementById("newStartDate_" + id);
+      const endInp = document.getElementById("newEndDate_" + id);
+      if (!startInp || !endInp || !startInp.value || !endInp.value) return;
+      if (endInp.value < startInp.value) { alert("Das Enddatum darf nicht vor dem Startdatum liegen!"); return; }
+
       const sl = sickLeaves.find(x => x.id === id);
-      if (!sl || input.value < sl.startDate) { alert("Enddatum darf nicht vor Startdatum liegen!"); return; }
-      sl.endDate = input.value; sl.approvedBy = currentPlannerName; sl.approvedAt = new Date().toLocaleString('de-DE');
-      processSickLeavesAutomation(); saveToFirebase(); renderInboxModal(); renderEmployees();
+      if (!sl) return;
+
+      const oldStart = sl.startDate, oldEnd = sl.endDate;
+      sl.startDate = startInp.value;
+      sl.endDate = endInp.value;
+      sl.approvedBy = currentPlannerName;
+      sl.approvedAt = new Date().toLocaleString('de-DE');
+
+      // Verknüpften Urlaubsantrag im Mitarbeiter-Portal synchronisieren
+      const linkedReq = leaveRequests.find(r => r.id === sl.requestId || r.linkedSickLeaveId === sl.id || (r.empId === sl.empId && r.startDate === oldStart && r.endDate === oldEnd && r.status === "approved"));
+      if (linkedReq) {
+        linkedReq.startDate = sl.startDate;
+        linkedReq.endDate = sl.endDate;
+        linkedReq.approvedBy = currentPlannerName;
+        linkedReq.approvedAt = sl.approvedAt;
+      }
+
+      // Prüfen, ob Mitarbeiter heute noch abwesend ist oder zurück aufs Board muss
+      const today = getTodayIso();
+      const emp = employees.find(e => e.id === sl.empId);
+      if (emp) {
+        const stillAbsentToday = sickLeaves.some(x => x.empId === emp.id && x.startDate <= today && x.endDate >= today);
+        if (!stillAbsentToday && emp.zone === "absent") {
+          returnEmpFromAbsentOrExtra(emp);
+        }
+      }
+
+      processSickLeavesAutomation();
+      saveToFirebase();
+      renderInboxModal();
+      renderEmployees();
     };
 
     function onManualSickNameInput(val) {
@@ -821,10 +882,41 @@
       const unreadC = document.getElementById("unreadSickList"), activeC = document.getElementById("activeSickList"), btnMark = document.getElementById("btnMarkAllRead"), today = getTodayIso();
       const unreadSl = sickLeaves.filter(sl => !sl.readByPlanner || sl.returnRequestPending);
       const pendingLr = leaveRequests.filter(lr => lr.status === "pending");
+      const cancelledLr = leaveRequests.filter(lr => lr.cancelUnreadByPlanner);
       const pendingEs = extraShifts.filter(es => es.status === "pending");
+      const cancelledEs = extraShifts.filter(es => es.cancelUnreadByPlanner);
       btnMark.style.display = unreadSl.length > 0 ? "inline-block" : "none";
 
       let html = "";
+      // 0. Storno-Meldungen vom Mitarbeiter (Urlaub & Bringschicht)
+      cancelledLr.forEach(lr => {
+        html += `
+          <div class="sick-card unread" style="border-left-color:#dc2626;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+              <div>
+                <div style="font-weight:700; color:#9f1239;">🚫 Stornierung durch Mitarbeiter: ${lr.empName}</div>
+                <div style="font-size:0.8rem; margin-top:3px;">Der Mitarbeiter hat seinen <b>${lr.type} (${formatDateDe(lr.startDate)} – ${formatDateDe(lr.endDate)})</b> storniert.</div>
+                <div style="font-size:0.65rem; color:#64748b; margin-top:2px;">🕒 Storniert am: ${lr.cancelledAt || '-'}</div>
+              </div>
+              <button class="btn btn-primary" style="padding:5px 10px; font-size:0.75rem;" onclick="acknowledgeLeaveCancel('${lr.id}')">✓ Gelesen</button>
+            </div>
+          </div>`;
+      });
+
+      cancelledEs.forEach(es => {
+        html += `
+          <div class="sick-card unread" style="border-left-color:#dc2626;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+              <div>
+                <div style="font-weight:700; color:#9f1239;">🚫 Bringschicht abgesagt: ${es.empName}</div>
+                <div style="font-size:0.8rem; margin-top:3px;">Bringschicht am <b>${formatDateDe(es.date)} (${shiftsLabel[es.shift] || es.shift})</b> wurde vom Mitarbeiter storniert.</div>
+                <div style="font-size:0.65rem; color:#64748b; margin-top:2px;">🕒 Storniert am: ${es.cancelledAt || '-'}</div>
+              </div>
+              <button class="btn btn-primary" style="padding:5px 10px; font-size:0.75rem;" onclick="acknowledgeExtraCancel('${es.id}')">✓ Gelesen</button>
+            </div>
+          </div>`;
+      });
+
       // 1. Offene Urlaubsanträge
       pendingLr.forEach(lr => {
         const days = calcSickDays(lr.startDate, lr.endDate);
@@ -932,16 +1024,18 @@
                   <div style="font-size:0.65rem; color:#64748b; margin-top:2px;">🕒 Eingereicht: ${sl.createdAt || '-'} ${sl.approvedBy ? `| ✍️ <b>Bestätigt durch: ${sl.approvedBy}</b>` : ''}</div>
                   <div style="font-size:0.8rem; margin-top:2px;">
                     Zeitraum: <b>${formatDateDe(sl.startDate)}</b> bis <b>${formatDateDe(sl.endDate)}</b> (${days} ${days===1?'Tag':'Tage'})
-                    <button class="btn btn-outline" style="padding:1px 6px; font-size:0.7rem; margin-left:6px; color:var(--bayer-blue);" onclick="toggleEditSickDate('${sl.id}')">✏️ Ändern</button>
+                    <button class="btn btn-outline" style="padding:1px 6px; font-size:0.7rem; margin-left:6px; color:var(--bayer-blue);" onclick="toggleEditSickDate('${sl.id}')">✏️ Zeitraum ändern</button>
                   </div>
-                  <div id="editDateBox_${sl.id}" style="display:none; align-items:center; gap:6px; margin-top:6px; background:#fff; padding:6px; border-radius:6px; border:1px solid #cbd5e1;">
-                    <span style="font-size:0.75rem; font-weight:600;">Neues Bis-Datum:</span>
-                    <input type="date" id="newEndDate_${sl.id}" value="${sl.endDate}" min="${sl.startDate}" class="form-control" style="width:auto; padding:3px 6px; font-size:0.78rem;">
-                    <button class="btn btn-primary" style="padding:4px 10px; font-size:0.75rem;" onclick="saveSickLeaveEndDate('${sl.id}')">Speichern</button>
+                  <div id="editDateBox_${sl.id}" style="display:none; align-items:center; flex-wrap:wrap; gap:6px; margin-top:6px; background:#fff; padding:6px; border-radius:6px; border:1px solid #cbd5e1;">
+                    <span style="font-size:0.75rem; font-weight:600;">Von:</span>
+                    <input type="date" id="newStartDate_${sl.id}" value="${sl.startDate}" class="form-control" style="width:auto; padding:3px 6px; font-size:0.78rem;">
+                    <span style="font-size:0.75rem; font-weight:600;">Bis:</span>
+                    <input type="date" id="newEndDate_${sl.id}" value="${sl.endDate}" class="form-control" style="width:auto; padding:3px 6px; font-size:0.78rem;">
+                    <button class="btn btn-primary" style="padding:4px 10px; font-size:0.75rem;" onclick="saveSickLeaveDates('${sl.id}')">Speichern</button>
                   </div>
                   ${sl.reason ? `<div style="font-size:0.78rem; color:#475569; margin-top:3px;">💬 "${sl.reason}"</div>` : ''}
                 </div>
-                <button class="btn btn-outline" style="padding:4px 8px; font-size:0.75rem; color:#ef4444;" onclick="deleteSickLeave('${sl.id}')">Beenden</button>
+                <button class="btn btn-outline" style="padding:4px 8px; font-size:0.75rem; color:#ef4444;" onclick="deleteSickLeave('${sl.id}')">Beenden / Löschen</button>
               </div>
             </div>`;
         }).join("");
@@ -960,17 +1054,22 @@
     }
 
     function deleteSickLeave(id) {
-      if (!confirm("Abwesenheit beenden? Mitarbeiter kehrt in seine Schicht (oder Pool) zurück.")) return;
-      const sl = sickLeaves.find(x => x.id === id), today = getTodayIso();
+      if (!confirm("Abwesenheit beenden / löschen? Der Eintrag wird auch beim Mitarbeiter im Portal als storniert markiert.")) return;
+      const sl = sickLeaves.find(x => x.id === id), today = getTodayIso(), nowStr = new Date().toLocaleString('de-DE');
       if (sl) {
+        // Verknüpften Urlaubsantrag beim Mitarbeiter auf "cancelled_by_planner" setzen
+        leaveRequests.forEach(r => {
+          if (r.id === sl.requestId || r.linkedSickLeaveId === sl.id || (r.empId === sl.empId && r.startDate === sl.startDate && r.endDate === sl.endDate && (r.status === "approved" || r.status === "accepted_counter"))) {
+            r.status = "cancelled_by_planner";
+            r.approvedBy = currentPlannerName;
+            r.approvedAt = nowStr;
+          }
+        });
+
         const emp = employees.find(e => e.id === sl.empId);
-        if (emp && emp.zone === "absent" && sl.startDate <= today && sl.endDate >= today) {
-          const l = getPredeterminedLineForEmp(emp);
-          if (emp.noRotation && emp.lastShiftId && l) emp.zone = `${l}_${emp.lastShiftId}`;
-          else if (emp.team === shiftRotation.frueh && l && !emp.noRotation) emp.zone = `${l}_frueh`;
-          else if (emp.team === shiftRotation.spaet && l && !emp.noRotation) emp.zone = `${l}_spaet`;
-          else if (emp.team === shiftRotation.nacht && l && !emp.noRotation) emp.zone = `${l}_nacht`;
-          else emp.zone = "pool";
+        const hasOtherActive = sickLeaves.some(x => x.id !== id && x.empId === sl.empId && x.startDate <= today && x.endDate >= today);
+        if (emp && emp.zone === "absent" && !hasOtherActive) {
+          returnEmpFromAbsentOrExtra(emp);
         }
       }
       sickLeaves = sickLeaves.filter(x => x.id !== id);
@@ -1075,7 +1174,12 @@
       const todayIso = getTodayIso(), todayDe = new Date().toLocaleDateString('de-DE');
       db.collection("shiftplan_backups").doc(todayIso).get().then(snap => {
         if (!snap.exists) {
-          db.collection("shiftplan_backups").doc(todayIso).set({ date: todayIso, displayDate: todayDe, lines: data.lines || [], roles: data.roles || [], employees: data.employees || [], teamsConfig: data.teamsConfig || teamsConfig, sickLeaves: data.sickLeaves || [], shiftRotation: data.shiftRotation || shiftRotation }).then(() => {
+          db.collection("shiftplan_backups").doc(todayIso).set({
+            date: todayIso, displayDate: todayDe, lines: data.lines || [], roles: data.roles || [],
+            employees: data.employees || [], teamsConfig: data.teamsConfig || teamsConfig,
+            sickLeaves: data.sickLeaves || [], leaveRequests: data.leaveRequests || [],
+            extraShifts: data.extraShifts || [], shiftRotation: data.shiftRotation || shiftRotation
+          }).then(() => {
             db.collection("shiftplan_backups").orderBy("date", "desc").get().then(sn => { let c = 0; sn.forEach(d => { if (++c > 7) d.ref.delete(); }); });
           });
         }
@@ -1094,7 +1198,16 @@
     function restoreBackup(docId) {
       if (!confirm("Diesen Stand wirklich laden?")) return;
       db.collection("shiftplan_backups").doc(docId).get().then(snap => {
-        if (snap.exists) { const b = snap.data(); db.collection("shiftplan").doc("live_board").set({ lines: b.lines, roles: b.roles, employees: b.employees, teamsConfig: b.teamsConfig || teamsConfig, sickLeaves: b.sickLeaves || [], shiftRotation: b.shiftRotation || shiftRotation }); closeModal('settingsModal'); }
+        if (snap.exists) {
+          const b = snap.data();
+          db.collection("shiftplan").doc("live_board").set({
+            lines: b.lines, roles: b.roles, employees: b.employees,
+            teamsConfig: b.teamsConfig || teamsConfig, sickLeaves: b.sickLeaves || [],
+            leaveRequests: b.leaveRequests || [], extraShifts: b.extraShifts || [],
+            shiftRotation: b.shiftRotation || shiftRotation
+          });
+          closeModal('settingsModal');
+        }
       });
     }
 
@@ -1190,7 +1303,6 @@
       document.getElementById("poolCount").textContent = `(${document.getElementById("pool")?.children.length || 0})`;
       document.getElementById("extraCount").textContent = `(${document.getElementById("extra")?.children.length || 0})`;
 
-      // Liste bestätigter Bringschichten unter der Zusatz-Box rendern
       const extraListEl = document.getElementById("approvedExtraList");
       if (extraListEl) {
         const appr = extraShifts.filter(es => es.status === "approved" && es.date >= today).sort((a,b) => a.date.localeCompare(b.date));
@@ -1198,8 +1310,8 @@
           <div style="display:flex; justify-content:space-between; align-items:center; background:#dcfce7; padding:3px 6px; border-radius:4px; margin-top:3px; color:#166534;">
             <span><b>${es.empName}</b>: ${formatDateDe(es.date)} (${shiftsLabel[es.shift]})</span>
             <div style="display:flex; gap:4px;">
-              <button onclick="pullExtraShiftToBox('${es.id}')" style="border:none; background:#16a34a; color:#fff; border-radius:3px; padding:1px 5px; cursor:pointer; font-size:0.68rem;" title="Karte in dieses Zusatz-Fenster holen">📥</button>
-              <button onclick="deleteExtraShift('${es.id}')" style="border:none; background:none; color:#b91c1c; cursor:pointer; font-size:0.72rem;">✖</button>
+              <button onclick="pullExtraShiftToBox('${es.id}')" style="border:none; background:#16a34a; color:#fff; border-radius:3px; padding:1px 5px; cursor:pointer; font-size:0.68rem;" title="Karte vorab in dieses Zusatz-Fenster holen">📥</button>
+              <button onclick="deleteExtraShift('${es.id}')" style="border:none; background:none; color:#b91c1c; cursor:pointer; font-size:0.72rem;" title="Bringschicht entfernen">✖</button>
             </div>
           </div>`).join("");
       }
@@ -1343,10 +1455,14 @@
     }
 
     function deleteEmployee(id) {
-      if (!confirm("Mitarbeiter wirklich löschen?")) return;
-      employees = employees.filter(e => e.id !== id); sickLeaves = sickLeaves.filter(sl => sl.empId !== id);
+      if (!confirm("Mitarbeiter inklusive aller Anträge wirklich löschen?")) return;
+      employees = employees.filter(e => e.id !== id);
+      sickLeaves = sickLeaves.filter(sl => sl.empId !== id);
+      leaveRequests = leaveRequests.filter(lr => lr.empId !== id);
+      extraShifts = extraShifts.filter(es => es.empId !== id);
       saveToFirebase(); renderEmployees(); renderSettingsLists();
     }
   </script>
 </body>
 </html>
+```!]
