@@ -32,6 +32,8 @@
     .btn-primary { background: var(--bayer-blue); color: #fff; }
     .btn-primary:hover:not(:disabled) { background: #0077b6; }
     .btn-outline { border-color: #cbd5e1; background: #fff; color: #475569; width: auto; padding: 7px 12px; font-size: 0.82rem; }
+    .btn-sm-danger { border: 1px solid #fecaca; background: #fff1f2; color: #dc2626; padding: 3px 8px; border-radius: 5px; font-size: 0.73rem; font-weight: 600; cursor: pointer; width: auto; }
+    .btn-sm-danger:hover { background: #fee2e2; }
     .status-box { padding: 15px; border-radius: 10px; font-weight: 600; display: flex; flex-direction: column; gap: 4px; }
     .status-assigned { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
     .status-pool { background: #e0f2fe; color: #075985; border: 1px solid #bae6fd; }
@@ -44,7 +46,7 @@
     .error-msg { display: none; background: #fee2e2; color: #b91c1c; padding: 10px; border-radius: 6px; font-size: 0.84rem; margin-bottom: 12px; text-align: center; font-weight: 600; line-height: 1.35; }
     .notice-hint { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; padding: 8px 10px; border-radius: 6px; font-size: 0.76rem; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; line-height: 1.3; }
     .req-item { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 12px; font-size: 0.82rem; margin-bottom: 8px; }
-    .stamp-tag { font-size: 0.72rem; color: #475569; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #cbd5e1; }
+    .stamp-tag { font-size: 0.72rem; color: #475569; margin-top: 6px; padding-top: 5px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }
   </style>
 </head>
 <body>
@@ -189,7 +191,7 @@
     });
     const db = firebase.firestore();
     const shiftsMap = { frueh: "Frühschicht", spaet: "Spätschicht", nacht: "Nachtschicht" };
-    let lines = [], employees = [], sickLeaves = [], leaveRequests = [], extraShifts = [], rawDocData = {};
+    let lines = [], employees = [], sickLeaves = [], leaveRequests = [], extraShifts = [], shiftRotation = {}, rawDocData = {};
     
     const SESSION_TIMEOUT_MS = 12 * 60 * 60 * 1000;
     let loggedInEmpId = localStorage.getItem("portal_emp_id") || null;
@@ -210,6 +212,15 @@
     function canMergeDateRanges(s1, e1, s2, e2) { const msDay = 86400000, tS1 = parseIsoLocal(s1), tE1 = parseIsoLocal(e1), tS2 = parseIsoLocal(s2), tE2 = parseIsoLocal(e2); return (tS1 && tE1 && tS2 && tE2) ? (tS1 <= tE2 + msDay * 1.1) && (tS2 <= tE1 + msDay * 1.1) : false; }
     function mergeReasonsText(r1, r2) { const a = (r1 || "").trim(), b = (r2 || "").trim(); if (!a) return b; if (!b) return a; if (a.toLowerCase().includes(b.toLowerCase())) return a; if (b.toLowerCase().includes(a.toLowerCase())) return b; return `${a} | ${b}`; }
 
+    function getRestoredZoneForEmp(emp) {
+      let l = (emp.lastLineId && lines.some(x => x.id === emp.lastLineId)) ? emp.lastLineId : ((emp.mainLines && emp.mainLines.length > 0 && lines.some(x => x.id === emp.mainLines[0])) ? emp.mainLines[0] : null);
+      if (emp.noRotation && emp.lastShiftId && l) return `${l}_${emp.lastShiftId}`;
+      if (emp.team === shiftRotation.frueh && l && !emp.noRotation) return `${l}_frueh`;
+      if (emp.team === shiftRotation.spaet && l && !emp.noRotation) return `${l}_spaet`;
+      if (emp.team === shiftRotation.nacht && l && !emp.noRotation) return `${l}_nacht`;
+      return "pool";
+    }
+
     window.addEventListener("DOMContentLoaded", () => {
       const today = getTodayIso();
       $("sickStartDate").value = $("sickEndDate").value = $("earlyReturnDate").value = $("leaveStartDate").value = $("leaveEndDate").value = $("extraDate").value = today;
@@ -223,6 +234,7 @@
         sickLeaves = rawDocData.sickLeaves || [];
         leaveRequests = rawDocData.leaveRequests || [];
         extraShifts = rawDocData.extraShifts || [];
+        shiftRotation = rawDocData.shiftRotation || {};
         employees = (rawDocData.employees || []).map(e => {
           if (!e.firstName && e.name) { const p = e.name.split(" "); e.firstName = p[0]||""; e.lastName = p.slice(1).join(" ")||""; }
           e.password = e.password || "1234"; if (e.mustChangePw === undefined) e.mustChangePw = (e.password === "1234");
@@ -303,7 +315,7 @@
       $("empSecLines").innerHTML = sList.length ? sList.map(l => `<span class="line-badge badge-sec">${l.name}</span>`).join("") : `<span style="font-size:0.8rem; color:#94a3b8;">Keine hinterlegt</span>`;
       
       // 1. Aktive Krankmeldungen / Abwesenheiten rendern
-      $("mySickLeavesHistory").innerHTML = !myActiveAbsences.length ? "" : `<div style="font-size:0.82rem; font-weight:700; margin-bottom:6px;">Eingetragene Abwesenheiten:</div>` + myActiveAbsences.map(s => `
+      $("mySickLeavesHistory").innerHTML = !myActiveAbsences.length ? "" : `<div style="font-size:0.82rem; font-weight:700; margin-bottom:6px;">Aktuell aktive Zeiträume im Plan:</div>` + myActiveAbsences.map(s => `
         <div class="req-item">
           <div style="display:flex; justify-content:space-between;">
             <b>📅 ${formatDateDe(s.startDate)} bis ${formatDateDe(s.endDate)}</b>
@@ -311,20 +323,44 @@
           </div>
           ${s.returnRequestPending ? `<div style="color:#d97706; font-weight:700; margin-top:3px;">⚠️ Rückkehr-Anfrage für ${formatDateDe(s.returnRequestDate)} in Prüfung</div>` : ''}
           ${s.reason ? `<div style="color:#64748b; margin-top:2px;">Notiz: ${s.reason}</div>` : ''}
-          ${s.approvedBy ? `<div class="stamp-tag">✍️ Bestätigt durch: <b>${s.approvedBy}</b> (${s.approvedAt || ''})</div>` : ''}
+          ${s.approvedBy ? `<div class="stamp-tag"><span>✍️ Bestätigt durch: <b>${s.approvedBy}</b> (${s.approvedAt || ''})</span></div>` : ''}
         </div>`).join("");
 
-      // 2. Meine Urlaubsanträge rendern (inkl. Gegenvorschlag-Annahme/Ablehnung)
-      const myLeaves = leaveRequests.filter(lr => lr.empId === emp.id).sort((a,b) => (b.createdAt||"").localeCompare(a.createdAt||""));
+      // 2. Meine Urlaubsanträge rendern (inkl. Erkennung gelöschter Planer-Termine & Storno-Buttons)
+      const myLeaves = leaveRequests.filter(lr => lr.empId === emp.id && !lr.hiddenForEmp).sort((a,b) => (b.createdAt||"").localeCompare(a.createdAt||""));
       $("myLeaveRequestsList").innerHTML = !myLeaves.length ? "" : `<div style="font-size:0.82rem; font-weight:700; margin-bottom:6px;">Meine Anträge:</div>` + myLeaves.map(lr => {
+        // Prüfen, ob ein genehmigter Urlaub vom Planer aus den aktiven Abwesenheiten gelöscht wurde
+        let effectiveStatus = lr.status;
+        if ((lr.status === "approved" || lr.status === "accepted_counter") && lr.endDate >= today) {
+          const stillInSickLeaves = sickLeaves.some(s => s.requestId === lr.id || s.id === lr.linkedSickLeaveId || (s.empId === emp.id && s.startDate <= lr.endDate && s.endDate >= lr.startDate && (!s.category || !s.category.includes("Krank"))));
+          if (!stillInSickLeaves) effectiveStatus = "cancelled_by_planner";
+        }
+
         let statusBadge = `<span style="background:#fef3c7; color:#b45309; padding:2px 6px; border-radius:4px; font-weight:700;">⏳ In Bearbeitung</span>`;
-        if (lr.status === "approved" || lr.status === "accepted_counter") statusBadge = `<span style="background:#dcfce7; color:#166534; padding:2px 6px; border-radius:4px; font-weight:700;">✅ Genehmigt</span>`;
-        else if (lr.status === "rejected") statusBadge = `<span style="background:#fee2e2; color:#b91c1c; padding:2px 6px; border-radius:4px; font-weight:700;">❌ Abgelehnt</span>`;
-        else if (lr.status === "declined_counter") statusBadge = `<span style="background:#f1f5f9; color:#64748b; padding:2px 6px; border-radius:4px; font-weight:700;">Gegenvorschlag abgelehnt</span>`;
-        else if (lr.status === "counter_offered") statusBadge = `<span style="background:#e0f2fe; color:#0369a1; padding:2px 6px; border-radius:4px; font-weight:700;">⚖️ Vorschlag vom Planer</span>`;
+        let actionBtnHtml = `<button class="btn-sm-danger" onclick="cancelOrDeleteLeave('${lr.id}', '${effectiveStatus}')">🗑️ Antrag zurückziehen</button>`;
+
+        if (effectiveStatus === "approved" || effectiveStatus === "accepted_counter") {
+          statusBadge = `<span style="background:#dcfce7; color:#166534; padding:2px 6px; border-radius:4px; font-weight:700;">✅ Genehmigt</span>`;
+          actionBtnHtml = `<button class="btn-sm-danger" onclick="cancelOrDeleteLeave('${lr.id}', '${effectiveStatus}')">🗑️ Termin stornieren</button>`;
+        } else if (effectiveStatus === "rejected") {
+          statusBadge = `<span style="background:#fee2e2; color:#b91c1c; padding:2px 6px; border-radius:4px; font-weight:700;">❌ Abgelehnt</span>`;
+          actionBtnHtml = `<button class="btn-sm-danger" onclick="cancelOrDeleteLeave('${lr.id}', '${effectiveStatus}')">✖ Entfernen</button>`;
+        } else if (effectiveStatus === "cancelled_by_planner") {
+          statusBadge = `<span style="background:#fee2e2; color:#991b1b; padding:2px 6px; border-radius:4px; font-weight:700;">🚫 Vom Planer beendet/storniert</span>`;
+          actionBtnHtml = `<button class="btn-sm-danger" onclick="cancelOrDeleteLeave('${lr.id}', '${effectiveStatus}')">✖ Entfernen</button>`;
+        } else if (effectiveStatus === "cancelled_by_emp") {
+          statusBadge = `<span style="background:#f1f5f9; color:#64748b; padding:2px 6px; border-radius:4px; font-weight:700;">🚫 Von dir storniert</span>`;
+          actionBtnHtml = `<button class="btn-sm-danger" onclick="cancelOrDeleteLeave('${lr.id}', '${effectiveStatus}')">✖ Entfernen</button>`;
+        } else if (effectiveStatus === "declined_counter") {
+          statusBadge = `<span style="background:#f1f5f9; color:#64748b; padding:2px 6px; border-radius:4px; font-weight:700;">Gegenvorschlag abgelehnt</span>`;
+          actionBtnHtml = `<button class="btn-sm-danger" onclick="cancelOrDeleteLeave('${lr.id}', '${effectiveStatus}')">✖ Entfernen</button>`;
+        } else if (effectiveStatus === "counter_offered") {
+          statusBadge = `<span style="background:#e0f2fe; color:#0369a1; padding:2px 6px; border-radius:4px; font-weight:700;">⚖️ Vorschlag vom Planer</span>`;
+          actionBtnHtml = "";
+        }
 
         let counterHtml = "";
-        if (lr.status === "counter_offered" && lr.proposedRanges) {
+        if (effectiveStatus === "counter_offered" && lr.proposedRanges) {
           const rangesText = lr.proposedRanges.map((r, i) => `<div>• Zeitraum ${i+1}: <b>${formatDateDe(r.startDate)} bis ${formatDateDe(r.endDate)}</b></div>`).join("");
           counterHtml = `
             <div style="background:#f0f9ff; border:1px solid #7dd3fc; border-radius:6px; padding:10px; margin-top:8px;">
@@ -346,34 +382,58 @@
             </div>
             ${lr.reason ? `<div style="color:#64748b; margin-top:2px;">Bemerkung: ${lr.reason}</div>` : ''}
             ${counterHtml}
-            ${lr.approvedBy ? `<div class="stamp-tag">✍️ Geprüft / Bestätigt durch: <b>${lr.approvedBy}</b> (${lr.approvedAt || ''})</div>` : ''}
+            <div class="stamp-tag">
+              <span>${lr.approvedBy ? `✍️ Geprüft durch: <b>${lr.approvedBy}</b> (${lr.approvedAt || ''})` : `🕒 Eingereicht: ${lr.createdAt || '-'}`}</span>
+              ${actionBtnHtml}
+            </div>
           </div>`;
       }).join("");
 
-      // 3. Meine Bringschichten rendern
-      const myExtras = extraShifts.filter(es => es.empId === emp.id).sort((a,b) => b.date.localeCompare(a.date));
+      // 3. Meine Bringschichten rendern (inkl. Storno-Button)
+      const myExtras = extraShifts.filter(es => es.empId === emp.id && !es.hiddenForEmp).sort((a,b) => b.date.localeCompare(a.date));
       $("myExtraShiftsList").innerHTML = !myExtras.length ? "" : `<div style="font-size:0.82rem; font-weight:700; margin-bottom:6px;">Gemeldete Bringschichten:</div>` + myExtras.map(es => {
         let st = `<span style="background:#fef3c7; color:#b45309; padding:2px 6px; border-radius:4px; font-weight:700;">⏳ In Bearbeitung</span>`;
-        if (es.status === "approved") st = `<span style="background:#dcfce7; color:#166534; padding:2px 6px; border-radius:4px; font-weight:700;">✅ Bestätigt</span>`;
-        else if (es.status === "rejected") st = `<span style="background:#fee2e2; color:#b91c1c; padding:2px 6px; border-radius:4px; font-weight:700;">❌ Abgelehnt</span>`;
+        let btnHtml = `<button class="btn-sm-danger" onclick="cancelOrDeleteExtra('${es.id}', '${es.status}')">🗑️ Zurückziehen</button>`;
+        if (es.status === "approved") {
+          st = `<span style="background:#dcfce7; color:#166534; padding:2px 6px; border-radius:4px; font-weight:700;">✅ Bestätigt</span>`;
+          btnHtml = `<button class="btn-sm-danger" onclick="cancelOrDeleteExtra('${es.id}', '${es.status}')">🗑️ Absagen / Stornieren</button>`;
+        } else if (es.status === "rejected") {
+          st = `<span style="background:#fee2e2; color:#b91c1c; padding:2px 6px; border-radius:4px; font-weight:700;">❌ Abgelehnt</span>`;
+          btnHtml = `<button class="btn-sm-danger" onclick="cancelOrDeleteExtra('${es.id}', '${es.status}')">✖ Entfernen</button>`;
+        } else if (es.status === "cancelled_by_emp") {
+          st = `<span style="background:#f1f5f9; color:#64748b; padding:2px 6px; border-radius:4px; font-weight:700;">🚫 Von dir abgesagt</span>`;
+          btnHtml = `<button class="btn-sm-danger" onclick="cancelOrDeleteExtra('${es.id}', '${es.status}')">✖ Entfernen</button>`;
+        }
         return `
           <div class="req-item">
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <b>📅 ${formatDateDe(es.date)} – ${shiftsMap[es.shift] || es.shift} (${es.note || 'BS'})</b>
               ${st}
             </div>
-            ${es.approvedBy ? `<div class="stamp-tag">✍️ Bestätigt durch: <b>${es.approvedBy}</b> (${es.approvedAt || ''})</div>` : ''}
+            <div class="stamp-tag">
+              <span>${es.approvedBy ? `✍️ Bestätigt durch: <b>${es.approvedBy}</b> (${es.approvedAt || ''})` : `🕒 Angefragt: ${es.createdAt || '-'}`}</span>
+              ${btnHtml}
+            </div>
           </div>`;
       }).join("");
     }
 
-    // --- AKTIONEN: URLAUBSANTRAG & GEGENVORSCHLAG ---
+    // --- AKTIONEN: URLAUBSANTRAG, GEGENVORSCHLAG & STORNIERUNG ---
     function submitLeaveRequest() {
       const emp = employees.find(e => e.id === loggedInEmpId); if (!emp) return;
       const type = $("leaveType").value, sD = $("leaveStartDate").value, eD = $("leaveEndDate").value, r = $("leaveReason").value.trim();
       const err = $("leaveErrorBanner"), succ = $("leaveSuccessBanner"), btn = $("leaveSubmitBtn");
       err.style.display = "none"; succ.style.display = "none";
       if (!sD || !eD || eD < sD) { err.textContent = "Bitte einen gültigen Zeitraum (Von - Bis) wählen!"; err.style.display = "block"; return; }
+
+      // Doppel-Prüfung
+      const hasOverlap = leaveRequests.some(lr => lr.empId === emp.id && ["pending","counter_offered"].includes(lr.status) && sD <= lr.endDate && eD >= lr.startDate) ||
+                         sickLeaves.some(sl => sl.empId === emp.id && sD <= sl.endDate && eD >= sl.startDate);
+      if (hasOverlap) {
+        err.textContent = "⚠️ Für diesen Zeitraum liegt bereits ein offener Antrag oder eine genehmigte Abwesenheit vor!";
+        err.style.display = "block"; return;
+      }
+
       btn.disabled = true;
       const updated = [...leaveRequests, {
         id: "lr_" + Date.now(), empId: emp.id, empName: fullName(emp),
@@ -396,7 +456,7 @@
       (req.proposedRanges || []).forEach((rg, i) => {
         if (rg.startDate <= today && rg.endDate >= today) touchesToday = true;
         updatedSl.push({
-          id: "sl_" + Date.now() + "_" + i, empId: emp.id, empName: fullName(emp),
+          id: "sl_" + Date.now() + "_" + i, requestId: req.id, empId: emp.id, empName: fullName(emp),
           category: req.type, startDate: rg.startDate, endDate: rg.endDate,
           reason: req.reason || req.type, createdAt: nowStr, readByPlanner: true,
           approvedBy: req.approvedBy, approvedAt: req.approvedAt
@@ -419,13 +479,49 @@
       db.collection("shiftplan").doc("live_board").set({ ...rawDocData, leaveRequests: updatedLr });
     };
 
-    // --- AKTIONEN: BRINGSCHICHTEN ---
+    window.cancelOrDeleteLeave = function(reqId, effectiveStatus) {
+      const emp = employees.find(e => e.id === loggedInEmpId); if (!emp) return;
+      const idx = leaveRequests.findIndex(r => r.id === reqId); if (idx === -1) return;
+      const lr = leaveRequests[idx], today = getTodayIso(), nowStr = new Date().toLocaleString('de-DE');
+
+      // Fall 1: Genehmigter Urlaub wird vom Mitarbeiter storniert -> Planer informieren & aus Kalender löschen
+      if (effectiveStatus === "approved" || effectiveStatus === "accepted_counter") {
+        if (!confirm("Möchtest du diesen bereits genehmigten Termin wirklich stornieren?\n\nDer Planer erhält automatisch eine Benachrichtigung über deine Stornierung.")) return;
+        const updatedSl = sickLeaves.filter(s => !(s.requestId === lr.id || s.id === lr.linkedSickLeaveId || (s.empId === emp.id && s.startDate === lr.startDate && s.endDate === lr.endDate)));
+        const stillAbsentToday = updatedSl.some(s => s.empId === emp.id && s.startDate <= today && s.endDate >= today);
+        const updatedEmp = employees.map(e => {
+          if (e.id === emp.id && e.zone === "absent" && !stillAbsentToday) return { ...e, zone: getRestoredZoneForEmp(e) };
+          return e;
+        });
+        const updatedLr = [...leaveRequests];
+        updatedLr[idx] = { ...lr, status: "cancelled_by_emp", cancelUnreadByPlanner: true, cancelledAt: nowStr };
+        db.collection("shiftplan").doc("live_board").set({ ...rawDocData, employees: updatedEmp, sickLeaves: updatedSl, leaveRequests: updatedLr });
+      }
+      // Fall 2: Offener Antrag oder erledigter Eintrag wird entfernt
+      else {
+        if (effectiveStatus === "pending" && !confirm("Deinen offenen Antrag wirklich zurückziehen?")) return;
+        let updatedLr;
+        if (lr.cancelUnreadByPlanner) {
+          updatedLr = [...leaveRequests];
+          updatedLr[idx] = { ...lr, hiddenForEmp: true };
+        } else {
+          updatedLr = leaveRequests.filter(r => r.id !== reqId);
+        }
+        db.collection("shiftplan").doc("live_board").set({ ...rawDocData, leaveRequests: updatedLr });
+      }
+    };
+
+    // --- AKTIONEN: BRINGSCHICHTEN & STORNIERUNG ---
     function submitExtraShift() {
       const emp = employees.find(e => e.id === loggedInEmpId); if (!emp) return;
       const d = $("extraDate").value, sh = $("extraShift").value, note = $("extraNote").value.trim() || "BS";
       const err = $("extraErrorBanner"), succ = $("extraSuccessBanner"), btn = $("extraSubmitBtn");
       err.style.display = "none"; succ.style.display = "none";
       if (!d) { err.textContent = "Bitte ein Datum wählen!"; err.style.display = "block"; return; }
+
+      const duplicate = extraShifts.some(es => es.empId === emp.id && es.date === d && ["pending","approved"].includes(es.status));
+      if (duplicate) { err.textContent = "⚠️ Für diesen Tag hast du bereits eine Bringschicht gemeldet!"; err.style.display = "block"; return; }
+
       btn.disabled = true;
       const updated = [...extraShifts, {
         id: "es_" + Date.now(), empId: emp.id, empName: fullName(emp),
@@ -436,6 +532,34 @@
         succ.textContent = "✅ Deine Bringschicht wurde beim Planer angefragt!"; succ.style.display = "block";
       }).finally(() => { btn.disabled = false; });
     }
+
+    window.cancelOrDeleteExtra = function(esId, status) {
+      const emp = employees.find(e => e.id === loggedInEmpId); if (!emp) return;
+      const idx = extraShifts.findIndex(x => x.id === esId); if (idx === -1) return;
+      const es = extraShifts[idx], today = getTodayIso(), nowStr = new Date().toLocaleString('de-DE');
+
+      if (status === "approved") {
+        if (!confirm("Möchtest du diese bestätigte Bringschicht wirklich absagen?\n\nDer Planer wird im Postfach über deine Absage informiert.")) return;
+        const updatedEs = [...extraShifts];
+        updatedEs[idx] = { ...es, status: "cancelled_by_emp", cancelUnreadByPlanner: true, cancelledAt: nowStr };
+        const hasOtherExtraToday = updatedEs.some(x => x.id !== esId && x.empId === emp.id && x.status === "approved" && x.date === today);
+        const updatedEmp = employees.map(e => {
+          if (e.id === emp.id && e.zone === "extra" && !hasOtherExtraToday) return { ...e, zone: getRestoredZoneForEmp(e) };
+          return e;
+        });
+        db.collection("shiftplan").doc("live_board").set({ ...rawDocData, employees: updatedEmp, extraShifts: updatedEs });
+      } else {
+        if (status === "pending" && !confirm("Bringschicht-Anfrage wirklich zurückziehen?")) return;
+        let updatedEs;
+        if (es.cancelUnreadByPlanner) {
+          updatedEs = [...extraShifts];
+          updatedEs[idx] = { ...es, hiddenForEmp: true };
+        } else {
+          updatedEs = extraShifts.filter(x => x.id !== esId);
+        }
+        db.collection("shiftplan").doc("live_board").set({ ...rawDocData, extraShifts: updatedEs });
+      }
+    };
 
     // --- AKTIONEN: GESUND- & KRANKMELDUNG ---
     function submitEarlyReturn() {
