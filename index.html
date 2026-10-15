@@ -97,6 +97,12 @@
     .item-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid #f1f5f9; font-size: 0.92rem; gap: 8px; }
     .sick-card { background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid var(--bayer-blue); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
     .sick-card.unread { background: #fff1f2; border-color: #fecdd3; border-left: 4px solid #dc2626; }
+    .inbox-filter-bar { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+    .filter-chip { padding: 4px 10px; border-radius: 999px; font-size: 0.74rem; font-weight: 600; cursor: pointer; border: 1px solid #cbd5e1; background: #fff; color: #475569; transition: 0.15s; }
+    .filter-chip:hover { background: #f1f5f9; }
+    .filter-chip.active { background: var(--bayer-blue); color: #fff; border-color: var(--bayer-blue); }
+    .manual-entry-toggle { width: 100%; text-align: left; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 14px; font-size: 0.86rem; font-weight: 700; color: #0f172a; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: 0.15s; }
+    .manual-entry-toggle:hover { background: #f1f5f9; }
     .lvl-3-only, .admin-element { display: none; }
     body.planner-active .admin-element { display: inline-flex; }
     body.planner-lvl-3 .lvl-3-only { display: inline-flex; }
@@ -161,7 +167,7 @@
       <div class="panel">
         <h2>
           <span>Abwesend</span>
-          <button class="btn btn-outline lvl-3-only" style="padding:2px 7px; font-size:0.72rem;" onclick="openInboxModal()">+ Zeitraum</button>
+          <button class="btn btn-outline lvl-3-only" style="padding:2px 7px; font-size:0.72rem;" onclick="openInboxModal(null, true)">+ Zeitraum</button>
         </h2>
         <div id="absent" class="card-list drop-zone" data-zone="absent" style="background: #fff1f2;"></div>
       </div>
@@ -198,54 +204,70 @@
 
   <!-- POSTFACH & ANTRÄGE MODAL (STUFE 3) -->
   <div id="inboxModal" class="modal-overlay">
-    <div class="modal" style="max-width: 660px;">
+    <div class="modal" style="max-width: 680px;">
       <h3 style="display:flex; justify-content:space-between; align-items:center; color:var(--bayer-blue); margin-bottom:8px;">
         <span>📬 Postfach, Urlaub & Bringschichten</span>
         <button onclick="closeModal('inboxModal')" style="border:none; background:none; font-size:1.5rem; cursor:pointer;">&times;</button>
       </h3>
-      <div id="serverSyncInfo" style="font-size:0.74rem; background:#f1f5f9; color:#475569; padding:6px 10px; border-radius:6px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+      <div id="serverSyncInfo" style="font-size:0.74rem; background:#f1f5f9; color:#475569; padding:6px 10px; border-radius:6px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
         <span>🔄 Prüfe Live-Datenbank...</span>
         <button class="btn btn-outline" style="padding:2px 8px; font-size:0.7rem;" onclick="forceRefreshFromServer()">🔄 Jetzt abrufen</button>
       </div>
 
+      <!-- LIVE-SUCHE FÜR DAS GESAMTE POSTFACH -->
+      <div class="search-wrapper" style="margin-bottom: 12px;">
+        <input type="text" id="inboxSearchInput" class="search-input" style="padding: 8px 30px 8px 12px; font-size: 0.84rem; background: #fff; border-color: #94a3b8;" placeholder="🔍 Postfach durchsuchen (Name, Datum, Urlaub, Krank, Notiz)..." oninput="updateInboxSearch(this.value)">
+        <span id="clearInboxSearchBtn" class="search-clear" onclick="updateInboxSearch('')">&times;</span>
+      </div>
+
+      <!-- AUF-/ZUKLAPPBARES DIREKT-EINTRAGEN FORMULAR -->
+      <div style="margin-bottom: 16px;">
+        <button type="button" class="manual-entry-toggle" onclick="toggleManualEntryBox()">
+          <span>➕ Abwesenheit / Urlaub / Krank direkt eintragen</span>
+          <span id="manualEntryArrow" style="font-size:0.76rem; color:var(--bayer-blue);">▼ Formular öffnen</span>
+        </button>
+        <div id="manualEntryContent" style="display:none; background:#f8fafc; border:1px solid #cbd5e1; border-top:none; border-radius:0 0 8px 8px; padding:14px;">
+          <div style="display:flex; gap:10px;">
+            <div class="form-group" id="manualSickSearchGroup" style="flex:1.4;">
+              <label>Mitarbeiter</label>
+              <input type="text" id="manualSickEmpInput" class="form-control" placeholder="🔍 Name tippen..." autocomplete="off" oninput="onManualSickNameInput(this.value)">
+              <div id="manualSickSuggestions" class="suggestions-box"></div>
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label>Art der Abwesenheit</label>
+              <select id="manualSickCategory" class="form-control">
+                <option value="Arbeitsunfähigkeit (Krank)">🏥 Krank / AU</option>
+                <option value="Urlaub - bezahlt">🌴 Urlaub (bezahlt)</option>
+                <option value="Urlaub - unbezahlt">🌴 Urlaub (unbezahlt)</option>
+                <option value="Freizeitausgleich / Gleittag">⏱️ Freizeitausgleich / Gleittag</option>
+                <option value="Aus- und Fortbildung">🎓 Aus- und Fortbildung</option>
+                <option value="Dienstreise">🚗 Dienstreise</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <div class="form-group" style="flex:1;"><label>Von</label><input type="date" id="manualSickStart" class="form-control"></div>
+            <div class="form-group" style="flex:1;"><label>Bis</label><input type="date" id="manualSickEnd" class="form-control"></div>
+          </div>
+          <div class="form-group"><label>Notiz / Bemerkung</label><input type="text" id="manualSickReason" class="form-control" placeholder="Optional..."></div>
+          <button class="btn btn-primary" style="width:100%;" onclick="addManualSickLeave()">Eintragen & Genehmigen</button>
+        </div>
+      </div>
+
+      <!-- BEREICH 1: OFFENE ANTRÄGE & MELDUNGEN -->
       <div style="margin-bottom: 18px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
           <h4 style="font-size:0.92rem; color:#dc2626;">🔔 Offene Anträge, Stornos & Meldungen</h4>
           <button id="btnMarkAllRead" class="btn btn-outline" style="padding:4px 10px; font-size:0.75rem; display:none;" onclick="markAllSickLeavesRead()">Krankmeldungen gelesen</button>
         </div>
+        <div id="inboxUnreadFilterBar" class="inbox-filter-bar"></div>
         <div id="unreadSickList"></div>
       </div>
 
-      <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:14px; margin-bottom:18px;">
-        <h4 style="font-size:0.9rem; color:#0f172a; margin-bottom:10px;">➕ Abwesenheit / Urlaub / Krank direkt eintragen</h4>
-        <div style="display:flex; gap:10px;">
-          <div class="form-group" id="manualSickSearchGroup" style="flex:1.4;">
-            <label>Mitarbeiter</label>
-            <input type="text" id="manualSickEmpInput" class="form-control" placeholder="🔍 Name tippen..." autocomplete="off" oninput="onManualSickNameInput(this.value)">
-            <div id="manualSickSuggestions" class="suggestions-box"></div>
-          </div>
-          <div class="form-group" style="flex:1;">
-            <label>Art der Abwesenheit</label>
-            <select id="manualSickCategory" class="form-control">
-              <option value="Arbeitsunfähigkeit (Krank)">🏥 Krank / AU</option>
-              <option value="Urlaub - bezahlt">🌴 Urlaub (bezahlt)</option>
-              <option value="Urlaub - unbezahlt">🌴 Urlaub (unbezahlt)</option>
-              <option value="Freizeitausgleich / Gleittag">⏱️ Freizeitausgleich / Gleittag</option>
-              <option value="Aus- und Fortbildung">🎓 Aus- und Fortbildung</option>
-              <option value="Dienstreise">🚗 Dienstreise</option>
-            </select>
-          </div>
-        </div>
-        <div style="display:flex; gap:10px;">
-          <div class="form-group" style="flex:1;"><label>Von</label><input type="date" id="manualSickStart" class="form-control"></div>
-          <div class="form-group" style="flex:1;"><label>Bis</label><input type="date" id="manualSickEnd" class="form-control"></div>
-        </div>
-        <div class="form-group"><label>Notiz / Bemerkung</label><input type="text" id="manualSickReason" class="form-control" placeholder="Optional..."></div>
-        <button class="btn btn-primary" style="width:100%;" onclick="addManualSickLeave()">Eintragen & Genehmigen</button>
-      </div>
-
+      <!-- BEREICH 2: AKTIVE & GENEHMIGTE ABWESENHEITEN -->
       <div style="border-top: 2px solid #e2e8f0; padding-top: 14px;">
         <h4 style="font-size:0.92rem; margin-bottom: 6px;">📋 Aktive & Genehmigte Abwesenheiten</h4>
+        <div id="inboxActiveFilterBar" class="inbox-filter-bar"></div>
         <div id="activeSickList"></div>
       </div>
     </div>
@@ -379,6 +401,7 @@
       "team-4": { name: "Team 4", color: "#f43f5e", rotates: true }
     };
     let activeTeamFilters = {}, activeRoleFilters = {}, poolSearchQuery = "";
+    let inboxSearchQuery = "", inboxUnreadFilter = "all", inboxActiveFilter = "all";
     let selectedManualSickEmpId = null, selectedLoginPlannerId = null;
     let isPlanner = false, plannerLevel = 0, currentPlannerName = "";
     let sortableInstances = [], backupDoneToday = false;
@@ -964,14 +987,54 @@
       if (e) { selectedManualSickEmpId = e.id; document.getElementById("manualSickEmpInput").value = fullName(e); document.getElementById("manualSickSuggestions").style.display = "none"; }
     }
 
-    function openInboxModal(preselectEmpId) {
+    window.toggleManualEntryBox = function(forceState) {
+      const content = document.getElementById("manualEntryContent");
+      const arrow = document.getElementById("manualEntryArrow");
+      if (!content || !arrow) return;
+      const isOpen = forceState !== undefined ? forceState : (content.style.display === "none");
+      content.style.display = isOpen ? "block" : "none";
+      arrow.textContent = isOpen ? "▲ Formular schließen" : "▼ Formular öffnen";
+    };
+
+    window.updateInboxSearch = function(val) {
+      inboxSearchQuery = val.trim().toLowerCase();
+      const inp = document.getElementById("inboxSearchInput");
+      if (inp && inp.value !== val) inp.value = val;
+      const clr = document.getElementById("clearInboxSearchBtn");
+      if (clr) clr.style.display = inboxSearchQuery.length > 0 ? "block" : "none";
+      renderInboxModal();
+    };
+
+    window.setInboxUnreadFilter = function(f) {
+      inboxUnreadFilter = f;
+      renderInboxModal();
+    };
+
+    window.setInboxActiveFilter = function(f) {
+      inboxActiveFilter = f;
+      renderInboxModal();
+    };
+
+    function matchesInboxSearch(fields) {
+      if (!inboxSearchQuery) return true;
+      for (let i = 0; i < fields.length; i++) {
+        if (fields[i] && String(fields[i]).toLowerCase().indexOf(inboxSearchQuery) !== -1) return true;
+      }
+      return false;
+    }
+
+    function openInboxModal(preselectEmpId, forceOpenManual) {
       if (plannerLevel < 3) return;
       document.getElementById("inboxModal").style.display = "flex";
       const input = document.getElementById("manualSickEmpInput");
       if (preselectEmpId) {
         const emp = employees.find(function(e) { return e.id === preselectEmpId; });
         if (emp) { selectedManualSickEmpId = emp.id; input.value = fullName(emp); }
-      } else { selectedManualSickEmpId = null; input.value = ""; }
+        toggleManualEntryBox(true);
+      } else {
+        selectedManualSickEmpId = null; input.value = "";
+        toggleManualEntryBox(!!forceOpenManual);
+      }
       const today = getTodayIso();
       document.getElementById("manualSickStart").value = today;
       document.getElementById("manualSickEnd").value = today;
@@ -1001,138 +1064,205 @@
         if (cL) emp.lastLineId = cL; if (cS) emp.lastShiftId = cS; emp.zone = "absent";
       }
       selectedManualSickEmpId = null; document.getElementById("manualSickEmpInput").value = ""; document.getElementById("manualSickReason").value = "";
+      toggleManualEntryBox(false);
       saveToFirebase(); renderInboxModal(); renderEmployees();
     }
 
     function renderInboxModal() {
       const unreadC = document.getElementById("unreadSickList"), activeC = document.getElementById("activeSickList"), btnMark = document.getElementById("btnMarkAllRead"), today = getTodayIso();
-      const unreadSl = sickLeaves.filter(function(sl) { return !sl.readByPlanner || sl.returnRequestPending; });
-      const pendingLr = leaveRequests.filter(function(lr) { return !lr.status || lr.status === "pending" || lr.status === "counter_offered"; });
-      const cancelledLr = leaveRequests.filter(function(lr) { return lr.cancelUnreadByPlanner; });
-      const pendingEs = extraShifts.filter(function(es) { return !es.status || es.status === "pending"; });
-      const cancelledEs = extraShifts.filter(function(es) { return es.cancelUnreadByPlanner; });
-      btnMark.style.display = unreadSl.length > 0 ? "inline-block" : "none";
+      const unreadSlAll = sickLeaves.filter(function(sl) { return !sl.readByPlanner || sl.returnRequestPending; });
+      const pendingLrAll = leaveRequests.filter(function(lr) { return !lr.status || lr.status === "pending" || lr.status === "counter_offered"; });
+      const cancelledLrAll = leaveRequests.filter(function(lr) { return lr.cancelUnreadByPlanner; });
+      const pendingEsAll = extraShifts.filter(function(es) { return !es.status || es.status === "pending"; });
+      const cancelledEsAll = extraShifts.filter(function(es) { return es.cancelUnreadByPlanner; });
+
+      btnMark.style.display = unreadSlAll.length > 0 ? "inline-block" : "none";
 
       const syncInfo = document.getElementById("serverSyncInfo");
       if (syncInfo) {
-        syncInfo.firstElementChild.innerHTML = "✅ Live-Stand: <b>" + pendingLr.length + "</b> offene Urlaubsanträge | <b>" + pendingEs.length + "</b> Bringschichten | <b>" + unreadSl.length + "</b> Krankmeldungen";
+        syncInfo.firstElementChild.innerHTML = "✅ Live-Stand: <b>" + pendingLrAll.length + "</b> offene Urlaubsanträge | <b>" + pendingEsAll.length + "</b> Bringschichten | <b>" + unreadSlAll.length + "</b> Krankmeldungen";
       }
 
+      const totalCancelCount = cancelledLrAll.length + cancelledEsAll.length;
+      const totalOpenCount = pendingLrAll.length + pendingEsAll.length + unreadSlAll.length + totalCancelCount;
+
+      const unreadBar = document.getElementById("inboxUnreadFilterBar");
+      if (unreadBar) {
+        const uChips = [
+          { id: "all", label: "Alle (" + totalOpenCount + ")" },
+          { id: "leave", label: "🌴 Anträge (" + pendingLrAll.length + ")" },
+          { id: "extra", label: "➕ Bringschichten (" + pendingEsAll.length + ")" },
+          { id: "sick", label: "🏥 Krank & Gesund (" + unreadSlAll.length + ")" },
+          { id: "cancel", label: "🚫 Stornos (" + totalCancelCount + ")" }
+        ];
+        unreadBar.innerHTML = uChips.map(function(c) {
+          return '<button type="button" class="filter-chip ' + (inboxUnreadFilter === c.id ? 'active' : '') + '" onclick="setInboxUnreadFilter(\'' + c.id + '\')">' + c.label + '</button>';
+        }).join("");
+      }
+
+      const showCancel = (inboxUnreadFilter === "all" || inboxUnreadFilter === "cancel");
+      const showLeave = (inboxUnreadFilter === "all" || inboxUnreadFilter === "leave");
+      const showExtra = (inboxUnreadFilter === "all" || inboxUnreadFilter === "extra");
+      const showSick = (inboxUnreadFilter === "all" || inboxUnreadFilter === "sick");
+
       let html = "";
-      cancelledLr.forEach(function(lr) {
-        html += '<div class="sick-card unread" style="border-left-color:#dc2626;">' +
-          '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">' +
-            '<div>' +
-              '<div style="font-weight:700; color:#9f1239;">🚫 Stornierung durch Mitarbeiter: ' + lr.empName + '</div>' +
-              '<div style="font-size:0.8rem; margin-top:3px;">Der Mitarbeiter hat seinen <b>' + lr.type + ' (' + formatDateDe(lr.startDate) + ' – ' + formatDateDe(lr.endDate) + ')</b> storniert.</div>' +
-              '<div style="font-size:0.65rem; color:#64748b; margin-top:2px;">🕒 Storniert am: ' + (lr.cancelledAt || '-') + '</div>' +
-            '</div>' +
-            '<button class="btn btn-primary" style="padding:5px 10px; font-size:0.75rem;" onclick="acknowledgeLeaveCancel(\'' + lr.id + '\')">✓ Gelesen</button>' +
-          '</div>' +
-        '</div>';
-      });
 
-      cancelledEs.forEach(function(es) {
-        html += '<div class="sick-card unread" style="border-left-color:#dc2626;">' +
-          '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">' +
-            '<div>' +
-              '<div style="font-weight:700; color:#9f1239;">🚫 Bringschicht abgesagt: ' + es.empName + '</div>' +
-              '<div style="font-size:0.8rem; margin-top:3px;">Bringschicht am <b>' + formatDateDe(es.date) + ' (' + (shiftsLabel[es.shift] || es.shift) + ')</b> wurde vom Mitarbeiter storniert.</div>' +
-              '<div style="font-size:0.65rem; color:#64748b; margin-top:2px;">🕒 Storniert am: ' + (es.cancelledAt || '-') + '</div>' +
+      if (showCancel) {
+        cancelledLrAll.forEach(function(lr) {
+          if (!matchesInboxSearch([lr.empName, lr.type, lr.reason, formatDateDe(lr.startDate), formatDateDe(lr.endDate), lr.startDate, lr.endDate, "storno"])) return;
+          html += '<div class="sick-card unread" style="border-left-color:#dc2626;">' +
+            '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">' +
+              '<div>' +
+                '<div style="font-weight:700; color:#9f1239;">🚫 Stornierung durch Mitarbeiter: ' + lr.empName + '</div>' +
+                '<div style="font-size:0.8rem; margin-top:3px;">Der Mitarbeiter hat seinen <b>' + lr.type + ' (' + formatDateDe(lr.startDate) + ' – ' + formatDateDe(lr.endDate) + ')</b> storniert.</div>' +
+                '<div style="font-size:0.65rem; color:#64748b; margin-top:2px;">🕒 Storniert am: ' + (lr.cancelledAt || '-') + '</div>' +
+              '</div>' +
+              '<button class="btn btn-primary" style="padding:5px 10px; font-size:0.75rem;" onclick="acknowledgeLeaveCancel(\'' + lr.id + '\')">✓ Gelesen</button>' +
             '</div>' +
-            '<button class="btn btn-primary" style="padding:5px 10px; font-size:0.75rem;" onclick="acknowledgeExtraCancel(\'' + es.id + '\')">✓ Gelesen</button>' +
-          '</div>' +
-        '</div>';
-      });
+          '</div>';
+        });
 
-      pendingLr.forEach(function(lr) {
-        const days = calcSickDays(lr.startDate, lr.endDate);
-        html += '<div class="sick-card" style="background:#f0f9ff; border-left-color:#0284c7; border-color:#bae6fd;">' +
-          '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">' +
-            '<div style="flex:1;">' +
-              '<div style="font-weight:700; color:#0369a1;">🌴 Antrag (' + lr.type + '): ' + lr.empName + '</div>' +
-              '<div style="font-size:0.65rem; color:#0284c7; margin-top:2px;">🕒 Eingereicht am: ' + (lr.createdAt || '-') + '</div>' +
-              '<div style="font-size:0.84rem; font-weight:700; margin-top:4px;">📅 Gewünscht: ' + formatDateDe(lr.startDate) + ' bis ' + formatDateDe(lr.endDate) + ' (' + days + ' ' + (days === 1 ? 'Tag' : 'Tage') + ')</div>' +
-              (lr.reason ? '<div style="font-size:0.8rem; margin-top:4px; color:#334155;">💬 "' + lr.reason + '"</div>' : '') +
-              '<div id="partialBox_' + lr.id + '" style="display:none; background:#fff; padding:10px; border-radius:6px; border:1px solid #93c5fd; margin-top:8px;">' +
-                '<div style="font-size:0.78rem; font-weight:700; color:#1e3a8a; margin-bottom:6px;">⚖️ Gegenvorschlag (Genehmigte Teil-Zeiträume angeben):</div>' +
-                '<div id="partialRanges_' + lr.id + '">' +
-                  '<div style="display:flex; gap:6px; align-items:center;">' +
-                    '<span style="font-size:0.75rem;">Von:</span><input type="date" class="form-control partial-start" value="' + lr.startDate + '" style="padding:4px; font-size:0.78rem;">' +
-                    '<span style="font-size:0.75rem;">Bis:</span><input type="date" class="form-control partial-end" value="' + lr.endDate + '" style="padding:4px; font-size:0.78rem;">' +
+        cancelledEsAll.forEach(function(es) {
+          if (!matchesInboxSearch([es.empName, es.note, formatDateDe(es.date), es.date, shiftsLabel[es.shift], "storno", "bringschicht"])) return;
+          html += '<div class="sick-card unread" style="border-left-color:#dc2626;">' +
+            '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">' +
+              '<div>' +
+                '<div style="font-weight:700; color:#9f1239;">🚫 Bringschicht abgesagt: ' + es.empName + '</div>' +
+                '<div style="font-size:0.8rem; margin-top:3px;">Bringschicht am <b>' + formatDateDe(es.date) + ' (' + (shiftsLabel[es.shift] || es.shift) + ')</b> wurde vom Mitarbeiter storniert.</div>' +
+                '<div style="font-size:0.65rem; color:#64748b; margin-top:2px;">🕒 Storniert am: ' + (es.cancelledAt || '-') + '</div>' +
+              '</div>' +
+              '<button class="btn btn-primary" style="padding:5px 10px; font-size:0.75rem;" onclick="acknowledgeExtraCancel(\'' + es.id + '\')">✓ Gelesen</button>' +
+            '</div>' +
+          '</div>';
+        });
+      }
+
+      if (showLeave) {
+        pendingLrAll.forEach(function(lr) {
+          if (!matchesInboxSearch([lr.empName, lr.type, lr.reason, formatDateDe(lr.startDate), formatDateDe(lr.endDate), lr.startDate, lr.endDate, "urlaub", "antrag"])) return;
+          const days = calcSickDays(lr.startDate, lr.endDate);
+          html += '<div class="sick-card" style="background:#f0f9ff; border-left-color:#0284c7; border-color:#bae6fd;">' +
+            '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">' +
+              '<div style="flex:1;">' +
+                '<div style="font-weight:700; color:#0369a1;">🌴 Antrag (' + lr.type + '): ' + lr.empName + '</div>' +
+                '<div style="font-size:0.65rem; color:#0284c7; margin-top:2px;">🕒 Eingereicht am: ' + (lr.createdAt || '-') + '</div>' +
+                '<div style="font-size:0.84rem; font-weight:700; margin-top:4px;">📅 Gewünscht: ' + formatDateDe(lr.startDate) + ' bis ' + formatDateDe(lr.endDate) + ' (' + days + ' ' + (days === 1 ? 'Tag' : 'Tage') + ')</div>' +
+                (lr.reason ? '<div style="font-size:0.8rem; margin-top:4px; color:#334155;">💬 "' + lr.reason + '"</div>' : '') +
+                '<div id="partialBox_' + lr.id + '" style="display:none; background:#fff; padding:10px; border-radius:6px; border:1px solid #93c5fd; margin-top:8px;">' +
+                  '<div style="font-size:0.78rem; font-weight:700; color:#1e3a8a; margin-bottom:6px;">⚖️ Gegenvorschlag (Genehmigte Teil-Zeiträume angeben):</div>' +
+                  '<div id="partialRanges_' + lr.id + '">' +
+                    '<div style="display:flex; gap:6px; align-items:center;">' +
+                      '<span style="font-size:0.75rem;">Von:</span><input type="date" class="form-control partial-start" value="' + lr.startDate + '" style="padding:4px; font-size:0.78rem;">' +
+                      '<span style="font-size:0.75rem;">Bis:</span><input type="date" class="form-control partial-end" value="' + lr.endDate + '" style="padding:4px; font-size:0.78rem;">' +
+                    '</div>' +
+                  '</div>' +
+                  '<button class="btn btn-outline" style="padding:3px 8px; font-size:0.72rem; margin-top:6px;" onclick="addPartialRangeRow(\'' + lr.id + '\',\'' + lr.startDate + '\',\'' + lr.endDate + '\')">+ Weiterer Zeitraum (z.B. Woche 3)</button>' +
+                  '<input type="text" id="partialNote_' + lr.id + '" class="form-control" placeholder="Kurze Info an Mitarbeiter (optional)..." style="margin-top:6px; padding:5px 8px; font-size:0.78rem;">' +
+                  '<button class="btn btn-primary" style="width:100%; margin-top:6px; padding:6px; font-size:0.78rem;" onclick="sendPartialCounterOffer(\'' + lr.id + '\')">📤 Vorschlag an Mitarbeiter senden</button>' +
+                '</div>' +
+              '</div>' +
+              '<div style="display:flex; flex-direction:column; gap:5px;">' +
+                '<button class="btn btn-primary" style="background:#16a34a; padding:5px 10px; font-size:0.75rem;" onclick="approveLeaveRequest(\'' + lr.id + '\')">✓ Bestätigen</button>' +
+                '<button class="btn btn-outline" style="padding:5px 10px; font-size:0.75rem; color:#0284c7; border-color:#7dd3fc;" onclick="togglePartialLeaveBox(\'' + lr.id + '\')">⚖️ Teilweise</button>' +
+                '<button class="btn btn-outline" style="padding:5px 10px; font-size:0.75rem; color:#ef4444;" onclick="rejectLeaveRequest(\'' + lr.id + '\')">✖ Ablehnen</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+        });
+      }
+
+      if (showExtra) {
+        pendingEsAll.forEach(function(es) {
+          if (!matchesInboxSearch([es.empName, es.note, formatDateDe(es.date), es.date, shiftsLabel[es.shift], "bringschicht", "zusatzschicht"])) return;
+          html += '<div class="sick-card" style="background:#f0fdf4; border-left-color:#16a34a; border-color:#bbf7d0;">' +
+            '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">' +
+              '<div>' +
+                '<div style="font-weight:700; color:#166534;">➕ Bringschicht-Anfrage: ' + es.empName + '</div>' +
+                '<div style="font-size:0.65rem; color:#15803d; margin-top:2px;">🕒 Eingereicht am: ' + (es.createdAt || '-') + '</div>' +
+                '<div style="font-size:0.84rem; font-weight:700; margin-top:4px;">📅 Datum: ' + formatDateDe(es.date) + ' | Schicht: ' + (shiftsLabel[es.shift] || es.shift) + '</div>' +
+                '<div style="font-size:0.8rem; color:#334155; margin-top:2px;">Bemerkung: <b>' + (es.note || 'BS/ZS') + '</b></div>' +
+              '</div>' +
+              '<div style="display:flex; flex-direction:column; gap:5px;">' +
+                '<button class="btn btn-primary" style="background:#16a34a; padding:5px 10px; font-size:0.75rem;" onclick="approveExtraShift(\'' + es.id + '\')">✓ Bestätigen</button>' +
+                '<button class="btn btn-outline" style="padding:5px 10px; font-size:0.75rem; color:#ef4444;" onclick="rejectExtraShift(\'' + es.id + '\')">✖ Ablehnen</button>' +
+              </div>' +
+            '</div>' +
+          '</div>';
+        });
+      }
+
+      if (showSick) {
+        unreadSlAll.forEach(function(sl) {
+          if (!matchesInboxSearch([sl.empName, sl.category, sl.reason, formatDateDe(sl.startDate), formatDateDe(sl.endDate), sl.startDate, sl.endDate, "krank", "gesund"])) return;
+          if (sl.returnRequestPending) {
+            html += '<div class="sick-card" style="background:#fffbeb; border-left-color:#f59e0b; border-color:#fde68a;">' +
+              '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">' +
+                '<div>' +
+                  '<div style="font-weight:700; color:#b45309;">⚠️ Gesundmeldung: ' + sl.empName + '</div>' +
+                  '<div style="font-size:0.65rem; color:#92400e; margin-top:2px;">🕒 Angefragt am: ' + (sl.returnRequestCreatedAt || sl.createdAt || '-') + '</div>' +
+                  '<div style="font-size:0.82rem; background:#fff; padding:6px; border-radius:4px; margin-top:6px; border:1px solid #fde68a;">' +
+                    'War gemeldet bis: <span style="text-decoration:line-through; color:#94a3b8;">' + formatDateDe(sl.endDate) + '</span><br>' +
+                    'Wieder einsatzbereit am: <b style="color:#16a34a;">' + formatDateDe(sl.returnRequestDate) + '</b>' +
                   '</div>' +
                 '</div>' +
-                '<button class="btn btn-outline" style="padding:3px 8px; font-size:0.72rem; margin-top:6px;" onclick="addPartialRangeRow(\'' + lr.id + '\',\'' + lr.startDate + '\',\'' + lr.endDate + '\')">+ Weiterer Zeitraum (z.B. Woche 3)</button>' +
-                '<input type="text" id="partialNote_' + lr.id + '" class="form-control" placeholder="Kurze Info an Mitarbeiter (optional)..." style="margin-top:6px; padding:5px 8px; font-size:0.78rem;">' +
-                '<button class="btn btn-primary" style="width:100%; margin-top:6px; padding:6px; font-size:0.78rem;" onclick="sendPartialCounterOffer(\'' + lr.id + '\')">📤 Vorschlag an Mitarbeiter senden</button>' +
-              '</div>' +
-            '</div>' +
-            '<div style="display:flex; flex-direction:column; gap:5px;">' +
-              '<button class="btn btn-primary" style="background:#16a34a; padding:5px 10px; font-size:0.75rem;" onclick="approveLeaveRequest(\'' + lr.id + '\')">✓ Bestätigen</button>' +
-              '<button class="btn btn-outline" style="padding:5px 10px; font-size:0.75rem; color:#0284c7; border-color:#7dd3fc;" onclick="togglePartialLeaveBox(\'' + lr.id + '\')">⚖️ Teilweise</button>' +
-              '<button class="btn btn-outline" style="padding:5px 10px; font-size:0.75rem; color:#ef4444;" onclick="rejectLeaveRequest(\'' + lr.id + '\')">✖ Ablehnen</button>' +
-            '</div>' +
-          '</div>' +
-        '</div>';
-      });
-
-      pendingEs.forEach(function(es) {
-        html += '<div class="sick-card" style="background:#f0fdf4; border-left-color:#16a34a; border-color:#bbf7d0;">' +
-          '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">' +
-            '<div>' +
-              '<div style="font-weight:700; color:#166534;">➕ Bringschicht-Anfrage: ' + es.empName + '</div>' +
-              '<div style="font-size:0.65rem; color:#15803d; margin-top:2px;">🕒 Eingereicht am: ' + (es.createdAt || '-') + '</div>' +
-              '<div style="font-size:0.84rem; font-weight:700; margin-top:4px;">📅 Datum: ' + formatDateDe(es.date) + ' | Schicht: ' + (shiftsLabel[es.shift] || es.shift) + '</div>' +
-              '<div style="font-size:0.8rem; color:#334155; margin-top:2px;">Bemerkung: <b>' + (es.note || 'BS/ZS') + '</b></div>' +
-            '</div>' +
-            '<div style="display:flex; flex-direction:column; gap:5px;">' +
-              '<button class="btn btn-primary" style="background:#16a34a; padding:5px 10px; font-size:0.75rem;" onclick="approveExtraShift(\'' + es.id + '\')">✓ Bestätigen</button>' +
-              '<button class="btn btn-outline" style="padding:5px 10px; font-size:0.75rem; color:#ef4444;" onclick="rejectExtraShift(\'' + es.id + '\')">✖ Ablehnen</button>' +
-            '</div>' +
-          '</div>' +
-        '</div>';
-      });
-
-      unreadSl.forEach(function(sl) {
-        if (sl.returnRequestPending) {
-          html += '<div class="sick-card" style="background:#fffbeb; border-left-color:#f59e0b; border-color:#fde68a;">' +
-            '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">' +
-              '<div>' +
-                '<div style="font-weight:700; color:#b45309;">⚠️ Gesundmeldung: ' + sl.empName + '</div>' +
-                '<div style="font-size:0.65rem; color:#92400e; margin-top:2px;">🕒 Angefragt am: ' + (sl.returnRequestCreatedAt || sl.createdAt || '-') + '</div>' +
-                '<div style="font-size:0.82rem; background:#fff; padding:6px; border-radius:4px; margin-top:6px; border:1px solid #fde68a;">' +
-                  'War gemeldet bis: <span style="text-decoration:line-through; color:#94a3b8;">' + formatDateDe(sl.endDate) + '</span><br>' +
-                  'Wieder einsatzbereit am: <b style="color:#16a34a;">' + formatDateDe(sl.returnRequestDate) + '</b>' +
+                '<div style="display:flex; flex-direction:column; gap:6px;">' +
+                  '<button class="btn btn-primary" style="background:#16a34a; padding:6px 10px; font-size:0.75rem;" onclick="acceptReturnRequest(\'' + sl.id + '\')">✓ Bestätigen</button>' +
+                  '<button class="btn btn-outline" style="padding:6px 10px; font-size:0.75rem; color:#ef4444;" onclick="rejectReturnRequest(\'' + sl.id + '\')">✖ Ablehnen</button>' +
                 '</div>' +
               '</div>' +
-              '<div style="display:flex; flex-direction:column; gap:6px;">' +
-                '<button class="btn btn-primary" style="background:#16a34a; padding:6px 10px; font-size:0.75rem;" onclick="acceptReturnRequest(\'' + sl.id + '\')">✓ Bestätigen</button>' +
-                '<button class="btn btn-outline" style="padding:6px 10px; font-size:0.75rem; color:#ef4444;" onclick="rejectReturnRequest(\'' + sl.id + '\')">✖ Ablehnen</button>' +
+            '</div>';
+          } else {
+            const days = calcSickDays(sl.startDate, sl.endDate);
+            html += '<div class="sick-card unread">' +
+              '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">' +
+                '<div>' +
+                  '<div style="font-weight:700; color:#9f1239;">🏥 Krankmeldung: ' + sl.empName + '</div>' +
+                  '<div style="font-size:0.65rem; color:#9f1239; margin-top:2px;">🕒 Eingereicht am: ' + (sl.createdAt || '-') + '</div>' +
+                  '<div style="font-size:0.82rem; font-weight:600; margin-top:2px;">📅 Zeitraum: ' + formatDateDe(sl.startDate) + ' bis ' + formatDateDe(sl.endDate) + ' (' + days + ' ' + (days === 1 ? 'Tag' : 'Tage') + ')</div>' +
+                  '<div style="font-size:0.8rem; margin-top:4px; background:#fff; padding:5px 8px; border-radius:4px; border:1px solid #fecdd3;"><b>Notiz:</b> ' + (sl.reason || '<i>Keine Angabe</i>') + '</div>' +
+                '</div>' +
+                '<button class="btn btn-primary" style="padding:5px 10px; font-size:0.78rem;" onclick="markSickLeaveRead(\'' + sl.id + '\')">✓ Bestätigen</button>' +
               '</div>' +
-            '</div>' +
-          '</div>';
-        } else {
-          const days = calcSickDays(sl.startDate, sl.endDate);
-          html += '<div class="sick-card unread">' +
-            '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">' +
-              '<div>' +
-                '<div style="font-weight:700; color:#9f1239;">🏥 Krankmeldung: ' + sl.empName + '</div>' +
-                '<div style="font-size:0.65rem; color:#9f1239; margin-top:2px;">🕒 Eingereicht am: ' + (sl.createdAt || '-') + '</div>' +
-                '<div style="font-size:0.82rem; font-weight:600; margin-top:2px;">📅 Zeitraum: ' + formatDateDe(sl.startDate) + ' bis ' + formatDateDe(sl.endDate) + ' (' + days + ' ' + (days === 1 ? 'Tag' : 'Tage') + ')</div>' +
-                '<div style="font-size:0.8rem; margin-top:4px; background:#fff; padding:5px 8px; border-radius:4px; border:1px solid #fecdd3;"><b>Notiz:</b> ' + (sl.reason || '<i>Keine Angabe</i>') + '</div>' +
-              '</div>' +
-              '<button class="btn btn-primary" style="padding:5px 10px; font-size:0.78rem;" onclick="markSickLeaveRead(\'' + sl.id + '\')">✓ Bestätigen</button>' +
-            '</div>' +
-          '</div>';
-        }
+            '</div>';
+          }
+        });
+      }
+
+      unreadC.innerHTML = html || '<div style="color:#64748b; font-size:0.83rem; padding:8px; background:#f8fafc; border-radius:6px;">Keine passenden Anträge oder Meldungen für diesen Filter.</div>';
+
+      // BEREICH 2: AKTIVE & GENEHMIGTE ABWESENHEITEN FILTERN
+      const isSickCat = function(sl) { return !sl.category || sl.category.indexOf("Krank") !== -1; };
+      const countToday = sickLeaves.filter(function(sl) { return sl.startDate <= today && sl.endDate >= today; }).length;
+      const countFuture = sickLeaves.filter(function(sl) { return sl.startDate > today; }).length;
+      const countSickOnly = sickLeaves.filter(isSickCat).length;
+      const countLeaveOnly = sickLeaves.filter(function(sl) { return !isSickCat(sl); }).length;
+
+      const activeBar = document.getElementById("inboxActiveFilterBar");
+      if (activeBar) {
+        const aChips = [
+          { id: "all", label: "Alle (" + sickLeaves.length + ")" },
+          { id: "today", label: "🔴 Heute abwesend (" + countToday + ")" },
+          { id: "future", label: "📅 Zukünftig (" + countFuture + ")" },
+          { id: "sick", label: "🏥 Nur Krank (" + countSickOnly + ")" },
+          { id: "leave", label: "🌴 Nur Urlaub/Frei (" + countLeaveOnly + ")" }
+        ];
+        activeBar.innerHTML = aChips.map(function(c) {
+          return '<button type="button" class="filter-chip ' + (inboxActiveFilter === c.id ? 'active' : '') + '" onclick="setInboxActiveFilter(\'' + c.id + '\')">' + c.label + '</button>';
+        }).join("");
+      }
+
+      const filteredActive = sickLeaves.slice().sort(function(a, b) { return a.startDate.localeCompare(b.startDate); }).filter(function(sl) {
+        if (inboxActiveFilter === "today" && !(sl.startDate <= today && sl.endDate >= today)) return false;
+        if (inboxActiveFilter === "future" && !(sl.startDate > today)) return false;
+        if (inboxActiveFilter === "sick" && !isSickCat(sl)) return false;
+        if (inboxActiveFilter === "leave" && isSickCat(sl)) return false;
+        return matchesInboxSearch([sl.empName, sl.category || "Krank", sl.reason, sl.approvedBy, formatDateDe(sl.startDate), formatDateDe(sl.endDate), sl.startDate, sl.endDate]);
       });
 
-      unreadC.innerHTML = html || '<div style="color:#64748b; font-size:0.83rem; padding:8px; background:#f8fafc; border-radius:6px;">Keine offenen Anträge oder ungelesenen Meldungen.</div>';
-
-      if (!sickLeaves.length) {
-        activeC.innerHTML = '<div style="color:#64748b; font-size:0.83rem; padding:8px; background:#f8fafc; border-radius:6px;">Aktuell liegen keine aktiven Zeiträume vor.</div>';
+      if (!filteredActive.length) {
+        activeC.innerHTML = '<div style="color:#64748b; font-size:0.83rem; padding:8px; background:#f8fafc; border-radius:6px;">Keine aktiven Zeiträume für diesen Filter gefunden.</div>';
       } else {
-        activeC.innerHTML = sickLeaves.slice().sort(function(a, b) { return a.startDate.localeCompare(b.startDate); }).map(function(sl) {
+        activeC.innerHTML = filteredActive.map(function(sl) {
           const isCurr = sl.startDate <= today && sl.endDate >= today;
           const badge = isCurr ? '<span style="background:#fee2e2; color:#b91c1c; font-size:0.68rem; padding:2px 6px; border-radius:4px; font-weight:700;">AKTUELL ABWESEND</span>' : '<span style="background:#fef3c7; color:#b45309; font-size:0.68rem; padding:2px 6px; border-radius:4px; font-weight:700;">AB ' + formatDateDe(sl.startDate) + '</span>';
           const catBadge = '<span style="background:#e0f2fe; color:#0369a1; font-size:0.68rem; padding:2px 6px; border-radius:4px; font-weight:700;">' + (sl.category || 'Krank') + '</span>';
@@ -1431,7 +1561,7 @@
               fixHtml +
             '</div>' +
             '<div style="display:flex; align-items:center; gap:3px;">' +
-              '<button class="quick-sick-btn" onclick="openInboxModal(\'' + emp.id + '\')" title="Abwesenheit eintragen">🏥</button>' +
+              '<button class="quick-sick-btn" onclick="openInboxModal(\'' + emp.id + '\', true)" title="Abwesenheit eintragen">🏥</button>' +
               (emp.ersthelfer ? '<span class="first-aider-icon" title="Ersthelfer">+</span>' : '') +
             '</div>' +
           '</div>' +
