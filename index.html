@@ -50,7 +50,6 @@
     body.planner-active .card-sick-tag { display: inline-block; }
     .card-extra-tag { font-size: 0.62rem; color: #166534; background: #dcfce7; padding: 1px 5px; border-radius: 4px; font-weight: 700; margin-top: 1px; align-self: flex-start; }
     
-    /* ANKER NUR IM PLANER-MODUS SICHTBAR */
     .card-fix-tag { display: none; font-size: 0.6rem; background: #fef08a; color: #854d0e; padding: 1px 4px; border-radius: 3px; font-weight: 700; }
     body.planner-active .card-fix-tag { display: inline-block; }
 
@@ -979,7 +978,7 @@
             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
               <div style="flex:1;">
                 <div style="font-weight:700; color:#0369a1;">🌴 Antrag (${lr.type}): ${lr.empName}</div>
-                <div style="font-size:0.65rem; color:#0284c7; margin-top:2px;">🕒 Eingereicht am: ${lr.createdAt || '-'}</div>
+                <div style="font-size:0.65rem; color:#0369a1; margin-top:2px;">🕒 Eingereicht am: ${lr.createdAt || '-'}</div>
                 <div style="font-size:0.84rem; font-weight:700; margin-top:4px;">📅 Gewünscht: ${formatDateDe(lr.startDate)} bis ${formatDateDe(lr.endDate)} (${days} ${days===1?'Tag':'Tage'})</div>
                 ${lr.reason ? `<div style="font-size:0.8rem; margin-top:4px; color:#334155;">💬 "${lr.reason}"</div>` : ''}
                 <div id="partialBox_${lr.id}" style="display:none; background:#fff; padding:10px; border-radius:6px; border:1px solid #93c5fd; margin-top:8px;">
@@ -1101,7 +1100,7 @@
 
     function markAllSickLeavesRead() {
       const nowStr = new Date().toLocaleString('de-DE');
-      sickLeaves.leaveRequests(sl => { if (!sl.returnRequestPending && !sl.readByPlanner) { sl.readByPlanner = true; sl.approvedBy = currentPlannerName; sl.approvedAt = nowStr; } });
+      sickLeaves.forEach(sl => { if (!sl.returnRequestPending && !sl.readByPlanner) { sl.readByPlanner = true; sl.approvedBy = currentPlannerName; sl.approvedAt = nowStr; } });
       saveToFirebase(); renderInboxModal(); updateInboxBadge();
     }
 
@@ -1321,7 +1320,7 @@
     }
 
     function resetEmpForm() {
-      document.getElementById("editEmpId": "").value = ""; document.getElementById("newEmpFirstName").value = ""; document.getElementById("newEmpLastName").value = "";
+      document.getElementById("editEmpId").value = ""; document.getElementById("newEmpFirstName").value = ""; document.getElementById("newEmpLastName").value = "";
       document.getElementById("newEmpAccessLevel").value = "1"; document.getElementById("newEmpFirstAider").checked = false; document.getElementById("newEmpNoRotation").checked = false;
       renderLineCheckboxes([], []); document.getElementById("btnSaveEmp").textContent = "Hinzufügen / Speichern"; document.getElementById("btnCancelEditEmp").style.display = "none";
     }
