@@ -184,7 +184,8 @@
   <!-- LOGIN MODAL (NAME + PIN) -->
   <div id="pinModal" class="modal-overlay">
     <div class="modal" style="max-width: 380px;">
-      <h3 style="color: var(--bayer-blue); margin-bottom: 12px; text-align:center;">🔐 Planer-Anmeldung</h3>
+      <h3 style="color: var(--bayer-blue); margin-bottom: 4px; text-align:center;">🔐 Planer-Anmeldung</h3>
+      <div style="text-align:center; font-size:0.7rem; color:#64748b; margin-bottom:12px;">System-Version 2.5</div>
       <div id="loginModalError" style="display:none; background:#fee2e2; color:#b91c1c; padding:10px; border-radius:6px; font-size:0.82rem; font-weight:700; margin-bottom:12px; text-align:center;"></div>
       <div class="form-group" id="plannerLoginSearchGroup">
         <label>Dein Name (oder "Admin")</label>
@@ -214,13 +215,11 @@
         <button class="btn btn-outline" style="padding:2px 8px; font-size:0.7rem;" onclick="forceRefreshFromServer()">🔄 Jetzt abrufen</button>
       </div>
 
-      <!-- LIVE-SUCHE FÜR DAS GESAMTE POSTFACH -->
       <div class="search-wrapper" style="margin-bottom: 12px;">
         <input type="text" id="inboxSearchInput" class="search-input" style="padding: 8px 30px 8px 12px; font-size: 0.84rem; background: #fff; border-color: #94a3b8;" placeholder="🔍 Postfach durchsuchen (Name, Datum, Urlaub, Krank, Notiz)..." oninput="updateInboxSearch(this.value)">
         <span id="clearInboxSearchBtn" class="search-clear" onclick="updateInboxSearch('')">&times;</span>
       </div>
 
-      <!-- AUF-/ZUKLAPPBARES DIREKT-EINTRAGEN FORMULAR -->
       <div style="margin-bottom: 16px;">
         <button type="button" class="manual-entry-toggle" onclick="toggleManualEntryBox()">
           <span>➕ Abwesenheit / Urlaub / Krank direkt eintragen</span>
@@ -254,7 +253,6 @@
         </div>
       </div>
 
-      <!-- BEREICH 1: OFFENE ANTRÄGE & MELDUNGEN -->
       <div style="margin-bottom: 18px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
           <h4 style="font-size:0.92rem; color:#dc2626;">🔔 Offene Anträge, Stornos & Meldungen</h4>
@@ -264,7 +262,6 @@
         <div id="unreadSickList"></div>
       </div>
 
-      <!-- BEREICH 2: AKTIVE & GENEHMIGTE ABWESENHEITEN -->
       <div style="border-top: 2px solid #e2e8f0; padding-top: 14px;">
         <h4 style="font-size:0.92rem; margin-bottom: 6px;">📋 Aktive & Genehmigte Abwesenheiten</h4>
         <div id="inboxActiveFilterBar" class="inbox-filter-bar"></div>
@@ -406,7 +403,6 @@
     let isPlanner = false, plannerLevel = 0, currentPlannerName = "";
     let sortableInstances = [], backupDoneToday = false;
 
-    // 3 Stunden Inaktivitäts-Logout für das Planer-Board
     const PLANER_INACTIVITY_MS = 3 * 60 * 60 * 1000;
     let planerLastActivityTime = Date.now();
     function resetPlanerActivity() {
@@ -424,23 +420,157 @@
       const d = new Date();
       return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
     }
-    function formatDateDe(s) {
-      return (s && s.indexOf("-") !== -1) ? s.split("-").reverse().join(".") : (s || "");
+    function formatDateDe(s) { return (s && s.indexOf("-") !== -1) ? s.split("-").reverse().join(".") : (s || ""); }
+    function fullName(e) { return ((e.firstName || "") + " " + (e.lastName || "")).trim(); }
+    function extractLineIdFromZone(z) { return (!z || ["pool","absent","extra"].indexOf(z) !== -1 || z.indexOf("_") === -1) ? null : z.split("_").slice(0, -1).join("_"); }
+    function extractShiftIdFromZone(z) { return (!z || ["pool","absent","extra"].indexOf(z) !== -1 || z.indexOf("_") === -1) ? null : z.split("_").pop(); }
+    function isTeamRotating(teamKey) { return teamsConfig[teamKey] ? (teamsConfig[teamKey].rotates !== false) : true; }
+    function isEmpProtectedFromRotation(emp) { return !!(emp.noRotation || !isTeamRotating(emp.team)); }
+
+    function closeModal(id) {
+      const el = document.getElementById(id);
+      if (el) el.style.display = "none";
+      if (id === "settingsModal") resetEmpForm();
     }
-    function fullName(e) {
-      return ((e.firstName || "") + " " + (e.lastName || "")).trim();
+
+    function initBoard() {
+      const headerRow = document.getElementById("headerRow");
+      if (!headerRow) return;
+      if (!Array.isArray(lines) || lines.length === 0) lines = defaultLines.slice();
+
+      headerRow.innerHTML = '<th class="shift-header"><div>Schicht</div><div class="shift-controls"><button class="shift-rotate-btn" onclick="rotateAllShifts()">🔄 Rotieren</button><button class="shift-clear-btn" onclick="clearEntireBoard()">🧹 Alle leeren</button></div></th>';
+      lines.forEach(function(line) {
+        const th = document.createElement("th"); th.className = "line-header";
+        if (isPlanner) th.onclick = function() { openLineEditModal(line.id); };
+        let pCls = line.prio && (line.prio.indexOf("1") !== -1 || line.prio.indexOf("2") !== -1) ? "prio-high" : (line.prio ? "prio-mid" : "");
+        th.innerHTML = '<div class="line-title">' + line.name + '</div><div class="badge-container">' + (line.prio ? '<span class="line-prio ' + pCls + '">' + line.prio + '</span>' : '') + (line.tag ? '<span class="line-status-tag">' + line.tag + '</span>' : '') + '</div>' + (line.note ? '<div class="line-notes">' + line.note + '</div>' : '');
+        headerRow.appendChild(th);
+      });
+
+      const matrixBody = document.getElementById("matrixBody"); matrixBody.innerHTML = "";
+      const keys = Object.keys(teamsConfig).sort();
+      shifts.forEach(function(shift) {
+        const curKey = shiftRotation[shift.id] || keys[0], curObj = teamsConfig[curKey] || { name: "Team", color: "#0091df" };
+        const opts = keys.map(function(k) { return '<option value="' + k + '" ' + (k === curKey ? 'selected' : '') + '>' + teamsConfig[k].name + (isTeamRotating(k) ? ' 🔄' : '') + '</option>'; }).join("");
+        const tr = document.createElement("tr"), thS = document.createElement("th");
+        thS.className = "shift-header";
+        thS.innerHTML = '<div>' + shift.name + '</div><div class="shift-team-badge"><span style="color:' + curObj.color + ';">■</span> ' + curObj.name + '</div><div class="shift-controls"><div style="display:flex; gap:4px;"><select id="teamSelect_' + shift.id + '" class="shift-team-select" style="flex:1;">' + opts + '</select><button class="shift-clear-btn" style="width:26px; padding:0; color:var(--bayer-blue); border-color:var(--bayer-blue);" onclick="loadTeamToShift(\'' + shift.id + '\')" title="Team auf Linien laden">📥</button></div><button class="shift-clear-btn" onclick="clearShiftRow(\'' + shift.id + '\', \'' + shift.name + '\')">🧹 Leeren</button></div>';
+        tr.appendChild(thS);
+        lines.forEach(function(line) {
+          const td = document.createElement("td"), zId = line.id + "_" + shift.id;
+          td.innerHTML = '<div id="' + zId + '" class="card-list drop-zone" data-zone="' + zId + '"></div>';
+          tr.appendChild(td);
+        });
+        matrixBody.appendChild(tr);
+      });
+
+      renderEmployees(); initDragAndDrop(); updateRoleDropdown(); updateTeamDropdowns(); renderTeamFilterCheckboxes(); renderRoleFilterCheckboxes(); applyTeamStyles(); renderLineCheckboxes(); updateInboxBadge();
     }
-    function extractLineIdFromZone(z) {
-      return (!z || ["pool","absent","extra"].indexOf(z) !== -1 || z.indexOf("_") === -1) ? null : z.split("_").slice(0, -1).join("_");
+
+    function renderEmployees() {
+      document.querySelectorAll(".drop-zone").forEach(function(el) { el.innerHTML = ""; });
+      const today = getTodayIso();
+      const displayList = employees.slice();
+      if (isPlanner && poolSearchQuery) {
+        displayList.sort(function(a, b) {
+          if (a.zone !== "pool" || b.zone !== "pool") return 0;
+          const aM = (a.mainLines && a.mainLines.some(function(id) { const l = lines.find(function(x){return x.id===id;}); return l && l.name.toLowerCase().indexOf(poolSearchQuery) !== -1; })) ? 2 : ((a.secLines && a.secLines.some(function(id) { const l = lines.find(function(x){return x.id===id;}); return l && l.name.toLowerCase().indexOf(poolSearchQuery) !== -1; })) ? 1 : 0);
+          const bM = (b.mainLines && b.mainLines.some(function(id) { const l = lines.find(function(x){return x.id===id;}); return l && l.name.toLowerCase().indexOf(poolSearchQuery) !== -1; })) ? 2 : ((b.secLines && b.secLines.some(function(id) { const l = lines.find(function(x){return x.id===id;}); return l && l.name.toLowerCase().indexOf(poolSearchQuery) !== -1; })) ? 1 : 0);
+          return bM - aM;
+        });
+      }
+
+      displayList.forEach(function(emp) {
+        const fName = fullName(emp);
+        if (isPlanner && emp.zone === "pool") {
+          if (activeTeamFilters[emp.team] === false || activeRoleFilters[emp.role] === false) return;
+          if (poolSearchQuery) {
+            const nMatch = fName.toLowerCase().indexOf(poolSearchQuery) !== -1;
+            const pMatch = emp.mainLines && emp.mainLines.some(function(id) { const l = lines.find(function(x){return x.id===id;}); return l && l.name.toLowerCase().indexOf(poolSearchQuery) !== -1; });
+            const sMatch = emp.secLines && emp.secLines.some(function(id) { const l = lines.find(function(x){return x.id===id;}); return l && l.name.toLowerCase().indexOf(poolSearchQuery) !== -1; });
+            if (!nMatch && !pMatch && !sMatch) return;
+          }
+        }
+
+        const card = document.createElement("div");
+        card.className = "employee-card " + emp.team; card.setAttribute("data-id", emp.id);
+        let parts = [];
+        if (emp.lastLineId) {
+          const lastL = lines.find(function(x) { return x.id === emp.lastLineId; });
+          if (lastL) {
+            const delBtn = emp.zone === "pool" ? '<span onclick="event.stopPropagation(); deletePin(\'' + emp.id + '\')" style="cursor:pointer; color:#ef4444; font-size:0.75rem; padding:0 3px;">✖</span>' : "";
+            parts.push('<span style="color:#0284c7; font-weight:700;">📌 ' + lastL.name.replace(/Linie\s*/i, '') + ' ' + delBtn + '</span>');
+          }
+        }
+        if (emp.mainLines && emp.mainLines.length) {
+          parts.push("<b>Prio:</b> " + emp.mainLines.map(function(id) { const l = lines.find(function(x){return x.id===id;}); return l ? l.name.replace(/Linie\s*/i, '') : null; }).filter(Boolean).join(", "));
+        }
+        if (emp.secLines && emp.secLines.length) {
+          parts.push('<span style="color:#94a3b8;">Sek:</span> ' + emp.secLines.map(function(id) { const l = lines.find(function(x){return x.id===id;}); return l ? l.name.replace(/Linie\s*/i, '') : null; }).filter(Boolean).join(", "));
+        }
+
+        const fixHtml = emp.noRotation ? '<span class="card-fix-tag" title="Fixiert (rotiert nicht)">⚓ Fix</span>' : '';
+        const activeSl = sickLeaves.find(function(sl) { return sl.empId === emp.id && sl.startDate <= today && sl.endDate >= today; });
+        const sickHtml = activeSl ? '<span class="card-sick-tag">' + (activeSl.category && activeSl.category.indexOf('Urlaub') !== -1 ? '🌴' : '🏥') + ' Bis ' + formatDateDe(activeSl.endDate) + '</span>' : '';
+        const activeEs = extraShifts.find(function(es) { return es.empId === emp.id && es.status === "approved" && es.date >= today; });
+        const extraHtml = activeEs ? '<span class="card-extra-tag">➕ ' + formatDateDe(activeEs.date) + ' (' + (shiftsLabel[activeEs.shift] || activeEs.shift) + ' | ' + (activeEs.note || 'BS') + ')</span>' : '';
+
+        card.innerHTML =
+          '<div class="card-name">' + fName + '</div>' +
+          '<div style="display:flex; justify-content:space-between; align-items:center; gap:4px;">' +
+            '<div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap;">' +
+              '<span class="card-role">' + emp.role + '</span>' +
+              fixHtml +
+            '</div>' +
+            '<div style="display:flex; align-items:center; gap:3px;">' +
+              '<button class="quick-sick-btn" onclick="openInboxModal(\'' + emp.id + '\', true)" title="Abwesenheit eintragen">🏥</button>' +
+              (emp.ersthelfer ? '<span class="first-aider-icon" title="Ersthelfer">+</span>' : '') +
+            '</div>' +
+          '</div>' +
+          (parts.length ? '<div class="card-lines-info">' + parts.join(" | ") + '</div>' : '') +
+          extraHtml + sickHtml;
+
+        const targetZone = document.getElementById(emp.zone) || document.getElementById("pool");
+        if (targetZone) targetZone.appendChild(card);
+      });
+
+      const pEl = document.getElementById("pool"), eEl = document.getElementById("extra");
+      document.getElementById("poolCount").textContent = "(" + (pEl ? pEl.children.length : 0) + ")";
+      document.getElementById("extraCount").textContent = "(" + (eEl ? eEl.children.length : 0) + ")";
+
+      const extraListEl = document.getElementById("approvedExtraList");
+      if (extraListEl) {
+        const appr = extraShifts.filter(function(es) { return es.status === "approved" && es.date >= today; }).sort(function(a,b) { return a.date.localeCompare(b.date); });
+        extraListEl.innerHTML = appr.map(function(es) {
+          return '<div style="display:flex; justify-content:space-between; align-items:center; background:#dcfce7; padding:3px 6px; border-radius:4px; margin-top:3px; color:#166534;">' +
+            '<span><b>' + es.empName + '</b>: ' + formatDateDe(es.date) + ' (' + shiftsLabel[es.shift] + ')</span>' +
+            '<div style="display:flex; gap:4px;">' +
+              '<button onclick="pullExtraShiftToBox(\'' + es.id + '\')" style="border:none; background:#16a34a; color:#fff; border-radius:3px; padding:1px 5px; cursor:pointer; font-size:0.68rem;" title="Karte vorab in dieses Zusatz-Fenster holen">📥</button>' +
+              '<button onclick="deleteExtraShift(\'' + es.id + '\')" style="border:none; background:none; color:#b91c1c; cursor:pointer; font-size:0.72rem;" title="Bringschicht entfernen">✖</button>' +
+            '</div>' +
+          '</div>';
+        }).join("");
+      }
     }
-    function extractShiftIdFromZone(z) {
-      return (!z || ["pool","absent","extra"].indexOf(z) !== -1 || z.indexOf("_") === -1) ? null : z.split("_").pop();
-    }
-    function isTeamRotating(teamKey) {
-      return teamsConfig[teamKey] ? (teamsConfig[teamKey].rotates !== false) : true;
-    }
-    function isEmpProtectedFromRotation(emp) {
-      return !!(emp.noRotation || !isTeamRotating(emp.team));
+
+    function initDragAndDrop() {
+      sortableInstances.forEach(function(s) { s.destroy(); }); sortableInstances = [];
+      document.querySelectorAll(".drop-zone").forEach(function(zone) {
+        sortableInstances.push(new Sortable(zone, {
+          group: "shared-shifts", animation: 150, disabled: !isPlanner,
+          onEnd: function (evt) {
+            const empId = evt.item.getAttribute("data-id"), newZone = evt.to.getAttribute("data-zone");
+            const emp = employees.find(function(e) { return e.id === empId; });
+            if (emp) {
+              emp.zone = newZone;
+              const nL = extractLineIdFromZone(newZone), nS = extractShiftIdFromZone(newZone);
+              if (nL && nS) emp.lastShiftId = nS;
+              if (nL && (!emp.lastLineId || (nS && shiftRotation[nS] === emp.team) || isEmpProtectedFromRotation(emp))) emp.lastLineId = nL;
+              saveToFirebase(); renderEmployees();
+            }
+          }
+        }));
+      });
     }
 
     function parseIsoLocal(iso) {
@@ -495,6 +625,7 @@
       const lastAct = Number(sessionStorage.getItem("planner_last_active") || Date.now());
       if (savedName && savedLvl >= 2 && (Date.now() - lastAct <= PLANER_INACTIVITY_MS)) {
         applyPlannerLoginState(savedName, savedLvl);
+        closeModal("pinModal");
       } else if (savedName) {
         sessionStorage.removeItem("planner_name");
         sessionStorage.removeItem("planner_level");
@@ -592,6 +723,7 @@
       sessionStorage.removeItem("planner_level");
       sessionStorage.removeItem("planner_last_active");
       document.body.classList.remove("planner-active", "planner-lvl-3");
+      closeModal("pinModal");
       closeModal("inboxModal");
       closeModal("settingsModal");
       closeModal("lineEditModal");
@@ -1037,15 +1169,8 @@
       renderInboxModal();
     };
 
-    window.setInboxUnreadFilter = function(f) {
-      inboxUnreadFilter = f;
-      renderInboxModal();
-    };
-
-    window.setInboxActiveFilter = function(f) {
-      inboxActiveFilter = f;
-      renderInboxModal();
-    };
+    window.setInboxUnreadFilter = function(f) { inboxUnreadFilter = f; renderInboxModal(); };
+    window.setInboxActiveFilter = function(f) { inboxActiveFilter = f; renderInboxModal(); };
 
     function matchesInboxSearch(fields) {
       if (!inboxSearchQuery) return true;
@@ -1502,146 +1627,6 @@
       });
     }
 
-    function initBoard() {
-      const headerRow = document.getElementById("headerRow");
-      if (!headerRow) return;
-      if (!Array.isArray(lines) || lines.length === 0) lines = defaultLines.slice();
-
-      headerRow.innerHTML = '<th class="shift-header"><div>Schicht</div><div class="shift-controls"><button class="shift-rotate-btn" onclick="rotateAllShifts()">🔄 Rotieren</button><button class="shift-clear-btn" onclick="clearEntireBoard()">🧹 Alle leeren</button></div></th>';
-      lines.forEach(function(line) {
-        const th = document.createElement("th"); th.className = "line-header";
-        if (isPlanner) th.onclick = function() { openLineEditModal(line.id); };
-        let pCls = line.prio && (line.prio.indexOf("1") !== -1 || line.prio.indexOf("2") !== -1) ? "prio-high" : (line.prio ? "prio-mid" : "");
-        th.innerHTML = '<div class="line-title">' + line.name + '</div><div class="badge-container">' + (line.prio ? '<span class="line-prio ' + pCls + '">' + line.prio + '</span>' : '') + (line.tag ? '<span class="line-status-tag">' + line.tag + '</span>' : '') + '</div>' + (line.note ? '<div class="line-notes">' + line.note + '</div>' : '');
-        headerRow.appendChild(th);
-      });
-
-      const matrixBody = document.getElementById("matrixBody"); matrixBody.innerHTML = "";
-      const keys = Object.keys(teamsConfig).sort();
-      shifts.forEach(function(shift) {
-        const curKey = shiftRotation[shift.id] || keys[0], curObj = teamsConfig[curKey] || { name: "Team", color: "#0091df" };
-        const opts = keys.map(function(k) { return '<option value="' + k + '" ' + (k === curKey ? 'selected' : '') + '>' + teamsConfig[k].name + (isTeamRotating(k) ? ' 🔄' : '') + '</option>'; }).join("");
-        const tr = document.createElement("tr"), thS = document.createElement("th");
-        thS.className = "shift-header";
-        thS.innerHTML = '<div>' + shift.name + '</div><div class="shift-team-badge"><span style="color:' + curObj.color + ';">■</span> ' + curObj.name + '</div><div class="shift-controls"><div style="display:flex; gap:4px;"><select id="teamSelect_' + shift.id + '" class="shift-team-select" style="flex:1;">' + opts + '</select><button class="shift-clear-btn" style="width:26px; padding:0; color:var(--bayer-blue); border-color:var(--bayer-blue);" onclick="loadTeamToShift(\'' + shift.id + '\')" title="Team auf Linien laden">📥</button></div><button class="shift-clear-btn" onclick="clearShiftRow(\'' + shift.id + '\', \'' + shift.name + '\')">🧹 Leeren</button></div>';
-        tr.appendChild(thS);
-        lines.forEach(function(line) {
-          const td = document.createElement("td"), zId = line.id + "_" + shift.id;
-          td.innerHTML = '<div id="' + zId + '" class="card-list drop-zone" data-zone="' + zId + '"></div>';
-          tr.appendChild(td);
-        });
-        matrixBody.appendChild(tr);
-      });
-
-      renderEmployees(); initDragAndDrop(); updateRoleDropdown(); updateTeamDropdowns(); renderTeamFilterCheckboxes(); renderRoleFilterCheckboxes(); applyTeamStyles(); renderLineCheckboxes(); updateInboxBadge();
-    }
-
-    function renderEmployees() {
-      document.querySelectorAll(".drop-zone").forEach(function(el) { el.innerHTML = ""; });
-      const today = getTodayIso();
-      const displayList = employees.slice();
-      if (isPlanner && poolSearchQuery) {
-        displayList.sort(function(a, b) {
-          if (a.zone !== "pool" || b.zone !== "pool") return 0;
-          const aM = (a.mainLines && a.mainLines.some(function(id) { const l = lines.find(function(x){return x.id===id;}); return l && l.name.toLowerCase().indexOf(poolSearchQuery) !== -1; })) ? 2 : ((a.secLines && a.secLines.some(function(id) { const l = lines.find(function(x){return x.id===id;}); return l && l.name.toLowerCase().indexOf(poolSearchQuery) !== -1; })) ? 1 : 0);
-          const bM = (b.mainLines && b.mainLines.some(function(id) { const l = lines.find(function(x){return x.id===id;}); return l && l.name.toLowerCase().indexOf(poolSearchQuery) !== -1; })) ? 2 : ((b.secLines && b.secLines.some(function(id) { const l = lines.find(function(x){return x.id===id;}); return l && l.name.toLowerCase().indexOf(poolSearchQuery) !== -1; })) ? 1 : 0);
-          return bM - aM;
-        });
-      }
-
-      displayList.forEach(function(emp) {
-        const fName = fullName(emp);
-        if (isPlanner && emp.zone === "pool") {
-          if (activeTeamFilters[emp.team] === false || activeRoleFilters[emp.role] === false) return;
-          if (poolSearchQuery) {
-            const nMatch = fName.toLowerCase().indexOf(poolSearchQuery) !== -1;
-            const pMatch = emp.mainLines && emp.mainLines.some(function(id) { const l = lines.find(function(x){return x.id===id;}); return l && l.name.toLowerCase().indexOf(poolSearchQuery) !== -1; });
-            const sMatch = emp.secLines && emp.secLines.some(function(id) { const l = lines.find(function(x){return x.id===id;}); return l && l.name.toLowerCase().indexOf(poolSearchQuery) !== -1; });
-            if (!nMatch && !pMatch && !sMatch) return;
-          }
-        }
-
-        const card = document.createElement("div");
-        card.className = "employee-card " + emp.team; card.setAttribute("data-id", emp.id);
-        let parts = [];
-        if (emp.lastLineId) {
-          const lastL = lines.find(function(x) { return x.id === emp.lastLineId; });
-          if (lastL) {
-            const delBtn = emp.zone === "pool" ? '<span onclick="event.stopPropagation(); deletePin(\'' + emp.id + '\')" style="cursor:pointer; color:#ef4444; font-size:0.75rem; padding:0 3px;">✖</span>' : "";
-            parts.push('<span style="color:#0284c7; font-weight:700;">📌 ' + lastL.name.replace(/Linie\s*/i, '') + ' ' + delBtn + '</span>');
-          }
-        }
-        if (emp.mainLines && emp.mainLines.length) {
-          parts.push("<b>Prio:</b> " + emp.mainLines.map(function(id) { const l = lines.find(function(x){return x.id===id;}); return l ? l.name.replace(/Linie\s*/i, '') : null; }).filter(Boolean).join(", "));
-        }
-        if (emp.secLines && emp.secLines.length) {
-          parts.push('<span style="color:#94a3b8;">Sek:</span> ' + emp.secLines.map(function(id) { const l = lines.find(function(x){return x.id===id;}); return l ? l.name.replace(/Linie\s*/i, '') : null; }).filter(Boolean).join(", "));
-        }
-
-        const fixHtml = emp.noRotation ? '<span class="card-fix-tag" title="Fixiert (rotiert nicht)">⚓ Fix</span>' : '';
-        const activeSl = sickLeaves.find(function(sl) { return sl.empId === emp.id && sl.startDate <= today && sl.endDate >= today; });
-        const sickHtml = activeSl ? '<span class="card-sick-tag">' + (activeSl.category && activeSl.category.indexOf('Urlaub') !== -1 ? '🌴' : '🏥') + ' Bis ' + formatDateDe(activeSl.endDate) + '</span>' : '';
-        const activeEs = extraShifts.find(function(es) { return es.empId === emp.id && es.status === "approved" && es.date >= today; });
-        const extraHtml = activeEs ? '<span class="card-extra-tag">➕ ' + formatDateDe(activeEs.date) + ' (' + (shiftsLabel[activeEs.shift] || activeEs.shift) + ' | ' + (activeEs.note || 'BS') + ')</span>' : '';
-
-        card.innerHTML =
-          '<div class="card-name">' + fName + '</div>' +
-          '<div style="display:flex; justify-content:space-between; align-items:center; gap:4px;">' +
-            '<div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap;">' +
-              '<span class="card-role">' + emp.role + '</span>' +
-              fixHtml +
-            '</div>' +
-            '<div style="display:flex; align-items:center; gap:3px;">' +
-              '<button class="quick-sick-btn" onclick="openInboxModal(\'' + emp.id + '\', true)" title="Abwesenheit eintragen">🏥</button>' +
-              (emp.ersthelfer ? '<span class="first-aider-icon" title="Ersthelfer">+</span>' : '') +
-            '</div>' +
-          '</div>' +
-          (parts.length ? '<div class="card-lines-info">' + parts.join(" | ") + '</div>' : '') +
-          extraHtml + sickHtml;
-
-        const targetZone = document.getElementById(emp.zone) || document.getElementById("pool");
-        if (targetZone) targetZone.appendChild(card);
-      });
-
-      const pEl = document.getElementById("pool"), eEl = document.getElementById("extra");
-      document.getElementById("poolCount").textContent = "(" + (pEl ? pEl.children.length : 0) + ")";
-      document.getElementById("extraCount").textContent = "(" + (eEl ? eEl.children.length : 0) + ")";
-
-      const extraListEl = document.getElementById("approvedExtraList");
-      if (extraListEl) {
-        const appr = extraShifts.filter(function(es) { return es.status === "approved" && es.date >= today; }).sort(function(a,b) { return a.date.localeCompare(b.date); });
-        extraListEl.innerHTML = appr.map(function(es) {
-          return '<div style="display:flex; justify-content:space-between; align-items:center; background:#dcfce7; padding:3px 6px; border-radius:4px; margin-top:3px; color:#166534;">' +
-            '<span><b>' + es.empName + '</b>: ' + formatDateDe(es.date) + ' (' + shiftsLabel[es.shift] + ')</span>' +
-            '<div style="display:flex; gap:4px;">' +
-              '<button onclick="pullExtraShiftToBox(\'' + es.id + '\')" style="border:none; background:#16a34a; color:#fff; border-radius:3px; padding:1px 5px; cursor:pointer; font-size:0.68rem;" title="Karte vorab in dieses Zusatz-Fenster holen">📥</button>' +
-              '<button onclick="deleteExtraShift(\'' + es.id + '\')" style="border:none; background:none; color:#b91c1c; cursor:pointer; font-size:0.72rem;" title="Bringschicht entfernen">✖</button>' +
-            '</div>' +
-          '</div>';
-        }).join("");
-      }
-    }
-
-    function initDragAndDrop() {
-      sortableInstances.forEach(function(s) { s.destroy(); }); sortableInstances = [];
-      document.querySelectorAll(".drop-zone").forEach(function(zone) {
-        sortableInstances.push(new Sortable(zone, {
-          group: "shared-shifts", animation: 150, disabled: !isPlanner,
-          onEnd: function (evt) {
-            const empId = evt.item.getAttribute("data-id"), newZone = evt.to.getAttribute("data-zone");
-            const emp = employees.find(function(e) { return e.id === empId; });
-            if (emp) {
-              emp.zone = newZone;
-              const nL = extractLineIdFromZone(newZone), nS = extractShiftIdFromZone(newZone);
-              if (nL && nS) emp.lastShiftId = nS;
-              if (nL && (!emp.lastLineId || (nS && shiftRotation[nS] === emp.team) || isEmpProtectedFromRotation(emp))) emp.lastLineId = nL;
-              saveToFirebase(); renderEmployees();
-            }
-          }
-        }));
-      });
-    }
-
     function openLineEditModal(lineId) {
       const l = lines.find(function(x) { return x.id === lineId; }); if (!l) return;
       document.getElementById("editLineId").value = l.id;
@@ -1658,12 +1643,6 @@
       l.tag = document.getElementById("editLineTag").value.trim();
       l.note = document.getElementById("editLineNote").value.trim();
       saveToFirebase(); initBoard(); closeModal("lineEditModal");
-    }
-
-    function closeModal(id) {
-      const el = document.getElementById(id);
-      if (el) el.style.display = "none";
-      if (id === "settingsModal") resetEmpForm();
     }
 
     function openSettingsModal() {
