@@ -27,6 +27,40 @@
     .btn-primary:hover { background: #0077b6; }
     .btn-outline { border-color: #cbd5e1; background: #fff; color: #475569; }
     .btn-outline:hover { background: #f8fafc; }
+    
+    /* SCHICHT-FREIGABE BANNER (ROT / GRÜN) */
+    .shift-approval-banner {
+      padding: 6px 24px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+      transition: background 0.2s, color 0.2s;
+    }
+    .shift-approval-banner.pending {
+      background: #fef2f2;
+      color: #991b1b;
+      border-bottom-color: #fecaca;
+    }
+    .shift-approval-banner.approved {
+      background: #f0fdf4;
+      color: #166534;
+      border-bottom-color: #bbf7d0;
+    }
+    .btn-approval-toggle {
+      display: none;
+      font-size: 0.75rem;
+      padding: 3px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 700;
+      border: 1px solid currentColor;
+      background: #fff;
+    }
+    body.planner-active .btn-approval-toggle { display: inline-block; }
+
     .inbox-badge { position: absolute; top: -6px; right: -6px; background: #dc2626; color: #fff; font-size: 0.72rem; font-weight: 800; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; display: none; align-items: center; justify-content: center; }
     main { padding: 16px; display: flex; gap: 16px; flex: 1; width: 100%; }
     .sidebar { width: 290px; flex-shrink: 0; display: none; flex-direction: column; gap: 10px; }
@@ -114,7 +148,7 @@
   <div class="brand-gradient"></div>
   <div id="toastBanner" class="toast-banner">Gespeichert</div>
 
-  <!-- START-PASSWORT SPERRE FÜR DIE SCHICHT-ÜBERSICHT (OPTIONAL NACH PC-NEUSTART) -->
+  <!-- START-PASSWORT SPERRE FÜR DIE SCHICHT-ÜBERSICHT -->
   <div id="boardLockModal" class="modal-overlay" style="background: rgba(15,23,42,0.92); z-index: 180;">
     <div class="modal" style="max-width: 380px; text-align: center;">
       <h3 style="color: var(--bayer-blue); margin-bottom: 6px;">🔒 Schicht- und Linienübersicht</h3>
@@ -146,6 +180,12 @@
       <button class="btn btn-outline admin-element" onclick="logoutPlanner()">Abmelden</button>
     </div>
   </header>
+
+  <!-- DEZENTES SCHICHT-FREIGABE BANNER (ROT / GRÜN) -->
+  <div id="shiftApprovalBanner" class="shift-approval-banner pending">
+    <span id="shiftApprovalText">⏳ Warte auf Freigabe der Schicht</span>
+    <button id="shiftApprovalBtn" class="btn-approval-toggle" onclick="toggleShiftApprovalState()">Freigeben</button>
+  </div>
 
   <main>
     <aside class="sidebar">
@@ -201,11 +241,11 @@
     </section>
   </main>
 
-  <!-- LOGIN MODAL (NAME + PIN) -->
+  <!-- LOGIN MODAL -->
   <div id="pinModal" class="modal-overlay">
     <div class="modal" style="max-width: 380px;">
       <h3 style="color: var(--bayer-blue); margin-bottom: 4px; text-align:center;">🔐 Planer-Anmeldung</h3>
-      <div style="text-align:center; font-size:0.7rem; color:#64748b; margin-bottom:12px;">System-Version 2.8 (Auto-Save & Recovery)</div>
+      <div style="text-align:center; font-size:0.7rem; color:#64748b; margin-bottom:12px;">System-Version 2.8</div>
       <div id="loginModalError" style="display:none; background:#fee2e2; color:#b91c1c; padding:10px; border-radius:6px; font-size:0.82rem; font-weight:700; margin-bottom:12px; text-align:center;"></div>
       <div class="form-group" id="plannerLoginSearchGroup">
         <label>Dein Name (oder "Admin")</label>
@@ -223,7 +263,7 @@
     </div>
   </div>
 
-  <!-- ERST-LOGIN PIN ÄNDERN MODAL (BEI START-PIN 1234) -->
+  <!-- ERST-LOGIN PIN ÄNDERN -->
   <div id="changePinModal" class="modal-overlay">
     <div class="modal" style="max-width: 390px;">
       <h3 style="color: var(--bayer-blue); margin-bottom: 12px; text-align:center;">🔑 Eigene Planer-PIN festlegen</h3>
@@ -238,7 +278,7 @@
     </div>
   </div>
 
-  <!-- POSTFACH & ANTRÄGE MODAL (STUFE 3) -->
+  <!-- POSTFACH & ANTRÄGE -->
   <div id="inboxModal" class="modal-overlay">
     <div class="modal" style="max-width: 680px;">
       <h3 style="display:flex; justify-content:space-between; align-items:center; color:var(--bayer-blue); margin-bottom:8px;">
@@ -251,13 +291,13 @@
       </div>
 
       <div class="search-wrapper" style="margin-bottom: 12px;">
-        <input type="text" id="inboxSearchInput" class="search-input" style="padding: 8px 30px 8px 12px; font-size: 0.84rem; background: #fff; border-color: #94a3b8;" placeholder="🔍 Postfach durchsuchen (Name, Datum, Urlaub, Krank, Notiz)..." oninput="updateInboxSearch(this.value)">
+        <input type="text" id="inboxSearchInput" class="search-input" style="padding: 8px 30px 8px 12px; font-size: 0.84rem; background: #fff; border-color: #94a3b8;" placeholder="🔍 Postfach durchsuchen..." oninput="updateInboxSearch(this.value)">
         <span id="clearInboxSearchBtn" class="search-clear" onclick="updateInboxSearch('')">&times;</span>
       </div>
 
       <div style="margin-bottom: 16px;">
         <button type="button" class="manual-entry-toggle" onclick="toggleManualEntryBox()">
-          <span>➕ Abwesenheit / Urlaub / Krank direkt eintragen</span>
+          <span>➕ Abwesenheit direkt eintragen</span>
           <span id="manualEntryArrow" style="font-size:0.76rem; color:var(--bayer-blue);">▼ Formular öffnen</span>
         </button>
         <div id="manualEntryContent" style="display:none; background:#f8fafc; border:1px solid #cbd5e1; border-top:none; border-radius:0 0 8px 8px; padding:14px;">
@@ -270,12 +310,11 @@
             <div class="form-group" style="flex:1;">
               <label>Art der Abwesenheit</label>
               <select id="manualSickCategory" class="form-control">
-                <option value="Arbeitsunfähigkeit (Krank)">🏥 Krank / AU</option>
-                <option value="Urlaub - bezahlt">🌴 Urlaub (bezahlt)</option>
-                <option value="Urlaub - unbezahlt">🌴 Urlaub (unbezahlt)</option>
+                <option value="Arbeitsunfähigkeit (Krank)">🏥 Arbeitsunfähigkeit</option>
+                <option value="Urlaub - bezahlt">🌴 Urlaub</option>
                 <option value="Freizeitausgleich / Gleittag">⏱️ Freizeitausgleich / Gleittag</option>
-                <option value="Aus- und Fortbildung">🎓 Aus- und Fortbildung</option>
-                <option value="Dienstreise">🚗 Dienstreise</option>
+                <option value="Kind krank">Kind krank</option>
+                <option value="Sonderurlaub">Sonderurlaub</option>
               </select>
             </div>
           </div>
@@ -283,29 +322,29 @@
             <div class="form-group" style="flex:1;"><label>Von</label><input type="date" id="manualSickStart" class="form-control"></div>
             <div class="form-group" style="flex:1;"><label>Bis</label><input type="date" id="manualSickEnd" class="form-control"></div>
           </div>
-          <div class="form-group"><label>Notiz / Bemerkung</label><input type="text" id="manualSickReason" class="form-control" placeholder="Optional..."></div>
+          <div class="form-group"><label>Notiz</label><input type="text" id="manualSickReason" class="form-control" placeholder="Optional..."></div>
           <button class="btn btn-primary" style="width:100%;" onclick="addManualSickLeave()">Eintragen & Genehmigen</button>
         </div>
       </div>
 
       <div style="margin-bottom: 18px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
-          <h4 style="font-size:0.92rem; color:#dc2626;">🔔 Offene Anträge, Stornos & Meldungen</h4>
-          <button id="btnMarkAllRead" class="btn btn-outline" style="padding:4px 10px; font-size:0.75rem; display:none;" onclick="markAllSickLeavesRead()">Krankmeldungen gelesen</button>
+          <h4 style="font-size:0.92rem; color:#dc2626;">🔔 Offene Anträge & Meldungen</h4>
+          <button id="btnMarkAllRead" class="btn btn-outline" style="padding:4px 10px; font-size:0.75rem; display:none;" onclick="markAllSickLeavesRead()">Gelesen</button>
         </div>
         <div id="inboxUnreadFilterBar" class="inbox-filter-bar"></div>
         <div id="unreadSickList"></div>
       </div>
 
       <div style="border-top: 2px solid #e2e8f0; padding-top: 14px;">
-        <h4 style="font-size:0.92rem; margin-bottom: 6px;">📋 Aktive & Genehmigte Abwesenheiten</h4>
+        <h4 style="font-size:0.92rem; margin-bottom: 6px;">📋 Aktive Abwesenheiten</h4>
         <div id="inboxActiveFilterBar" class="inbox-filter-bar"></div>
         <div id="activeSickList"></div>
       </div>
     </div>
   </div>
 
-  <!-- LINIE BEARBEITEN MODAL -->
+  <!-- LINIE BEARBEITEN -->
   <div id="lineEditModal" class="modal-overlay">
     <div class="modal" style="max-width: 450px;">
       <h3 id="lineEditTitle" style="color: var(--bayer-blue); margin-bottom: 16px;">Linie bearbeiten</h3>
@@ -313,36 +352,35 @@
       <div class="form-group">
         <label>Priorität</label>
         <select id="editLinePrio" class="form-control" onchange="saveLineDetails(true)">
-          <option value="">Keine Priorität</option><option value="PRIO 1">PRIO 1</option><option value="PRIO 2">PRIO 2</option><option value="PRIO 3">PRIO 3</option><option value="PRIO 4">PRIO 4</option>
+          <option value="">Keine</option><option value="PRIO 1">PRIO 1</option><option value="PRIO 2">PRIO 2</option><option value="PRIO 3">PRIO 3</option>
         </select>
       </div>
       <div class="form-group"><label>Status / Tag</label><input type="text" id="editLineTag" class="form-control" onchange="saveLineDetails(true)"></div>
       <div class="form-group"><label>Notiz</label><textarea id="editLineNote" class="form-control" onchange="saveLineDetails(true)"></textarea></div>
       <div class="modal-actions">
-        <button class="btn btn-primary" onclick="saveLineDetails(false)">Fertig & Schließen</button>
+        <button class="btn btn-primary" onclick="saveLineDetails(false)">Fertig</button>
       </div>
     </div>
   </div>
 
-  <!-- EINSTELLUNGEN & PROFIL MODAL (STUFE 2 & STUFE 3) -->
+  <!-- EINSTELLUNGEN -->
   <div id="settingsModal" class="modal-overlay">
     <div class="modal" style="max-width: 680px;">
       <h3 style="display:flex; justify-content:space-between; color:var(--bayer-blue); margin-bottom:14px;">
-        <span>⚙️ Einstellungen & Profil</span>
+        <span>⚙️ Einstellungen</span>
         <button onclick="closeModal('settingsModal')" style="border:none; background:none; font-size:1.5rem; cursor:pointer;">&times;</button>
       </h3>
       <div class="tabs">
-        <button id="tabBtnEmployees" class="tab-btn lvl-3-only active" onclick="switchTab('tabEmployees', this)">Mitarbeiter & Rechte</button>
+        <button id="tabBtnEmployees" class="tab-btn lvl-3-only active" onclick="switchTab('tabEmployees', this)">Mitarbeiter</button>
         <button class="tab-btn lvl-3-only" onclick="switchTab('tabRoles', this)">Rollen</button>
         <button class="tab-btn lvl-3-only" onclick="switchTab('tabLines', this)">Linien</button>
         <button class="tab-btn lvl-3-only" onclick="switchTab('tabTeams', this)">Teams</button>
-        <button class="tab-btn lvl-3-only" onclick="switchTab('tabSecurity', this)">🔒 Sicherheit & Timer</button>
+        <button class="tab-btn lvl-3-only" onclick="switchTab('tabSecurity', this)">Sicherheit</button>
         <button class="tab-btn lvl-3-only" onclick="switchTab('tabHistory', this)">Historie</button>
         <button class="tab-btn lvl-3-only" onclick="switchTab('tabBackups', this)">Backups</button>
-        <button id="tabBtnProfile" class="tab-btn" onclick="switchTab('tabProfile', this)">👤 Mein Profil</button>
+        <button id="tabBtnProfile" class="tab-btn" onclick="switchTab('tabProfile', this)">Mein Profil</button>
       </div>
       
-      <!-- TAB: MITARBEITER (STUFE 3) -->
       <div id="tabEmployees" class="tab-content active">
         <div style="background:#f8fafc; padding:14px; border-radius:8px; margin-bottom:14px; border:1px solid #e2e8f0;">
           <input type="hidden" id="editEmpId">
@@ -354,138 +392,124 @@
             <div class="form-group" style="flex:1;"><label>Team</label><select id="newEmpTeam" class="form-control" onchange="onEmpTeamChange(this.value)"></select></div>
             <div class="form-group" style="flex:1;"><label>Rolle</label><select id="newEmpRole" class="form-control"></select></div>
             <div class="form-group" style="flex:1.2;">
-              <label>Zugriffsrecht (Board)</label>
+              <label>Zugriff</label>
               <select id="newEmpAccessLevel" class="form-control">
-                <option value="1">Stufe 1 (Mitarbeiter)</option>
-                <option value="2">Stufe 2 (Planer)</option>
-                <option value="3">Stufe 3 (Admin)</option>
+                <option value="1">Mitarbeiter</option>
+                <option value="2">Planer</option>
+                <option value="3">Admin</option>
               </select>
             </div>
           </div>
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px; flex-wrap:wrap; gap:8px;">
             <div style="display:flex; gap:14px; align-items:center;">
-              <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="newEmpFirstAider"> Ersthelfer <span style="color:#dc2626; font-weight:900;">+</span></label>
-              <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="newEmpNoRotation"> ⚓ Fix (Rotiert nicht)</label>
+              <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="newEmpFirstAider"> Ersthelfer +</label>
+              <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="newEmpNoRotation"> ⚓ Fix</label>
             </div>
-            <span style="font-size:0.75rem; color:#64748b;">🔑 Start-PIN: <b>1234</b></span>
           </div>
           <div class="form-group"><label>Prio-Linien:</label><div id="mainLinesCheckboxes" style="display:flex; flex-wrap:wrap; gap:6px;"></div></div>
           <div class="form-group"><label>Sek-Linien:</label><div id="secLinesCheckboxes" style="display:flex; flex-wrap:wrap; gap:6px;"></div></div>
           <div style="display:flex; gap:10px; margin-top: 10px;">
-            <button id="btnSaveEmp" class="btn btn-primary" style="flex:1;" onclick="saveEmployee()">Hinzufügen / Speichern</button>
+            <button id="btnSaveEmp" class="btn btn-primary" style="flex:1;" onclick="saveEmployee()">Speichern</button>
             <button id="btnCancelEditEmp" class="btn btn-outline" style="display:none;" onclick="resetEmpForm()">Abbrechen</button>
           </div>
         </div>
-        <div style="margin-bottom:8px;"><input type="text" id="settingsEmpSearchInput" class="search-input" placeholder="🔍 Mitarbeiter in Liste suchen..." oninput="filterSettingsEmployees(this.value)" style="font-size:0.8rem; padding:6px 10px;"></div>
+        <div style="margin-bottom:8px;"><input type="text" id="settingsEmpSearchInput" class="search-input" placeholder="🔍 Suchen..." oninput="filterSettingsEmployees(this.value)" style="font-size:0.8rem; padding:6px 10px;"></div>
         <div id="employeeList" style="max-height: 180px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
       </div>
       
-      <!-- TAB: ROLLEN (STUFE 3) -->
       <div id="tabRoles" class="tab-content">
         <div style="display:flex; gap:10px; margin-bottom:16px;"><input type="text" id="newRoleName" class="form-control" placeholder="Neue Rolle"><button class="btn btn-primary" onclick="addRole()">Hinzufügen</button></div>
         <div id="roleList" style="max-height: 250px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
       </div>
 
-      <!-- TAB: LINIEN (STUFE 3) -->
       <div id="tabLines" class="tab-content">
         <div style="display:flex; gap:10px; margin-bottom:16px;"><input type="text" id="newLineName" class="form-control" placeholder="Neue Linie"><button class="btn btn-primary" onclick="addLine()">Hinzufügen</button></div>
         <div id="lineSettingsList" style="max-height: 250px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
       </div>
 
-      <!-- TAB: TEAMS MIT AUTO-SAVE (STUFE 3) -->
       <div id="tabTeams" class="tab-content">
         <div style="background:#f8fafc; padding:14px; border-radius:8px; margin-bottom:12px; border:1px solid #e2e8f0;">
-          <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:6px;">Neues Team hinzufügen (z.B. Team 5 / Tagschicht)</label>
+          <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:6px;">Neues Team</label>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
             <input type="color" id="newTeamColor" value="#3b82f6" style="width:40px; height:38px; border:none; cursor:pointer;">
-            <input type="text" id="newTeamName" class="form-control" placeholder="Team-Name" style="flex:1; min-width:140px;">
+            <input type="text" id="newTeamName" class="form-control" placeholder="Name" style="flex:1; min-width:140px;">
             <label style="display:flex; align-items:center; gap:5px; font-size:0.82rem; font-weight:600; cursor:pointer; background:#fff; padding:7px 10px; border-radius:6px; border:1px solid #cbd5e1;">
-              <input type="checkbox" id="newTeamRotates" checked> 🔄 Rotiert
+              <input type="checkbox" id="newTeamRotates" checked> Rotiert
             </label>
             <button class="btn btn-primary" onclick="addTeam()">+ Hinzufügen</button>
           </div>
         </div>
-        <div style="font-size:0.75rem; color:#64748b; margin-bottom:6px;">✨ Änderungen an bestehenden Teams (Farbe, Name, Rotation) werden automatisch gespeichert:</div>
         <div id="teamSettingsList" style="max-height: 240px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
       </div>
 
-      <!-- TAB: SICHERHEIT & TIMER (STUFE 3) -->
       <div id="tabSecurity" class="tab-content">
         <div style="background:#f8fafc; padding:14px; border-radius:8px; margin-bottom:14px; border:1px solid #e2e8f0;">
-          <h4 style="font-size:0.9rem; color:#0f172a; margin-bottom:6px;">🖥️ Start-Passwort für die Schicht-Übersicht (PC-Neustart)</h4>
-          <p style="font-size:0.78rem; color:#64748b; margin-bottom:10px; line-height:1.35;">Wenn aktiviert, fragt die Schicht-Übersicht beim ersten Öffnen des Browsers (z.B. nach einem PC-Neustart) einmalig dieses Passwort ab. Danach bleibt die Übersicht dauerhaft ohne Timer sichtbar. Jederzeit deaktivierbar.</p>
+          <h4 style="font-size:0.9rem; color:#0f172a; margin-bottom:6px;">Start-Passwort</h4>
           <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
             <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem; font-weight:700; cursor:pointer; background:#fff; padding:8px 12px; border-radius:6px; border:1px solid #cbd5e1;">
-              <input type="checkbox" id="secBoardPwEnabled" onchange="autoSaveSecurityConfig()"> Start-Passwort aktivieren
+              <input type="checkbox" id="secBoardPwEnabled" onchange="autoSaveSecurityConfig()"> Aktivieren
             </label>
-            <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:180px;">
-              <span style="font-size:0.82rem; font-weight:600; color:#475569;">Passwort:</span>
-              <input type="text" id="secBoardPwValue" class="form-control" placeholder="z.B. 0110" style="padding:7px 10px;" onchange="autoSaveSecurityConfig()">
-            </div>
-          </div>
-        </div>
-
-        <div style="background:#f8fafc; padding:14px; border-radius:8px; border:1px solid #e2e8f0;">
-          <h4 style="font-size:0.9rem; color:#0f172a; margin-bottom:6px;">⏱️ Automatischer Inaktivitäts-Logout (Timer)</h4>
-          <p style="font-size:0.78rem; color:#64748b; margin-bottom:12px; line-height:1.35;">Legt fest, nach wie vielen Minuten ohne Klick oder Eingabe ein angemeldetes Konto im Planer-Modus bzw. im Mitarbeiter-Portal automatisch abgemeldet wird (die reine Schicht-Übersicht hat keinen Timer).</p>
-          <div style="display:flex; gap:12px; flex-wrap:wrap;">
-            <div class="form-group" style="flex:1; min-width:200px; margin-bottom:0;">
-              <label>Planer-Modus (Admin-Panel)</label>
-              <select id="secPlannerTimeout" class="form-control" onchange="autoSaveSecurityConfig()">
-                <option value="15">Nach 15 Minuten</option>
-                <option value="30">Nach 30 Minuten</option>
-                <option value="60">Nach 1 Stunde</option>
-                <option value="120">Nach 2 Stunden</option>
-                <option value="180">Nach 3 Stunden (Standard)</option>
-                <option value="360">Nach 6 Stunden</option>
-                <option value="0">Nie (Dauerhaft angemeldet)</option>
-              </select>
-            </div>
-            <div class="form-group" style="flex:1; min-width:200px; margin-bottom:0;">
-              <label>Mitarbeiter-Portal (portal.html)</label>
-              <select id="secPortalTimeout" class="form-control" onchange="autoSaveSecurityConfig()">
-                <option value="15">Nach 15 Minuten</option>
-                <option value="30">Nach 30 Minuten</option>
-                <option value="60">Nach 1 Stunde (Standard)</option>
-                <option value="120">Nach 2 Stunden</option>
-                <option value="180">Nach 3 Stunden</option>
-                <option value="0">Nie (Dauerhaft angemeldet)</option>
-              </select>
-            </div>
+            <input type="text" id="secBoardPwValue" class="form-control" placeholder="Passwort" style="padding:7px 10px; flex:1;" onchange="autoSaveSecurityConfig()">
           </div>
         </div>
       </div>
 
-      <!-- TAB: HISTORIE (STUFE 3) -->
       <div id="tabHistory" class="tab-content">
-        <div style="margin-bottom:12px;"><input type="text" id="historyUnifiedInput" class="form-control" placeholder="🔍 Nach Name oder Datum filtern..." oninput="filterHistoryUnified()" style="font-size:0.82rem; padding:8px 10px;"></div>
-        <div id="historyList" style="max-height: 230px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px; padding:10px;">Lade Historie...</div>
+        <div style="margin-bottom:12px;"><input type="text" id="historyUnifiedInput" class="form-control" placeholder="🔍 Filtern..." oninput="filterHistoryUnified()" style="font-size:0.82rem; padding:8px 10px;"></div>
+        <div id="historyList" style="max-height: 230px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px; padding:10px;">Lade...</div>
       </div>
 
-      <!-- TAB: BACKUPS (STUFE 3) -->
       <div id="tabBackups" class="tab-content">
-        <p style="font-size:0.9rem; color:#64748b; margin-bottom:14px;">Automatische Sicherung (letzte 7 Tage):</p>
-        <div id="backupList" style="max-height: 250px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px; padding:10px;">Lade Backups...</div>
+        <div id="backupList" style="max-height: 250px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px; padding:10px;">Lade...</div>
       </div>
 
-      <!-- TAB: MEIN PROFIL & PIN ÄNDERN (FÜR STUFE 2 & STUFE 3) -->
       <div id="tabProfile" class="tab-content">
         <div id="profileInfoBox" style="background:#f8fafc; padding:14px; border-radius:8px; margin-bottom:14px; border:1px solid #e2e8f0;"></div>
         <div style="background:#fff; padding:14px; border-radius:8px; border:1px solid #cbd5e1;">
-          <h4 style="font-size:0.92rem; color:var(--bayer-blue); margin-bottom:10px;">🔑 Persönliche Planer-PIN / Passwort ändern</h4>
+          <h4 style="font-size:0.92rem; color:var(--bayer-blue); margin-bottom:10px;">PIN ändern</h4>
           <div id="profPinMsg" style="display:none; padding:8px 10px; border-radius:6px; font-size:0.82rem; font-weight:700; margin-bottom:10px; text-align:center;"></div>
-          <div class="form-group"><label>Aktuelle PIN / Passwort</label><input type="password" id="profOldPin" class="form-control" placeholder="Aktuelle PIN eingeben..."></div>
+          <div class="form-group"><label>Aktuelle PIN</label><input type="password" id="profOldPin" class="form-control"></div>
           <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <div class="form-group" style="flex:1; min-width:180px;"><label>Neue PIN (mind. 4 Zeichen)</label><input type="password" id="profNewPin" class="form-control" placeholder="Neue PIN..."></div>
-            <div class="form-group" style="flex:1; min-width:180px;"><label>Neue PIN wiederholen</label><input type="password" id="profNewPinConfirm" class="form-control" placeholder="Neue PIN bestätigen..." onkeydown="if(event.key==='Enter') saveProfilePinChange()"></div>
+            <div class="form-group" style="flex:1; min-width:180px;"><label>Neue PIN</label><input type="password" id="profNewPin" class="form-control"></div>
+            <div class="form-group" style="flex:1; min-width:180px;"><label>Wiederholen</label><input type="password" id="profNewPinConfirm" class="form-control" onkeydown="if(event.key==='Enter') saveProfilePinChange()"></div>
           </div>
-          <button class="btn btn-primary" style="width:100%;" onclick="saveProfilePinChange()">PIN jetzt aktualisieren</button>
+          <button class="btn btn-primary" style="width:100%;" onclick="saveProfilePinChange()">Aktualisieren</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- AUSGELAGERTE LOGIK ALS EXTERNE JS-DATEI -->
   <script src="planer.js"></script>
+  <script>
+    // Kleine Zusatzfunktion für das Schicht-Freigabe-Banner in index.html
+    let isShiftApproved = false;
+    function updateShiftApprovalUI() {
+      const banner = el("shiftApprovalBanner");
+      const text = el("shiftApprovalText");
+      const btn = el("shiftApprovalBtn");
+      if (!banner) return;
+      if (isShiftApproved) {
+        banner.className = "shift-approval-banner approved";
+        text.innerHTML = "✅ Schichtplan für diese Schicht freigegeben";
+        btn.textContent = "Zurückziehen";
+      } else {
+        banner.className = "shift-approval-banner pending";
+        text.innerHTML = "⏳ Warte auf Freigabe der Frühschicht";
+        btn.textContent = "Freigeben";
+      }
+    }
+    window.toggleShiftApprovalState = function() {
+      if (!isPlanner) {
+        alert("Nur angemeldete Planer können die Schicht freigeben.");
+        return;
+      }
+      isShiftApproved = !isShiftApproved;
+      updateShiftApprovalUI();
+      showToast(isShiftApproved ? "✅ Schichtplan freigegeben!" : "🔒 Freigabe zurückgezogen.");
+    };
+    window.addEventListener("DOMContentLoaded", function() {
+      updateShiftApprovalUI();
+    });
+  </script>
 </body>
 </html>
