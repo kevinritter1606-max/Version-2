@@ -1,491 +1,1288 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Schicht und Linienübersicht</title>
-  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-  <style>
-    :root { --bayer-blue: #0091df; --bg-gray: #f4f6f9; }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
-    body { background-color: var(--bg-gray); min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
-    .brand-gradient { height: 6px; background: linear-gradient(90deg, #0091df 0%, #00bcff 50%, #89d329 100%); width: 100%; flex-shrink: 0; }
-    header { background: #fff; padding: 10px 24px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 6px rgba(0,0,0,0.06); position: sticky; top: 0; z-index: 50; }
-    .header-left { display: flex; align-items: center; gap: 16px; }
-    .bayer-logo-btn { width: 64px; height: 64px; cursor: pointer; transition: 0.2s; }
-    .bayer-logo-btn:hover { transform: scale(1.05); }
-    .bayer-logo-btn img { width: 100%; height: 100%; object-fit: contain; }
-    .header-title h1 { font-size: 1.35rem; font-weight: 700; color: var(--bayer-blue); margin: 0; }
-    .header-meta { font-size: 0.78rem; color: #64748b; font-weight: 600; margin-top: 2px; }
-    .status-badge { display: none; font-size: 0.75rem; padding: 3px 10px; border-radius: 999px; font-weight: 700; background: #dcfce7; color: #166534; margin-top: 3px; }
-    body.planner-active .status-badge { display: inline-block; }
-    .header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .btn { padding: 8px 14px; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; position: relative; transition: 0.15s; }
-    .btn-primary { background: var(--bayer-blue); color: #fff; }
-    .btn-primary:hover { background: #0077b6; }
-    .btn-outline { border-color: #cbd5e1; background: #fff; color: #475569; }
-    .btn-outline:hover { background: #f8fafc; }
-    .inbox-badge { position: absolute; top: -6px; right: -6px; background: #dc2626; color: #fff; font-size: 0.72rem; font-weight: 800; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; display: none; align-items: center; justify-content: center; }
-    main { padding: 16px; display: flex; gap: 16px; flex: 1; width: 100%; }
-    .sidebar { width: 290px; flex-shrink: 0; display: none; flex-direction: column; gap: 10px; }
-    body.planner-active .sidebar { display: flex; }
-    .panel { background: #fff; border-radius: 10px; padding: 10px 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; display: flex; flex-direction: column; max-height: 32vh; }
-    .panel h2 { font-size: 0.86rem; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; color: #1e293b; }
-    .card-list { flex: 1; overflow-y: auto; min-height: 65px; padding: 6px; background: #f8fafc; border-radius: 6px; border: 1px dashed #cbd5e1; display: flex; flex-direction: column; gap: 6px; }
-    .team-filter-box { display: none; background: #fff; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 0.78rem; }
-    body.planner-active .team-filter-box { display: block; }
-    .team-filter-options { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; }
-    .filter-quick-links span { cursor: pointer; color: var(--bayer-blue); font-weight: 600; }
-    .search-wrapper { position: relative; margin-bottom: 8px; }
-    .search-input { width: 100%; padding: 6px 26px 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.8rem; background: #f8fafc; }
-    .search-clear { display: none; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #64748b; font-weight: bold; font-size: 1rem; }
-    .employee-card { background: #fff; padding: 6px 8px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); display: flex; flex-direction: column; border-left: 5px solid #94a3b8; user-select: none; gap: 3px; }
-    body.planner-active .employee-card { cursor: grab; }
-    .card-name { font-size: 0.8rem; font-weight: 700; color: #1e293b; line-height: 1.15; word-break: break-word; }
-    .card-role { font-size: 0.68rem; padding: 2px 5px; background: #f1f5f9; border-radius: 4px; color: #475569; font-weight: 600; }
-    .card-fix-tag { display: none; font-size: 0.62rem; padding: 1px 5px; background: #fef08a; color: #854d0e; border-radius: 4px; font-weight: 700; }
-    body.planner-active .card-fix-tag { display: inline-block; }
-    .card-lines-info { display: none; font-size: 0.65rem; color: #64748b; margin-top: 1px; line-height: 1.25; overflow-wrap: break-word; }
-    body.planner-active .card-lines-info { display: block; }
-    .card-sick-tag { display: none; font-size: 0.62rem; color: #b91c1c; background: #fee2e2; padding: 1px 5px; border-radius: 4px; font-weight: 700; margin-top: 1px; align-self: flex-start; }
-    body.planner-active .card-sick-tag { display: inline-block; }
-    .card-extra-tag { font-size: 0.62rem; color: #166534; background: #dcfce7; padding: 1px 5px; border-radius: 4px; font-weight: 700; margin-top: 1px; align-self: flex-start; }
-    .quick-sick-btn { display: none; border: none; background: #f1f5f9; border-radius: 4px; padding: 2px 4px; font-size: 0.72rem; cursor: pointer; line-height: 1; }
-    .quick-sick-btn:hover { background: #fee2e2; }
-    body.planner-lvl-3 .quick-sick-btn { display: inline-block; }
-    .board-container { flex: 1; background: #fff; border-radius: 10px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: flex; flex-direction: column; overflow: hidden; }
-    .board-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    .board-table th, .board-table td { border: 1px solid #e2e8f0; vertical-align: top; }
-    .line-header { background: #f8fafc; padding: 10px 4px; text-align: center; position: relative; }
-    body.planner-active .line-header { cursor: pointer; }
-    body.planner-active .line-header:hover { background: #f1f5f9; }
-    .line-title { font-size: 0.85rem; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .badge-container { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; margin-top: 2px; }
-    .line-prio { font-size: 0.6rem; padding: 1px 3px; border-radius: 3px; background: #e2e8f0; font-weight: 700; color: #334155; }
-    .line-prio.prio-high { background: #fee2e2; color: #b91c1c; }
-    .line-prio.prio-mid { background: #fef3c7; color: #b45309; }
-    .line-status-tag { font-size: 0.6rem; padding: 1px 3px; border-radius: 3px; background: #fecdd3; color: #9f1239; font-weight: 700; }
-    .line-notes { font-size: 0.65rem; color: #475569; margin-top: 3px; background: #fff; padding: 3px; border-radius: 3px; border: 1px dashed #cbd5e1; white-space: pre-wrap; word-break: break-word; }
-    .shift-header { background: #f1f5f9; font-weight: 700; font-size: 0.9rem; width: 92px; text-align: center; padding: 14px 4px; color: #334155; vertical-align: middle; }
-    body.planner-active .shift-header { width: 116px; padding: 10px 5px; }
-    .shift-team-badge { display: inline-flex; align-items: center; justify-content: center; gap: 4px; margin-top: 5px; padding: 3px 6px; border-radius: 4px; background: #fff; border: 1px solid #cbd5e1; font-size: 0.72rem; font-weight: 700; color: #1e293b; }
-    body.planner-active .shift-team-badge { display: none; }
-    .shift-controls { display: none; flex-direction: column; gap: 5px; margin-top: 6px; }
-    body.planner-active .shift-controls { display: flex; }
-    .shift-rotate-btn { width: 100%; font-size: 0.72rem; font-weight: 700; padding: 5px 4px; border-radius: 4px; border: none; background: var(--bayer-blue); color: #fff; cursor: pointer; }
-    .shift-team-select { width: 100%; font-size: 0.72rem; font-weight: 700; padding: 4px 2px; border-radius: 4px; border: 1px solid var(--bayer-blue); background: #fff; color: #0f172a; cursor: pointer; }
-    .shift-clear-btn { width: 100%; font-size: 0.68rem; font-weight: 600; padding: 4px; border-radius: 4px; border: 1px solid #cbd5e1; background: #fff; color: #64748b; cursor: pointer; }
-    .shift-clear-btn:hover { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
-    .drop-zone { padding: 5px; min-height: 120px; display: flex; flex-direction: column; gap: 5px; background: #fafafa; }
-    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15,23,42,0.55); display: none; align-items: center; justify-content: center; z-index: 100; padding: 12px; }
-    .modal { background: #fff; padding: 24px; border-radius: 10px; width: 100%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.18); max-height: 90vh; overflow-y: auto; }
-    .form-group { margin-bottom: 12px; position: relative; }
-    .form-group label { display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; color: #475569; }
-    .form-control { width: 100%; padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; }
-    textarea.form-control { resize: vertical; min-height: 65px; }
-    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
-    .suggestions-box { display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 8px 20px rgba(0,0,0,0.12); max-height: 180px; overflow-y: auto; z-index: 60; margin-top: 2px; text-align: left; }
-    .suggestion-item { padding: 8px 10px; font-size: 0.86rem; cursor: pointer; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
-    .suggestion-item:hover { background: #f0f9ff; color: var(--bayer-blue); }
-    .tabs { display: flex; gap: 4px; border-bottom: 2px solid #e2e8f0; margin-bottom: 16px; overflow-x: auto; }
-    .tab-btn { padding: 8px 11px; background: none; border: none; border-bottom: 2px solid transparent; font-weight: 600; cursor: pointer; color: #64748b; margin-bottom: -2px; font-size: 0.84rem; white-space: nowrap; }
-    .tab-btn.active { color: var(--bayer-blue); border-bottom-color: var(--bayer-blue); }
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
-    .item-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; gap: 8px; }
-    .sick-card { background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid var(--bayer-blue); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
-    .sick-card.unread { background: #fff1f2; border-color: #fecdd3; border-left: 4px solid #dc2626; }
-    .inbox-filter-bar { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
-    .filter-chip { padding: 4px 10px; border-radius: 999px; font-size: 0.74rem; font-weight: 600; cursor: pointer; border: 1px solid #cbd5e1; background: #fff; color: #475569; transition: 0.15s; }
-    .filter-chip:hover { background: #f1f5f9; }
-    .filter-chip.active { background: var(--bayer-blue); color: #fff; border-color: var(--bayer-blue); }
-    .manual-entry-toggle { width: 100%; text-align: left; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 14px; font-size: 0.86rem; font-weight: 700; color: #0f172a; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-    .manual-entry-toggle:hover { background: #f1f5f9; }
-    .toast-banner { display: none; position: fixed; top: 20px; right: 20px; background: #16a34a; color: #fff; padding: 10px 16px; border-radius: 8px; font-weight: 700; font-size: 0.86rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 250; }
-    .lvl-3-only, .admin-element { display: none !important; }
-    body.planner-active .admin-element { display: inline-flex !important; }
-    body.planner-lvl-3 .lvl-3-only { display: inline-flex !important; }
-    body.planner-lvl-3 div.lvl-3-only { display: block !important; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schicht und Linienübersicht – Bayer</title>
+    <!-- Firebase SDK (v8 compat) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <style>
+        :root {
+            --bayer-blue: #0091df;
+            --bayer-dark: #10384f;
+            --bayer-green: #66b512;
+            --bg-light: #f1f5f9;
+            --card-bg: #ffffff;
+            --border-color: #cbd5e1;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --success: #16a34a;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-light);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* HEADER */
+        header {
+            background: linear-gradient(90deg, #ffffff 0%, #f8fafc 100%);
+            border-bottom: 3px solid;
+            border-image: linear-gradient(90deg, var(--bayer-blue), var(--bayer-green)) 1;
+            padding: 8px 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+            z-index: 20;
+            flex-shrink: 0;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .logo-container {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            transition: transform 0.15s ease;
+            user-select: none;
+        }
+        .logo-container:hover {
+            transform: scale(1.05);
+        }
+
+        .bayer-cross {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: 2.5px solid var(--bayer-blue);
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            grid-template-rows: repeat(5, 1fr);
+            align-items: center;
+            justify-items: center;
+            font-size: 7px;
+            font-weight: 800;
+            color: var(--bayer-dark);
+            background: #fff;
+            box-shadow: 0 0 0 2px #e0f2fe, 0 2px 5px rgba(0,0,0,0.08);
+            padding: 2px;
+        }
+
+        .title-block h1 {
+            font-size: 1.25rem;
+            color: var(--bayer-blue);
+            font-weight: 700;
+            line-height: 1.15;
+        }
+
+        .header-subline {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 2px;
+            flex-wrap: wrap;
+        }
+
+        .date-display {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .planner-badge {
+            display: none;
+            align-items: center;
+            gap: 5px;
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #86efac;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .auto-shift-badge {
+            display: none;
+            align-items: center;
+            gap: 4px;
+            background: #e0f2fe;
+            color: #0369a1;
+            border: 1px solid #7dd3fc;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 0.73rem;
+            font-weight: 700;
+        }
+
+        .header-actions {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            border: 1px solid var(--border-color);
+            background: #fff;
+            color: var(--text-main);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+            position: relative;
+        }
+        .btn:hover {
+            background: #f1f5f9;
+            border-color: #94a3b8;
+        }
+        .btn-primary {
+            background: var(--bayer-blue);
+            color: #fff;
+            border-color: var(--bayer-blue);
+        }
+        .btn-primary:hover {
+            background: #0284c7;
+        }
+        .btn-success {
+            background: #16a34a;
+            color: #fff;
+            border-color: #15803d;
+        }
+        .btn-success:hover {
+            background: #15803d;
+        }
+        .btn-approve-pending {
+            background: #f0fdf4;
+            color: #15803d;
+            border: 1.5px solid #22c55e;
+            font-weight: 700;
+        }
+        .btn-approve-pending:hover {
+            background: #dcfce7;
+        }
+        .btn-approve-active {
+            background: linear-gradient(135deg, #16a34a, #15803d);
+            color: #ffffff;
+            border: 1.5px solid #14532d;
+            font-weight: 700;
+            box-shadow: 0 2px 6px rgba(22, 163, 74, 0.35);
+        }
+        .btn-danger {
+            background: #fee2e2;
+            color: #b91c1c;
+            border-color: #fca5a5;
+        }
+        .btn-danger:hover {
+            background: #fecaca;
+        }
+
+        .badge-counter {
+            background: var(--danger);
+            color: #fff;
+            font-size: 0.7rem;
+            font-weight: 800;
+            padding: 1px 6px;
+            border-radius: 999px;
+            display: none;
+        }
+
+        /* SCHICHT-STATUS & FREIGABE-BANNER (DASHBOARD & PLANER) */
+        .shift-status-banner {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            padding: 7px 18px;
+            font-size: 0.88rem;
+            font-weight: 700;
+            border-bottom: 1px solid transparent;
+            flex-shrink: 0;
+            z-index: 15;
+            transition: all 0.25s ease;
+        }
+        .shift-status-banner.status-approved {
+            display: flex;
+            background: linear-gradient(90deg, #16a34a 0%, #15803d 100%);
+            color: #ffffff;
+            border-bottom-color: #14532d;
+            box-shadow: 0 2px 8px rgba(22, 163, 74, 0.25);
+        }
+        .shift-status-banner.status-prep {
+            display: flex;
+            background: linear-gradient(90deg, #e0f2fe 0%, #f0f9ff 100%);
+            color: #0369a1;
+            border-bottom-color: #bae6fd;
+        }
+        .status-dot-pulse {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4ade80;
+            box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.35);
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        /* MAIN LAYOUT */
+        .workspace {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            gap: 10px;
+            padding: 10px;
+        }
+
+        /* SIDEBAR (LEFT) */
+        .sidebar {
+            width: 265px;
+            min-width: 245px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        body.readonly-mode .sidebar-PlannerOnly {
+            display: none !important;
+        }
+
+        .filter-box {
+            padding: 8px 10px;
+            border-bottom: 1px solid var(--border-color);
+            background: #f8fafc;
+            font-size: 0.78rem;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            font-size: 0.8rem;
+            margin-bottom: 6px;
+        }
+
+        .filter-group-title {
+            display: flex;
+            justify-content: space-between;
+            font-weight: 700;
+            color: var(--text-muted);
+            margin: 4px 0 3px 0;
+            font-size: 0.73rem;
+        }
+
+        .filter-links a {
+            color: var(--bayer-blue);
+            text-decoration: none;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .checkbox-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px 8px;
+            margin-bottom: 4px;
+        }
+
+        .checkbox-grid label {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            user-select: none;
+        }
+
+        .sidebar-zones {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .zone-section {
+            display: flex;
+            flex-direction: column;
+            border-bottom: 1px solid var(--border-color);
+            min-height: 0;
+        }
+        .zone-section.pool-sec {
+            flex: 1.5;
+        }
+        .zone-section.extra-sec {
+            flex: 0.8;
+        }
+        .zone-section.absent-sec {
+            flex: 0.9;
+            border-bottom: none;
+        }
+
+        .zone-header {
+            padding: 6px 10px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            background: #f1f5f9;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 4px;
+        }
+
+        .zone-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        /* EMPLOYEE CARDS */
+        .emp-card {
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-left: 4px solid #94a3b8;
+            border-radius: 6px;
+            padding: 5px 7px;
+            font-size: 0.76rem;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+            cursor: grab;
+            user-select: none;
+            position: relative;
+            transition: transform 0.1s ease, box-shadow 0.1s ease;
+        }
+        body.readonly-mode .emp-card {
+            cursor: default;
+        }
+        .emp-card:hover {
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .emp-card-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 4px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+        .emp-role {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            font-weight: 600;
+            margin-top: 1px;
+        }
+        .emp-lines {
+            font-size: 0.68rem;
+            color: #0369a1;
+            margin-top: 2px;
+            line-height: 1.2;
+        }
+        .emp-badge-fix {
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fde68a;
+            font-size: 0.64rem;
+            padding: 0 4px;
+            border-radius: 3px;
+            font-weight: 700;
+        }
+        .emp-badge-eh {
+            background: #dcfce7;
+            color: #166534;
+            font-size: 0.65rem;
+            padding: 0 4px;
+            border-radius: 3px;
+            font-weight: 700;
+        }
+        .emp-absent-tag {
+            display: inline-block;
+            margin-top: 3px;
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-size: 0.66rem;
+            font-weight: 700;
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        /* MATRIX TABLE (RIGHT) */
+        .matrix-wrapper {
+            flex: 1;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        table.matrix-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            min-width: 900px;
+            flex: 1;
+        }
+
+        table.matrix-table th,
+        table.matrix-table td {
+            border: 1px solid var(--border-color);
+            vertical-align: top;
+            padding: 5px;
+        }
+
+        table.matrix-table thead th {
+            background: #f8fafc;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            text-align: center;
+            font-size: 0.8rem;
+            padding: 6px 4px;
+        }
+
+        .shift-col-header {
+            width: 112px;
+            min-width: 112px;
+            max-width: 112px;
+        }
+
+        .shift-cell {
+            background: #f8fafc;
+            text-align: center;
+            vertical-align: middle !important;
+            padding: 8px 5px !important;
+        }
+
+        .shift-name {
+            font-size: 0.92rem;
+            font-weight: 800;
+            color: var(--bayer-dark);
+            margin-bottom: 6px;
+        }
+
+        .shift-team-select {
+            width: 100%;
+            padding: 3px 4px;
+            font-size: 0.74rem;
+            font-weight: 700;
+            border-radius: 5px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 5px;
+            background: #fff;
+        }
+
+        .btn-mini {
+            font-size: 0.7rem;
+            padding: 3px 6px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            background: #fff;
+            cursor: pointer;
+            font-weight: 600;
+            width: 100%;
+            margin-top: 2px;
+        }
+        .btn-mini:hover {
+            background: #f1f5f9;
+        }
+        .btn-rotate {
+            background: var(--bayer-blue);
+            color: #fff;
+            border-color: var(--bayer-blue);
+            margin-bottom: 4px;
+        }
+        .btn-rotate:hover {
+            background: #0284c7;
+        }
+
+        .drop-zone {
+            min-height: 120px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            transition: background-color 0.15s;
+        }
+        .drop-zone.drag-over {
+            background-color: #e0f2fe !important;
+            outline: 2px dashed var(--bayer-blue);
+            outline-offset: -2px;
+        }
+
+        .line-tag-badge {
+            display: inline-block;
+            font-size: 0.66rem;
+            font-weight: 800;
+            padding: 1px 5px;
+            border-radius: 4px;
+            margin-top: 2px;
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+        .line-prio-badge {
+            display: inline-block;
+            font-size: 0.66rem;
+            font-weight: 800;
+            color: #dc2626;
+            margin-top: 2px;
+        }
+        .line-note-text {
+            font-size: 0.68rem;
+            color: var(--text-muted);
+            font-weight: 500;
+            margin-top: 2px;
+            word-break: break-word;
+        }
+
+        /* MODALS */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(2px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 16px;
+        }
+
+        .modal-card {
+            background: #fff;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 920px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 35px -5px rgba(0, 0, 0, 0.25);
+            overflow: hidden;
+        }
+
+        .modal-header {
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #f8fafc;
+        }
+
+        .modal-header h2 {
+            font-size: 1.05rem;
+            color: var(--bayer-blue);
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.35rem;
+            cursor: pointer;
+            color: var(--text-muted);
+            line-height: 1;
+        }
+
+        .modal-body {
+            padding: 16px 18px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        /* TABS (SETTINGS & NEW INBOX COMMAND CENTER) */
+        .tabs-bar {
+            display: flex;
+            gap: 6px;
+            border-bottom: 1px solid var(--border-color);
+            padding: 10px 18px 0 18px;
+            background: #f8fafc;
+            flex-wrap: wrap;
+        }
+
+        .tab-btn {
+            padding: 8px 14px;
+            border: 1px solid transparent;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            background: transparent;
+            cursor: pointer;
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .tab-btn.active {
+            background: #fff;
+            color: var(--bayer-blue);
+            border-color: var(--border-color);
+            margin-bottom: -1px;
+            padding-bottom: 9px;
+        }
+
+        .inbox-pill-bar {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin: 10px 0 12px 0;
+        }
+        .pill-btn {
+            padding: 4px 11px;
+            border-radius: 999px;
+            border: 1px solid var(--border-color);
+            background: #fff;
+            font-size: 0.76rem;
+            font-weight: 700;
+            color: var(--text-main);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .pill-btn.active {
+            background: var(--bayer-blue);
+            color: #fff;
+            border-color: var(--bayer-blue);
+        }
+
+        /* FORM CONTROLS */
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .form-group label {
+            font-size: 0.76rem;
+            font-weight: 700;
+            color: var(--text-muted);
+        }
+        .form-control {
+            padding: 7px 9px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 0.83rem;
+        }
+
+        .card-panel {
+            background: #f8fafc;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 14px;
+        }
+
+        .inbox-item {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--bayer-blue);
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .empty-state-box {
+            text-align: center;
+            padding: 28px 16px;
+            background: #f8fafc;
+            border: 1px dashed #cbd5e1;
+            border-radius: 8px;
+            color: var(--text-muted);
+            font-size: 0.86rem;
+        }
+
+        /* TOAST NOTIFICATION */
+        #toastContainer {
+            position: fixed;
+            bottom: 18px;
+            right: 18px;
+            z-index: 3000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .toast-msg {
+            background: #0f172a;
+            color: #fff;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 0.83rem;
+            font-weight: 600;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+            border-left: 4px solid var(--bayer-blue);
+        }
+    </style>
 </head>
-<body>
-  <div class="brand-gradient"></div>
-  <div id="toastBanner" class="toast-banner">Gespeichert</div>
+<body class="readonly-mode">
 
-  <!-- START-PASSWORT SPERRE FÜR DIE SCHICHT-ÜBERSICHT (OPTIONAL NACH PC-NEUSTART) -->
-  <div id="boardLockModal" class="modal-overlay" style="background: rgba(15,23,42,0.92); z-index: 180;">
-    <div class="modal" style="max-width: 380px; text-align: center;">
-      <h3 style="color: var(--bayer-blue); margin-bottom: 6px;">🔒 Schicht- und Linienübersicht</h3>
-      <p style="font-size: 0.82rem; color: #64748b; margin-bottom: 14px;">Bitte einmalig das Start-Passwort eingeben, um die Übersicht für diese Sitzung freizuschalten.</p>
-      <div id="boardLockError" style="display:none; background:#fee2e2; color:#b91c1c; padding:8px; border-radius:6px; font-size:0.8rem; font-weight:700; margin-bottom:10px;"></div>
-      <div class="form-group" style="text-align:left;">
-        <label>Zugangs-Passwort</label>
-        <input type="password" id="boardLockInput" class="form-control" placeholder="Passwort eingeben..." onkeydown="if(event.key==='Enter') unlockBoardView()">
-      </div>
-      <button class="btn btn-primary" style="width:100%;" onclick="unlockBoardView()">Übersicht freischalten</button>
-      <div style="margin-top:12px; border-top:1px solid #e2e8f0; padding-top:10px;">
-        <span style="font-size:0.76rem; color:#64748b; cursor:pointer; text-decoration:underline;" onclick="openPlannerLoginFromLock()">Als Planer / Admin anmelden</span>
-      </div>
-    </div>
-  </div>
-  
-  <header>
-    <div class="header-left">
-      <div class="bayer-logo-btn" onclick="handleLogoClick()"><img src="logo.png" alt="Bayer Logo" onerror="this.style.display='none'"></div>
-      <div class="header-title">
-        <h1>Schicht und Linienübersicht</h1>
-        <div id="headerDateKw" class="header-meta">Lade Datum...</div>
-        <span id="plannerStatusBadge" class="status-badge">Planer-Modus aktiv</span>
-      </div>
-    </div>
-    <div class="header-actions">
-      <button class="btn btn-outline lvl-3-only" onclick="openInboxModal()">📬 Postfach & Anträge <span id="inboxBadge" class="inbox-badge">0</span></button>
-      <button class="btn btn-outline admin-element" onclick="openSettingsModal()">⚙️ Einstellungen</button>
-      <button class="btn btn-outline admin-element" onclick="logoutPlanner()">Abmelden</button>
-    </div>
-  </header>
-
-  <main>
-    <aside class="sidebar">
-      <div class="team-filter-box">
-        <div class="search-wrapper">
-          <input type="text" id="poolSearchInput" class="search-input" placeholder="🔍 Name oder Linie (z.B. 37)..." oninput="updatePoolSearch(this.value)">
-          <span id="clearSearchBtn" class="search-clear" onclick="updatePoolSearch('')">&times;</span>
-        </div>
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <span style="font-weight:700; color:#1e293b;">Pool-Teams</span>
-          <div class="filter-quick-links"><span onclick="toggleAllTeamFilters(true)">Alle</span> / <span onclick="toggleAllTeamFilters(false)">Keine</span></div>
-        </div>
-        <div id="teamFilterContainer" class="team-filter-options"></div>
-        <div style="border-top: 1px dashed #cbd5e1; margin: 7px 0 5px 0;"></div>
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <span style="font-weight:700; color:#1e293b;">Pool-Rollen</span>
-          <div class="filter-quick-links"><span onclick="toggleAllRoleFilters(true)">Alle</span> / <span onclick="toggleAllRoleFilters(false)">Keine</span></div>
-        </div>
-        <div id="roleFilterContainer" class="team-filter-options"></div>
-      </div>
-
-      <div class="panel">
-        <h2>
-          <span>Pool <span id="poolCount" style="font-size:0.8rem; color:#64748b;">(0)</span></span>
-          <div style="display:flex; align-items:center; gap:4px;">
-            <select id="teamSelect_frei" style="font-size:0.72rem; padding:2px 4px; border-radius:4px; border:1px solid #cbd5e1; font-weight:700; color:#334155;"></select>
-            <button class="btn btn-outline" style="padding:1px 6px; font-size:0.7rem; color:var(--bayer-blue); border-color:var(--bayer-blue);" onclick="loadTeamToShift('frei')" title="Team als Schichtfrei in den Pool setzen">📥</button>
-          </div>
-        </h2>
-        <div id="pool" class="card-list drop-zone" data-zone="pool"></div>
-      </div>
-
-      <div class="panel">
-        <h2><span>➕ Bringschichten / Zusatz <span id="extraCount" style="font-size:0.8rem; color:#166534;">(0)</span></span></h2>
-        <div id="extra" class="card-list drop-zone" data-zone="extra" style="background:#f0fdf4; border-color:#86efac;"></div>
-        <div id="approvedExtraList" style="max-height:75px; overflow-y:auto; margin-top:4px; font-size:0.72rem;"></div>
-      </div>
-
-      <div class="panel">
-        <h2>
-          <span>Abwesend <span id="absentCount" style="font-size:0.8rem; color:#b91c1c;">(0)</span></span>
-          <button class="btn btn-outline lvl-3-only" style="padding:2px 7px; font-size:0.72rem;" onclick="openInboxModal(null, true)">+ Zeitraum</button>
-        </h2>
-        <div id="absent" class="card-list drop-zone" data-zone="absent" style="background: #fff1f2;"></div>
-      </div>
-    </aside>
-
-    <section class="board-container">
-      <table class="board-table">
-        <thead><tr id="headerRow"><th class="shift-header">Schicht</th></tr></thead>
-        <tbody id="matrixBody"></tbody>
-      </table>
-    </section>
-  </main>
-
-  <!-- LOGIN MODAL (NAME + PIN) -->
-  <div id="pinModal" class="modal-overlay">
-    <div class="modal" style="max-width: 380px;">
-      <h3 style="color: var(--bayer-blue); margin-bottom: 4px; text-align:center;">🔐 Planer-Anmeldung</h3>
-      <div style="text-align:center; font-size:0.7rem; color:#64748b; margin-bottom:12px;">System-Version 2.8 (Auto-Save & Recovery)</div>
-      <div id="loginModalError" style="display:none; background:#fee2e2; color:#b91c1c; padding:10px; border-radius:6px; font-size:0.82rem; font-weight:700; margin-bottom:12px; text-align:center;"></div>
-      <div class="form-group" id="plannerLoginSearchGroup">
-        <label>Dein Name (oder "Admin")</label>
-        <input type="text" id="loginPlannerName" class="form-control" placeholder="Vor- und Nachname tippen..." autocomplete="off" onfocus="onPlannerLoginInput(this.value)" oninput="onPlannerLoginInput(this.value)" onkeydown="if(event.key==='Enter') document.getElementById('pinInput').focus()">
-        <div id="plannerLoginSuggestions" class="suggestions-box"></div>
-      </div>
-      <div class="form-group">
-        <label>Persönliche PIN / Passwort</label>
-        <input type="password" id="pinInput" class="form-control" placeholder="****" onkeydown="if(event.key==='Enter') verifyPin()">
-      </div>
-      <div class="modal-actions" style="justify-content: space-between;">
-        <button class="btn btn-outline" onclick="closeModal('pinModal')">Abbrechen</button>
-        <button class="btn btn-primary" onclick="verifyPin()">Anmelden</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ERST-LOGIN PIN ÄNDERN MODAL (BEI START-PIN 1234) -->
-  <div id="changePinModal" class="modal-overlay">
-    <div class="modal" style="max-width: 390px;">
-      <h3 style="color: var(--bayer-blue); margin-bottom: 12px; text-align:center;">🔑 Eigene Planer-PIN festlegen</h3>
-      <div id="changePinError" style="display:none; background:#fee2e2; color:#b91c1c; padding:8px; border-radius:6px; font-size:0.8rem; font-weight:700; margin-bottom:10px; text-align:center;"></div>
-      <div class="form-group"><label>Aktuelle PIN / Passwort</label><input type="password" id="oldPlannerPinInput" class="form-control" placeholder="Aktuelle PIN..."></div>
-      <div class="form-group"><label>Neue PIN / Passwort (mind. 4 Zeichen)</label><input type="password" id="newPlannerPinInput" class="form-control" placeholder="Neue PIN eingeben..."></div>
-      <div class="form-group"><label>Neue PIN bestätigen</label><input type="password" id="newPlannerPinConfirm" class="form-control" placeholder="Neue PIN wiederholen..." onkeydown="if(event.key==='Enter') saveNewPlannerPin()"></div>
-      <div class="modal-actions" style="justify-content: space-between;">
-        <button class="btn btn-outline" onclick="closeModal('changePinModal')">Abbrechen</button>
-        <button class="btn btn-primary" onclick="saveNewPlannerPin()">Speichern</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- POSTFACH & ANTRÄGE MODAL (STUFE 3) -->
-  <div id="inboxModal" class="modal-overlay">
-    <div class="modal" style="max-width: 680px;">
-      <h3 style="display:flex; justify-content:space-between; align-items:center; color:var(--bayer-blue); margin-bottom:8px;">
-        <span>📬 Postfach, Urlaub & Bringschichten</span>
-        <button onclick="closeModal('inboxModal')" style="border:none; background:none; font-size:1.5rem; cursor:pointer;">&times;</button>
-      </h3>
-      <div id="serverSyncInfo" style="font-size:0.74rem; background:#f1f5f9; color:#475569; padding:6px 10px; border-radius:6px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
-        <span>🔄 Prüfe Live-Datenbank...</span>
-        <button class="btn btn-outline" style="padding:2px 8px; font-size:0.7rem;" onclick="forceRefreshFromServer()">🔄 Jetzt abrufen</button>
-      </div>
-
-      <div class="search-wrapper" style="margin-bottom: 12px;">
-        <input type="text" id="inboxSearchInput" class="search-input" style="padding: 8px 30px 8px 12px; font-size: 0.84rem; background: #fff; border-color: #94a3b8;" placeholder="🔍 Postfach durchsuchen (Name, Datum, Urlaub, Krank, Notiz)..." oninput="updateInboxSearch(this.value)">
-        <span id="clearInboxSearchBtn" class="search-clear" onclick="updateInboxSearch('')">&times;</span>
-      </div>
-
-      <div style="margin-bottom: 16px;">
-        <button type="button" class="manual-entry-toggle" onclick="toggleManualEntryBox()">
-          <span>➕ Abwesenheit / Urlaub / Krank direkt eintragen</span>
-          <span id="manualEntryArrow" style="font-size:0.76rem; color:var(--bayer-blue);">▼ Formular öffnen</span>
-        </button>
-        <div id="manualEntryContent" style="display:none; background:#f8fafc; border:1px solid #cbd5e1; border-top:none; border-radius:0 0 8px 8px; padding:14px;">
-          <div style="display:flex; gap:10px;">
-            <div class="form-group" id="manualSickSearchGroup" style="flex:1.4;">
-              <label>Mitarbeiter</label>
-              <input type="text" id="manualSickEmpInput" class="form-control" placeholder="🔍 Name tippen..." autocomplete="off" onfocus="onManualSickNameInput(this.value)" oninput="onManualSickNameInput(this.value)">
-              <div id="manualSickSuggestions" class="suggestions-box"></div>
+    <!-- START-PASSWORT MODAL (ÜBERSICHT NACH PC-NEUSTART) -->
+    <div id="boardLockModal" class="modal-overlay" style="z-index: 2500; background: rgba(15, 23, 42, 0.92);">
+        <div class="modal-card" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2>🔒 Schicht-Übersicht geschützt</h2>
             </div>
-            <div class="form-group" style="flex:1;">
-              <label>Art der Abwesenheit</label>
-              <select id="manualSickCategory" class="form-control">
-                <option value="Arbeitsunfähigkeit (Krank)">🏥 Krank / AU</option>
-                <option value="Urlaub - bezahlt">🌴 Urlaub (bezahlt)</option>
-                <option value="Urlaub - unbezahlt">🌴 Urlaub (unbezahlt)</option>
-                <option value="Freizeitausgleich / Gleittag">⏱️ Freizeitausgleich / Gleittag</option>
-                <option value="Aus- und Fortbildung">🎓 Aus- und Fortbildung</option>
-                <option value="Dienstreise">🚗 Dienstreise</option>
-              </select>
+            <div class="modal-body">
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
+                    Bitte das Start-Passwort für die Schicht- und Linienübersicht eingeben (einmalig nach Browser-/PC-Start erforderlich):
+                </p>
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label>Start-Passwort</label>
+                    <input type="password" id="boardLockInput" class="form-control" placeholder="Passwort eingeben..." onkeydown="if(event.key==='Enter') unlockBoardView()">
+                </div>
+                <div id="boardLockError" style="color: var(--danger); font-size: 0.8rem; font-weight: 700; display: none; margin-bottom: 10px;">
+                    ❌ Falsches Start-Passwort!
+                </div>
+                <button class="btn btn-primary" style="width: 100%; justify-content: center;" onclick="unlockBoardView()">
+                    🔓 Übersicht freischalten
+                </button>
             </div>
-          </div>
-          <div style="display:flex; gap:10px;">
-            <div class="form-group" style="flex:1;"><label>Von</label><input type="date" id="manualSickStart" class="form-control"></div>
-            <div class="form-group" style="flex:1;"><label>Bis</label><input type="date" id="manualSickEnd" class="form-control"></div>
-          </div>
-          <div class="form-group"><label>Notiz / Bemerkung</label><input type="text" id="manualSickReason" class="form-control" placeholder="Optional..."></div>
-          <button class="btn btn-primary" style="width:100%;" onclick="addManualSickLeave()">Eintragen & Genehmigen</button>
         </div>
-      </div>
-
-      <div style="margin-bottom: 18px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
-          <h4 style="font-size:0.92rem; color:#dc2626;">🔔 Offene Anträge, Stornos & Meldungen</h4>
-          <button id="btnMarkAllRead" class="btn btn-outline" style="padding:4px 10px; font-size:0.75rem; display:none;" onclick="markAllSickLeavesRead()">Krankmeldungen gelesen</button>
-        </div>
-        <div id="inboxUnreadFilterBar" class="inbox-filter-bar"></div>
-        <div id="unreadSickList"></div>
-      </div>
-
-      <div style="border-top: 2px solid #e2e8f0; padding-top: 14px;">
-        <h4 style="font-size:0.92rem; margin-bottom: 6px;">📋 Aktive & Genehmigte Abwesenheiten</h4>
-        <div id="inboxActiveFilterBar" class="inbox-filter-bar"></div>
-        <div id="activeSickList"></div>
-      </div>
     </div>
-  </div>
 
-  <!-- LINIE BEARBEITEN MODAL -->
-  <div id="lineEditModal" class="modal-overlay">
-    <div class="modal" style="max-width: 450px;">
-      <h3 id="lineEditTitle" style="color: var(--bayer-blue); margin-bottom: 16px;">Linie bearbeiten</h3>
-      <input type="hidden" id="editLineId">
-      <div class="form-group">
-        <label>Priorität</label>
-        <select id="editLinePrio" class="form-control" onchange="saveLineDetails(true)">
-          <option value="">Keine Priorität</option><option value="PRIO 1">PRIO 1</option><option value="PRIO 2">PRIO 2</option><option value="PRIO 3">PRIO 3</option><option value="PRIO 4">PRIO 4</option>
-        </select>
-      </div>
-      <div class="form-group"><label>Status / Tag</label><input type="text" id="editLineTag" class="form-control" onchange="saveLineDetails(true)"></div>
-      <div class="form-group"><label>Notiz</label><textarea id="editLineNote" class="form-control" onchange="saveLineDetails(true)"></textarea></div>
-      <div class="modal-actions">
-        <button class="btn btn-primary" onclick="saveLineDetails(false)">Fertig & Schließen</button>
-      </div>
+    <!-- HEADER -->
+    <header>
+        <div class="header-left">
+            <div class="logo-container" onclick="handleLogoClick()" title="Planer-Anmeldung (Klicken)">
+                <div class="bayer-cross">
+                    <span></span><span></span><span>B</span><span></span><span></span>
+                    <span></span><span></span><span>A</span><span></span><span></span>
+                    <span>B</span><span>A</span><span>Y</span><span>E</span><span>R</span>
+                    <span></span><span></span><span>E</span><span></span><span></span>
+                    <span></span><span></span><span>R</span><span></span><span></span>
+                </div>
+            </div>
+            <div class="title-block">
+                <h1>Schicht und Linienübersicht</h1>
+                <div class="header-subline">
+                    <span id="headerDateDisplay" class="date-display">Lade Datum...</span>
+                    <span id="plannerStatusBadge" class="planner-badge"></span>
+                    <span id="autoShiftStatusBadge" class="auto-shift-badge" title="Automatischer Schicht-Generator ist aktiv">🤖 Auto-Schicht aktiv</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="headerActions" class="header-actions">
+            <!-- NEU: SCHICHTPLAN FREIGEBEN BUTTON -->
+            <button id="btnApproveShiftPlan" class="btn btn-approve-pending" onclick="toggleShiftPlanApproval()" title="Bestätigt die Planung für die aktuelle/kommende Schicht (setzt sich 1h vor nächstem Schichtbeginn automatisch zurück)">
+                ☑️ Schichtplan freigeben
+            </button>
+
+            <button class="btn" onclick="openInboxModal()">
+                📬 Postfach & Anträge
+                <span id="inboxBadge" class="badge-counter">0</span>
+            </button>
+
+            <button class="btn" onclick="openSettingsModal()">
+                ⚙️ Einstellungen
+            </button>
+
+            <button class="btn btn-danger" onclick="logoutPlanner()">
+                Abmelden
+            </button>
+        </div>
+    </header>
+
+    <!-- DYNAMISCHES SCHICHT-BEGRÜSSUNGS & FREIGABE-BANNER (DASHBOARD & PLANER) -->
+    <div id="shiftStatusBanner" class="shift-status-banner">
+        <div id="shiftStatusBannerText" style="display: flex; align-items: center;"></div>
+        <div id="shiftStatusBannerMeta" style="font-size: 0.78rem; opacity: 0.92;"></div>
     </div>
-  </div>
 
-  <!-- EINSTELLUNGEN & PROFIL MODAL (STUFE 2 & STUFE 3) -->
-  <div id="settingsModal" class="modal-overlay">
-    <div class="modal" style="max-width: 680px;">
-      <h3 style="display:flex; justify-content:space-between; color:var(--bayer-blue); margin-bottom:14px;">
-        <span>⚙️ Einstellungen & Profil</span>
-        <button onclick="closeModal('settingsModal')" style="border:none; background:none; font-size:1.5rem; cursor:pointer;">&times;</button>
-      </h3>
-      <div class="tabs">
-        <button id="tabBtnEmployees" class="tab-btn lvl-3-only active" onclick="switchTab('tabEmployees', this)">Mitarbeiter & Rechte</button>
-        <button class="tab-btn lvl-3-only" onclick="switchTab('tabRoles', this)">Rollen</button>
-        <button class="tab-btn lvl-3-only" onclick="switchTab('tabLines', this)">Linien</button>
-        <button class="tab-btn lvl-3-only" onclick="switchTab('tabTeams', this)">Teams</button>
-        <button class="tab-btn lvl-3-only" onclick="switchTab('tabSecurity', this)">🔒 Sicherheit & Timer</button>
-        <button class="tab-btn lvl-3-only" onclick="switchTab('tabHistory', this)">Historie</button>
-        <button class="tab-btn lvl-3-only" onclick="switchTab('tabBackups', this)">Backups</button>
-        <button id="tabBtnProfile" class="tab-btn" onclick="switchTab('tabProfile', this)">👤 Mein Profil</button>
-      </div>
-      
-      <!-- TAB: MITARBEITER (STUFE 3) -->
-      <div id="tabEmployees" class="tab-content active">
-        <div style="background:#f8fafc; padding:14px; border-radius:8px; margin-bottom:14px; border:1px solid #e2e8f0;">
-          <input type="hidden" id="editEmpId">
-          <div style="display:flex; gap:10px;">
-            <div class="form-group" style="flex:1;"><label>Vorname</label><input type="text" id="newEmpFirstName" class="form-control"></div>
-            <div class="form-group" style="flex:1;"><label>Nachname</label><input type="text" id="newEmpLastName" class="form-control"></div>
-          </div>
-          <div style="display:flex; gap:10px;">
-            <div class="form-group" style="flex:1;"><label>Team</label><select id="newEmpTeam" class="form-control" onchange="onEmpTeamChange(this.value)"></select></div>
-            <div class="form-group" style="flex:1;"><label>Rolle</label><select id="newEmpRole" class="form-control"></select></div>
-            <div class="form-group" style="flex:1.2;">
-              <label>Zugriffsrecht (Board)</label>
-              <select id="newEmpAccessLevel" class="form-control">
-                <option value="1">Stufe 1 (Mitarbeiter)</option>
-                <option value="2">Stufe 2 (Planer)</option>
-                <option value="3">Stufe 3 (Admin)</option>
-              </select>
+    <!-- HAUPTBEREICH -->
+    <div class="workspace">
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+            <div class="filter-box">
+                <input type="text" id="poolSearchInput" class="search-input" placeholder="🔍 Name oder Linie (z.B. 37)..." oninput="renderEmployees()">
+
+                <div class="filter-group-title">
+                    <span>Pool-Teams</span>
+                    <span class="filter-links">
+                        <a onclick="toggleAllTeamFilters(true)">Alle</a> / <a onclick="toggleAllTeamFilters(false)">Keine</a>
+                    </span>
+                </div>
+                <div id="teamFilterContainer" class="checkbox-grid"></div>
+
+                <div class="filter-group-title">
+                    <span>Pool-Rollen</span>
+                    <span class="filter-links">
+                        <a onclick="toggleAllRoleFilters(true)">Alle</a> / <a onclick="toggleAllRoleFilters(false)">Keine</a>
+                    </span>
+                </div>
+                <div id="roleFilterContainer" class="checkbox-grid"></div>
             </div>
-          </div>
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px; flex-wrap:wrap; gap:8px;">
-            <div style="display:flex; gap:14px; align-items:center;">
-              <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="newEmpFirstAider"> Ersthelfer <span style="color:#dc2626; font-weight:900;">+</span></label>
-              <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="newEmpNoRotation"> ⚓ Fix (Rotiert nicht)</label>
+
+            <div class="sidebar-zones">
+                <!-- POOL -->
+                <div class="zone-section pool-sec">
+                    <div class="zone-header">
+                        <span>Pool (<span id="count-pool">0</span>)</span>
+                        <div class="sidebar-PlannerOnly" style="display: flex; align-items: center; gap: 3px;">
+                            <select id="selectTeamFrei" class="shift-team-select" style="margin:0; width: 105px; font-size: 0.7rem;" onchange="onShiftTeamSelectChange('frei', this.value)"></select>
+                            <button class="btn-mini" style="width:auto; padding: 2px 5px;" onclick="loadTeamToShift('frei')" title="Gewähltes Frei-Team in den Pool holen">📥</button>
+                        </div>
+                    </div>
+                    <div id="pool" class="zone-list drop-zone" data-zone="pool"></div>
+                </div>
+
+                <!-- BRINGSCHICHTEN / ZUSATZ -->
+                <div class="zone-section extra-sec">
+                    <div class="zone-header">
+                        <span>➕ Bringschichten / Zusatz (<span id="count-extra">0</span>)</span>
+                    </div>
+                    <div id="extra" class="zone-list drop-zone" data-zone="extra"></div>
+                </div>
+
+                <!-- ABWESEND -->
+                <div class="zone-section absent-sec">
+                    <div class="zone-header">
+                        <span>🏖️/🤒 Abwesend (<span id="count-absent">0</span>)</span>
+                    </div>
+                    <div id="absent" class="zone-list drop-zone" data-zone="absent"></div>
+                </div>
             </div>
-            <span style="font-size:0.75rem; color:#64748b;">🔑 Start-PIN: <b>1234</b></span>
-          </div>
-          <div class="form-group"><label>Prio-Linien:</label><div id="mainLinesCheckboxes" style="display:flex; flex-wrap:wrap; gap:6px;"></div></div>
-          <div class="form-group"><label>Sek-Linien:</label><div id="secLinesCheckboxes" style="display:flex; flex-wrap:wrap; gap:6px;"></div></div>
-          <div style="display:flex; gap:10px; margin-top: 10px;">
-            <button id="btnSaveEmp" class="btn btn-primary" style="flex:1;" onclick="saveEmployee()">Hinzufügen / Speichern</button>
-            <button id="btnCancelEditEmp" class="btn btn-outline" style="display:none;" onclick="resetEmpForm()">Abbrechen</button>
-          </div>
-        </div>
-        <div style="margin-bottom:8px;"><input type="text" id="settingsEmpSearchInput" class="search-input" placeholder="🔍 Mitarbeiter in Liste suchen..." oninput="filterSettingsEmployees(this.value)" style="font-size:0.8rem; padding:6px 10px;"></div>
-        <div id="employeeList" style="max-height: 180px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
-      </div>
-      
-      <!-- TAB: ROLLEN (STUFE 3) -->
-      <div id="tabRoles" class="tab-content">
-        <div style="display:flex; gap:10px; margin-bottom:16px;"><input type="text" id="newRoleName" class="form-control" placeholder="Neue Rolle"><button class="btn btn-primary" onclick="addRole()">Hinzufügen</button></div>
-        <div id="roleList" style="max-height: 250px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
-      </div>
+        </aside>
 
-      <!-- TAB: LINIEN (STUFE 3) -->
-      <div id="tabLines" class="tab-content">
-        <div style="display:flex; gap:10px; margin-bottom:16px;"><input type="text" id="newLineName" class="form-control" placeholder="Neue Linie"><button class="btn btn-primary" onclick="addLine()">Hinzufügen</button></div>
-        <div id="lineSettingsList" style="max-height: 250px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
-      </div>
-
-      <!-- TAB: TEAMS MIT AUTO-SAVE (STUFE 3) -->
-      <div id="tabTeams" class="tab-content">
-        <div style="background:#f8fafc; padding:14px; border-radius:8px; margin-bottom:12px; border:1px solid #e2e8f0;">
-          <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:6px;">Neues Team hinzufügen (z.B. Team 5 / Tagschicht)</label>
-          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-            <input type="color" id="newTeamColor" value="#3b82f6" style="width:40px; height:38px; border:none; cursor:pointer;">
-            <input type="text" id="newTeamName" class="form-control" placeholder="Team-Name" style="flex:1; min-width:140px;">
-            <label style="display:flex; align-items:center; gap:5px; font-size:0.82rem; font-weight:600; cursor:pointer; background:#fff; padding:7px 10px; border-radius:6px; border:1px solid #cbd5e1;">
-              <input type="checkbox" id="newTeamRotates" checked> 🔄 Rotiert
-            </label>
-            <button class="btn btn-primary" onclick="addTeam()">+ Hinzufügen</button>
-          </div>
-        </div>
-        <div style="font-size:0.75rem; color:#64748b; margin-bottom:6px;">✨ Änderungen an bestehenden Teams (Farbe, Name, Rotation) werden automatisch gespeichert:</div>
-        <div id="teamSettingsList" style="max-height: 240px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
-      </div>
-
-      <!-- TAB: SICHERHEIT & TIMER (STUFE 3) -->
-      <div id="tabSecurity" class="tab-content">
-        <div style="background:#f8fafc; padding:14px; border-radius:8px; margin-bottom:14px; border:1px solid #e2e8f0;">
-          <h4 style="font-size:0.9rem; color:#0f172a; margin-bottom:6px;">🖥️ Start-Passwort für die Schicht-Übersicht (PC-Neustart)</h4>
-          <p style="font-size:0.78rem; color:#64748b; margin-bottom:10px; line-height:1.35;">Wenn aktiviert, fragt die Schicht-Übersicht beim ersten Öffnen des Browsers (z.B. nach einem PC-Neustart) einmalig dieses Passwort ab. Danach bleibt die Übersicht dauerhaft ohne Timer sichtbar. Jederzeit deaktivierbar.</p>
-          <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-            <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem; font-weight:700; cursor:pointer; background:#fff; padding:8px 12px; border-radius:6px; border:1px solid #cbd5e1;">
-              <input type="checkbox" id="secBoardPwEnabled" onchange="autoSaveSecurityConfig()"> Start-Passwort aktivieren
-            </label>
-            <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:180px;">
-              <span style="font-size:0.82rem; font-weight:600; color:#475569;">Passwort:</span>
-              <input type="text" id="secBoardPwValue" class="form-control" placeholder="z.B. 0110" style="padding:7px 10px;" onchange="autoSaveSecurityConfig()">
-            </div>
-          </div>
-        </div>
-
-        <div style="background:#f8fafc; padding:14px; border-radius:8px; border:1px solid #e2e8f0;">
-          <h4 style="font-size:0.9rem; color:#0f172a; margin-bottom:6px;">⏱️ Automatischer Inaktivitäts-Logout (Timer)</h4>
-          <p style="font-size:0.78rem; color:#64748b; margin-bottom:12px; line-height:1.35;">Legt fest, nach wie vielen Minuten ohne Klick oder Eingabe ein angemeldetes Konto im Planer-Modus bzw. im Mitarbeiter-Portal automatisch abgemeldet wird (die reine Schicht-Übersicht hat keinen Timer).</p>
-          <div style="display:flex; gap:12px; flex-wrap:wrap;">
-            <div class="form-group" style="flex:1; min-width:200px; margin-bottom:0;">
-              <label>Planer-Modus (Admin-Panel)</label>
-              <select id="secPlannerTimeout" class="form-control" onchange="autoSaveSecurityConfig()">
-                <option value="15">Nach 15 Minuten</option>
-                <option value="30">Nach 30 Minuten</option>
-                <option value="60">Nach 1 Stunde</option>
-                <option value="120">Nach 2 Stunden</option>
-                <option value="180">Nach 3 Stunden (Standard)</option>
-                <option value="360">Nach 6 Stunden</option>
-                <option value="0">Nie (Dauerhaft angemeldet)</option>
-              </select>
-            </div>
-            <div class="form-group" style="flex:1; min-width:200px; margin-bottom:0;">
-              <label>Mitarbeiter-Portal (portal.html)</label>
-              <select id="secPortalTimeout" class="form-control" onchange="autoSaveSecurityConfig()">
-                <option value="15">Nach 15 Minuten</option>
-                <option value="30">Nach 30 Minuten</option>
-                <option value="60">Nach 1 Stunde (Standard)</option>
-                <option value="120">Nach 2 Stunden</option>
-                <option value="180">Nach 3 Stunden</option>
-                <option value="0">Nie (Dauerhaft angemeldet)</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- TAB: HISTORIE (STUFE 3) -->
-      <div id="tabHistory" class="tab-content">
-        <div style="margin-bottom:12px;"><input type="text" id="historyUnifiedInput" class="form-control" placeholder="🔍 Nach Name oder Datum filtern..." oninput="filterHistoryUnified()" style="font-size:0.82rem; padding:8px 10px;"></div>
-        <div id="historyList" style="max-height: 230px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px; padding:10px;">Lade Historie...</div>
-      </div>
-
-      <!-- TAB: BACKUPS (STUFE 3) -->
-      <div id="tabBackups" class="tab-content">
-        <p style="font-size:0.9rem; color:#64748b; margin-bottom:14px;">Automatische Sicherung (letzte 7 Tage):</p>
-        <div id="backupList" style="max-height: 250px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px; padding:10px;">Lade Backups...</div>
-      </div>
-
-      <!-- TAB: MEIN PROFIL & PIN ÄNDERN (FÜR STUFE 2 & STUFE 3) -->
-      <div id="tabProfile" class="tab-content">
-        <div id="profileInfoBox" style="background:#f8fafc; padding:14px; border-radius:8px; margin-bottom:14px; border:1px solid #e2e8f0;"></div>
-        <div style="background:#fff; padding:14px; border-radius:8px; border:1px solid #cbd5e1;">
-          <h4 style="font-size:0.92rem; color:var(--bayer-blue); margin-bottom:10px;">🔑 Persönliche Planer-PIN / Passwort ändern</h4>
-          <div id="profPinMsg" style="display:none; padding:8px 10px; border-radius:6px; font-size:0.82rem; font-weight:700; margin-bottom:10px; text-align:center;"></div>
-          <div class="form-group"><label>Aktuelle PIN / Passwort</label><input type="password" id="profOldPin" class="form-control" placeholder="Aktuelle PIN eingeben..."></div>
-          <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <div class="form-group" style="flex:1; min-width:180px;"><label>Neue PIN (mind. 4 Zeichen)</label><input type="password" id="profNewPin" class="form-control" placeholder="Neue PIN..."></div>
-            <div class="form-group" style="flex:1; min-width:180px;"><label>Neue PIN wiederholen</label><input type="password" id="profNewPinConfirm" class="form-control" placeholder="Neue PIN bestätigen..." onkeydown="if(event.key==='Enter') saveProfilePinChange()"></div>
-          </div>
-          <button class="btn btn-primary" style="width:100%;" onclick="saveProfilePinChange()">PIN jetzt aktualisieren</button>
-        </div>
-      </div>
+        <!-- MATRIX -->
+        <main class="matrix-wrapper">
+            <table class="matrix-table">
+                <thead id="matrixHead"></thead>
+                <tbody id="matrixBody"></tbody>
+            </table>
+        </main>
     </div>
-  </div>
 
-  <!-- AUSGELAGERTE LOGIK ALS EXTERNE JS-DATEI -->
-  <script src="planer.js"></script>
+    <!-- MODAL 1: PLANER LOGIN (PIN) -->
+    <div id="pinModal" class="modal-overlay">
+        <div class="modal-card" style="max-width: 390px;">
+            <div class="modal-header">
+                <h2>🔐 Planer-Anmeldung</h2>
+                <button class="modal-close" onclick="closePinModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label>Planer / Berechtigter auswählen</label>
+                    <select id="loginEmpSelect" class="form-control"></select>
+                </div>
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label>Persönliche PIN / Passwort</label>
+                    <input type="password" id="pinInput" class="form-control" placeholder="PIN eingeben..." onkeydown="if(event.key==='Enter') verifyPin()">
+                </div>
+                <div id="pinError" style="color: var(--danger); font-size: 0.8rem; font-weight: 700; display: none; margin-bottom: 10px;">
+                    ❌ Falsche PIN! Bitte erneut versuchen.
+                </div>
+                <button class="btn btn-primary" style="width: 100%; justify-content: center;" onclick="verifyPin()">
+                    Anmelden
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: ZWANGS-PIN-ÄNDERUNG BEI ERSTANMELDUNG -->
+    <div id="changePinModal" class="modal-overlay">
+        <div class="modal-card" style="max-width: 420px;">
+            <div class="modal-header">
+                <h2>🔑 Persönliche PIN festlegen</h2>
+            </div>
+            <div class="modal-body">
+                <p style="font-size: 0.83rem; color: var(--text-muted); margin-bottom: 12px;">
+                    Bitte lege zu deiner eigenen Sicherheit jetzt eine neue persönliche PIN (mind. 4 Zeichen) fest:
+                </p>
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label>Neue PIN</label>
+                    <input type="password" id="newPlannerPin1" class="form-control" placeholder="Neue PIN (mind. 4 Zeichen)">
+                </div>
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label>Neue PIN wiederholen</label>
+                    <input type="password" id="newPlannerPin2" class="form-control" placeholder="Neue PIN bestätigen" onkeydown="if(event.key==='Enter') saveNewPlannerPin()">
+                </div>
+                <div id="changePinError" style="color: var(--danger); font-size: 0.8rem; font-weight: 700; display: none; margin-bottom: 10px;"></div>
+                <button class="btn btn-primary" style="width: 100%; justify-content: center;" onclick="saveNewPlannerPin()">
+                    💾 PIN speichern & weiter
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: DER NEUE POSTFACH-KOMMANDOSTAND (3 TABS) -->
+    <div id="inboxModal" class="modal-overlay">
+        <div class="modal-card" style="max-width: 820px;">
+            <div class="modal-header">
+                <h2>📬 Postfach-Kommandostand</h2>
+                <button class="modal-close" onclick="closeInboxModal()">×</button>
+            </div>
+
+            <!-- 3 KLARE REITER (TABS) -->
+            <div class="tabs-bar">
+                <button id="inboxTabBtnTodo" class="tab-btn active" onclick="switchInboxTab('todo')">
+                    🔔 Zu erledigen <span id="inboxTabTodoCount" style="background:#ef4444; color:#fff; border-radius:999px; padding:1px 7px; font-size:0.72rem;">0</span>
+                </button>
+                <button id="inboxTabBtnCalendar" class="tab-btn" onclick="switchInboxTab('calendar')">
+                    📅 Aktiver Kalender <span id="inboxTabCalCount" style="background:#0284c7; color:#fff; border-radius:999px; padding:1px 7px; font-size:0.72rem;">0</span>
+                </button>
+                <button id="inboxTabBtnManual" class="tab-btn" onclick="switchInboxTab('manual')">
+                    ➕ Manuell eintragen
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Suchzeile & Live-Sync Status für Tab 1 & Tab 2 -->
+                <div id="inboxTopSearchWrap">
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; margin-bottom: 8px; font-size: 0.78rem;">
+                        <span id="inboxLiveStatusText">✅ Live-Stand wird geladen...</span>
+                        <button class="btn-mini" style="width: auto; padding: 3px 8px;" onclick="refreshInboxNow()">🔄 Jetzt abrufen</button>
+                    </div>
+                    <input type="text" id="inboxSearchInput" class="form-control" style="width: 100%; margin-bottom: 8px;" placeholder="🔍 Suche nach Name, Datum, Urlaub, Krank oder Notiz..." oninput="renderInbox()">
+                </div>
+
+                <!-- TAB 1: ZU ERLEDIGEN -->
+                <div id="inboxTabTodo">
+                    <div class="inbox-pill-bar">
+                        <button class="pill-btn active" data-reqfilter="all" onclick="setInboxRequestFilter('all')">Alle (<span id="reqCountAll">0</span>)</button>
+                        <button class="pill-btn" data-reqfilter="vacation" onclick="setInboxRequestFilter('vacation')">🌴 Urlaubsanträge (<span id="reqCountVac">0</span>)</button>
+                        <button class="pill-btn" data-reqfilter="extra" onclick="setInboxRequestFilter('extra')">➕ Bringschichten (<span id="reqCountExtra">0</span>)</button>
+                        <button class="pill-btn" data-reqfilter="sick" onclick="setInboxRequestFilter('sick')">🏥 Krank & Gesund (<span id="reqCountSick">0</span>)</button>
+                        <button class="pill-btn" data-reqfilter="cancel" onclick="setInboxRequestFilter('cancel')">🚫 Stornos & Antworten (<span id="reqCountCancel">0</span>)</button>
+                    </div>
+                    <div id="inboxTodoList"></div>
+                </div>
+
+                <!-- TAB 2: AKTIVER KALENDER & GENEHMIGTE ABWESENHEITEN -->
+                <div id="inboxTabCalendar" style="display: none;">
+                    <div class="inbox-pill-bar">
+                        <button class="pill-btn active" data-actfilter="all" onclick="setInboxActiveFilter('all')">Alle (<span id="actCountAll">0</span>)</button>
+                        <button class="pill-btn" data-actfilter="today" onclick="setInboxActiveFilter('today')">🔴 Heute abwesend (<span id="actCountToday">0</span>)</button>
+                        <button class="pill-btn" data-actfilter="future" onclick="setInboxActiveFilter('future')">⏳ Zukünftig (<span id="actCountFuture">0</span>)</button>
+                        <button class="pill-btn" data-actfilter="sick" onclick="setInboxActiveFilter('sick')">🏥 Nur Krank (<span id="actCountSick">0</span>)</button>
+                        <button class="pill-btn" data-actfilter="vacation" onclick="setInboxActiveFilter('vacation')">🌴 Nur Urlaub/Frei (<span id="actCountVac">0</span>)</button>
+                    </div>
+                    <div id="inboxCalendarList"></div>
+                </div>
+
+                <!-- TAB 3: MANUELL EINTRAGEN (DIREKT-ERFASSUNG) -->
+                <div id="inboxTabManual" style="display: none;">
+                    <div class="card-panel">
+                        <h3 style="font-size: 0.92rem; color: var(--bayer-dark); margin-bottom: 10px;">
+                            ➕ Abwesenheit / Urlaub / Krank direkt für Mitarbeiter eintragen
+                        </h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Mitarbeiter</label>
+                                <select id="manualAbsEmpSelect" class="form-control"></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Kategorie / Grund</label>
+                                <select id="manualAbsCategory" class="form-control">
+                                    <option value="Urlaub">🌴 Urlaub</option>
+                                    <option value="Krank">🤒 Krank (AU)</option>
+                                    <option value="Kind krank">🧸 Kind krank</option>
+                                    <option value="Gleittag / Frei">🕒 Gleittag / Frei</option>
+                                    <option value="Sonderurlaub">⭐ Sonderurlaub</option>
+                                    <option value="Schulung / Seminar">📚 Schulung / Seminar</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Von (Startdatum)</label>
+                                <input type="date" id="manualAbsStart" class="form-control">
+                            </div>
+                            <div class="form-group">
+                                <label>Bis einschließlich (Enddatum)</label>
+                                <input type="date" id="manualAbsEnd" class="form-control">
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 12px;">
+                            <label>Optionale Notiz (z. B. Attest liegt vor, Vertretung etc.)</label>
+                            <input type="text" id="manualAbsNote" class="form-control" placeholder="Kurze Notiz (optional)...">
+                        </div>
+                        <button class="btn btn-primary" onclick="addManualAbsence()">
+                            ✅ Zeitraum direkt aktiv eintragen
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 4: EINSTELLUNGEN (ADMIN & PLANER) -->
+    <div id="settingsModal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h2>⚙️ System-Einstellungen & Verwaltung</h2>
+                <button class="modal-close" onclick="closeSettingsModal()">×</button>
+            </div>
+
+            <div class="tabs-bar">
+                <button id="tabBtnEmployees" class="tab-btn active" onclick="switchTab('tabEmployees')">👥 Mitarbeiter</button>
+                <button id="tabBtnTeams" class="tab-btn" onclick="switchTab('tabTeams')">🔄 Teams & Schichtmodell</button>
+                <button id="tabBtnRoles" class="tab-btn" onclick="switchTab('tabRoles')">🏷️ Rollen</button>
+                <button id="tabBtnLines" class="tab-btn" onclick="switchTab('tabLines')">🏭 Linien</button>
+                <button id="tabBtnHistory" class="tab-btn" onclick="switchTab('tabHistory')">📜 Urlaubs-Historie</button>
+                <button id="tabBtnSecurity" class="tab-btn" onclick="switchTab('tabSecurity')">🔒 Sicherheit & Backups</button>
+                <button id="tabBtnProfile" class="tab-btn" onclick="switchTab('tabProfile')">🔑 Mein Profil & PIN</button>
+            </div>
+
+            <div class="modal-body">
+                <!-- TAB: MITARBEITER -->
+                <div id="tabEmployees" class="settings-tab-content">
+                    <div class="card-panel">
+                        <h3 id="empFormTitle" style="font-size: 0.9rem; margin-bottom: 10px; color: var(--bayer-dark);">➕ Neuen Mitarbeiter anlegen / bearbeiten</h3>
+                        <input type="hidden" id="editEmpId">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Vorname</label>
+                                <input type="text" id="newEmpFirstName" class="form-control" placeholder="z.B. Max">
+                            </div>
+                            <div class="form-group">
+                                <label>Nachname</label>
+                                <input type="text" id="newEmpLastName" class="form-control" placeholder="z.B. Mustermann">
+                            </div>
+                            <div class="form-group">
+                                <label>Team</label>
+                                <select id="newEmpTeam" class="form-control"></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Rolle / Funktion</label>
+                                <select id="newEmpRole" class="form-control"></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Berechtigungs-Stufe</label>
+                                <select id="newEmpAccessLevel" class="form-control">
+                                    <option value="1">Stufe 1 – Mitarbeiter (Nur Portal)</option>
+                                    <option value="2">Stufe 2 – Schichtplaner (Planen & Postfach)</option>
+                                    <option value="3">Stufe 3 – Admin (Vollzugriff)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Start-PIN / Portal-Passwort</label>
+                                <input type="text" id="newEmpPassword" class="form-control" placeholder="Standard: 0000">
+                            </div>
+                        </div>
+
+                        <div style="display: flex; gap: 16px; margin: 8px 0 12px 0; flex-wrap: wrap;">
+                            <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 700; cursor: pointer;">
+                                <input type="checkbox" id="newEmpErsthelfer"> ➕ Ersthelfer
+                            </label>
+                            <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 700; cursor: pointer;">
+                                <input type="checkbox" id="newEmpNoRotation"> ⚓ Fixiert (rotiert beim Schichtwechsel NICHT mit)
+                            </label>
+                        </div>
+
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>⭐ Prio-Linien (Stammlinien)</label>
+                                <div id="newEmpMainLines" class="checkbox-grid" style="background:#fff; padding:6px; border:1px solid var(--border-color); border-radius:6px; max-height:95px; overflow-y:auto;"></div>
+                            </div>
+                            <div class="form-group">
+                                <label>🔹 Sekundär-Linien (Weitere Linien)</label>
+                                <div id="newEmpSecLines" class="checkbox-grid" style="background:#fff; padding:6px; border:1px solid var(--border-color); border-radius:6px; max-height:95px; overflow-y:auto;"></div>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; gap: 8px; margin-top: 8px;">
+                            <button class="btn btn-primary" onclick="saveEmployee()">💾 Mitarbeiter speichern</button>
+                            <button class="btn" onclick="resetEmpForm()">Abbrechen / Formular leeren</button>
+                        </div>
+                    </div>
+
+                    <input type="text" id="empSettingsSearch" class="form-control" style="width: 100%; margin-bottom: 10px;" placeholder="🔍 Mitarbeiterliste durchsuchen..." oninput="renderSettingsEmployees()">
+                    <div id="settingsEmpList"></div>
+                </div>
+
+                <!-- TAB: TEAMS & SCHICHTMODELL (INKL. AUTOMATIK & INTEGRITÄTS-SCHUTZ) -->
+                <div id="tabTeams" class="settings-tab-content" style="display: none;">
+                    <!-- NEUER AUTOMATISCHER SCHICHT-GENERATOR -->
+                    <div class="card-panel" style="border-left: 4px solid var(--bayer-blue); background: #f0f9ff;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
+                            <div>
+                                <h3 style="font-size: 0.95rem; color: var(--bayer-dark);">🤖 Automatischer Schicht-Generator (Umschaltung ab 05:00 Uhr)</h3>
+                                <p style="font-size: 0.78rem; color: var(--text-muted);">
+                                    Berechnet automatisch anhand des Kalenders, welches Team in Früh, Spät, Nacht und Frei eingeteilt ist. Schaltet bereits um <strong>05:00 Uhr morgens</strong> auf den neuen Tag um, damit die anrückende Frühschicht ihren Plan rechtzeitig sieht.
+                                </p>
+                            </div>
+                            <label style="display: inline-flex; align-items: center; gap: 8px; background: #fff; padding: 6px 12px; border-radius: 999px; border: 1.5px solid var(--bayer-blue); font-weight: 800; font-size: 0.82rem; cursor: pointer;">
+                                <input type="checkbox" id="autoShiftEnabledToggle" onchange="toggleAutoShiftMode(this.checked)">
+                                Automatik aktivieren
+                            </label>
+                        </div>
+
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Hinterlegtes Schichtmodell</label>
+                                <select id="autoShiftModelSelect" class="form-control" onchange="saveAutoShiftConfig()">
+                                    <option value="bayer_222_4team">4-Gruppen 2-2-2 Modell (Mo/Di, Mi/Do, Fr/Sa – Jahresplan 2025/2026)</option>
+                                    <option value="weekly_3shift">Klassische Wochen-Rotation (Wöchentlicher Wechsel Mo 05:00 Uhr)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Kalender-Referenz / Startdatum (für Wochen-Modell)</label>
+                                <input type="date" id="autoShiftStartDate" class="form-control" value="2026-01-01" onchange="saveAutoShiftConfig()">
+                            </div>
+                        </div>
+
+                        <div id="autoShiftPreviewBox" style="background: #ffffff; border: 1px solid #bae6fd; border-radius: 6px; padding: 8px 12px; font-size: 0.8rem; margin-top: 6px;">
+                            Berechne aktuelle Schicht-Zuweisung...
+                        </div>
+                        <div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button class="btn btn-primary" onclick="applyAutoShiftNow(true)">⚡ Heutige Automatik-Schichten jetzt sofort auf Board anwenden</button>
+                        </div>
+                    </div>
+
+                    <!-- TEAM-VERWALTUNG -->
+                    <div class="card-panel">
+                        <h3 style="font-size: 0.9rem; margin-bottom: 6px;">🔄 Teams konfigurieren (Auto-Save)</h3>
+                        <p style="font-size: 0.76rem; color: var(--text-muted); margin-bottom: 10px;">
+                            Hinweis: Für das 4-Gruppen-Schichtmodell müssen genau die 4 Haupt-Teams (Team 1 bis Team 4) den Haken bei „Rotiert“ gesetzt haben.
+                        </p>
+                        <div id="settingsTeamsList"></div>
+                        <div style="display: flex; gap: 8px; margin-top: 10px;">
+                            <input type="text" id="newTeamNameInput" class="form-control" placeholder="Neuer Team-Name (z.B. Team 5)">
+                            <button class="btn btn-primary" onclick="addNewTeam()">➕ Team hinzufügen</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB: ROLLEN -->
+                <div id="tabRoles" class="settings-tab-content" style="display: none;">
+                    <div class="card-panel">
+                        <h3 style="font-size: 0.9rem; margin-bottom: 10px;">🏷️ Rollen & Funktionen verwalten (Auto-Save)</h3>
+                        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                            <input type="text" id="newRoleInput" class="form-control" placeholder="Neue Rolle (z.B. Springer)...">
+                            <button class="btn btn-primary" onclick="addRole()">➕ Rolle hinzufügen</button>
+                        </div>
+                        <div id="settingsRolesList"></div>
+                    </div>
+                </div>
+
+                <!-- TAB: LINIEN -->
+                <div id="tabLines" class="settings-tab-content" style="display: none;">
+                    <div class="card-panel">
+                        <h3 style="font-size: 0.9rem; margin-bottom: 10px;">🏭 Produktionslinien verwalten (Auto-Save)</h3>
+                        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                            <input type="text" id="newLineNameInput" class="form-control" placeholder="Linien-Name (z.B. Linie 42)...">
+                            <button class="btn btn-primary" onclick="addLine()">➕ Linie hinzufügen</button>
+                        </div>
+                        <div id="settingsLinesList"></div>
+                    </div>
+                </div>
+
+                <!-- TAB: URLAUBS-HISTORIE -->
+                <div id="tabHistory" class="settings-tab-content" style="display: none;">
+                    <div class="card-panel">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                            <h3 style="font-size: 0.9rem;">📜 Archivierte & Genehmigte Urlaubs-/Abwesenheits-Historie</h3>
+                            <input type="text" id="historySearchInput" class="form-control" style="width: 260px;" placeholder="🔍 Historie durchsuchen..." oninput="renderHistoryList()">
+                        </div>
+                        <div id="settingsHistoryList"></div>
+                    </div>
+                </div>
+
+                <!-- TAB: SICHERHEIT & BACKUPS -->
+                <div id="tabSecurity" class="settings-tab-content" style="display: none;">
+                    <div class="card-panel">
+                        <h3 style="font-size: 0.9rem; margin-bottom: 10px;">🔐 Start-Passwort & Automatische Inaktivitäts-Abmeldung (Auto-Save)</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; color:var(--text-main);">
+                                    <input type="checkbox" id="secBoardPwEnabled" onchange="saveSecuritySettings()">
+                                    Start-Passwort für Übersicht aktivieren (nach PC-Neustart)
+                                </label>
+                                <input type="text" id="secBoardPwInput" class="form-control" placeholder="Start-Passwort für Übersicht..." onchange="saveSecuritySettings()">
+                            </div>
+                            <div class="form-group">
+                                <label>⏱️ Inaktivitäts-Logout Planer-Board (Minuten, 0 = Aus)</label>
+                                <input type="number" id="secPlannerTimeout" class="form-control" min="0" max="480" onchange="saveSecuritySettings()">
+                            </div>
+                            <div class="form-group">
+                                <label>⏱️ Inaktivitäts-Logout Mitarbeiter-Portal (Minuten, 0 = Aus)</label>
+                                <input type="number" id="secPortalTimeout" class="form-control" min="0" max="480" onchange="saveSecuritySettings()">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-panel">
+                        <h3 style="font-size: 0.9rem; margin-bottom: 8px;">💾 Cloud-Backups & Daten-Wiederherstellung</h3>
+                        <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 10px;">
+                            Das System erstellt automatisch Sicherungen in Firebase. Zudem kannst du jederzeit ein manuelles Backup anlegen oder einspielen:
+                        </p>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+                            <button class="btn btn-primary" onclick="createManualCloudBackup()">☁️ Jetzt Cloud-Backup erstellen</button>
+                            <button class="btn" onclick="exportLocalJsonBackup()">⬇️ JSON-Datei herunterladen</button>
+                        </div>
+                        <div id="cloudBackupsList"></div>
+                    </div>
+                </div>
+
+                <!-- TAB: MEIN PROFIL & PIN -->
+                <div id="tabProfile" class="settings-tab-content" style="display: none;">
+                    <div class="card-panel" style="max-width: 480px;">
+                        <h3 style="font-size: 0.92rem; margin-bottom: 8px;">🔑 Eigene Planer-/Portal-PIN ändern</h3>
+                        <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 12px;">
+                            Hier kannst du jederzeit deine eigene PIN ändern (gilt gleichzeitig für das Planer-Board und dein Mitarbeiter-Portal):
+                        </p>
+                        <div class="form-group" style="margin-bottom: 10px;">
+                            <label>Aktuelle PIN</label>
+                            <input type="password" id="profOldPin" class="form-control" placeholder="Aktuelle PIN eingeben">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 10px;">
+                            <label>Neue PIN (mind. 4 Zeichen)</label>
+                            <input type="password" id="profNewPin1" class="form-control" placeholder="Neue PIN eingeben">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 12px;">
+                            <label>Neue PIN wiederholen</label>
+                            <input type="password" id="profNewPin2" class="form-control" placeholder="Neue PIN bestätigen">
+                        </div>
+                        <button class="btn btn-primary" onclick="changeOwnPlannerPin()">💾 Eigene PIN jetzt aktualisieren</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastContainer"></div>
+
+    <!-- HAUPT-LOGIK -->
+    <script src="planer.js"></script>
 </body>
 </html>
