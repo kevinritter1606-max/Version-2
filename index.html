@@ -28,28 +28,28 @@
     .btn-outline { border-color: #cbd5e1; background: #fff; color: #475569; }
     .btn-outline:hover { background: #f8fafc; }
 
-    /* KOMPAKTER FREIGABE-BUTTON IM HEADER (ROT / GRÜN) */
+    /* SCHLANKER, ELEGANTER FREIGABE-BUTTON (SCHÖN INS BILD EINGEPASST) */
     .btn-shift-approval {
-      font-size: 0.8rem;
-      font-weight: 700;
-      padding: 7px 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 5px 10px;
       border-radius: 6px;
       cursor: pointer;
-      border: 1.5px solid transparent;
+      border: 1px solid transparent;
       transition: all 0.15s ease;
       display: inline-flex;
       align-items: center;
-      gap: 5px;
+      gap: 4px;
     }
     .btn-shift-approval.pending {
-      background: #fee2e2;
-      color: #b91c1c;
-      border-color: #fca5a5;
+      background: #fef2f2;
+      color: #dc2626;
+      border-color: #fecaca;
     }
     .btn-shift-approval.approved {
-      background: #dcfce7;
-      color: #15803d;
-      border-color: #86efac;
+      background: #f0fdf4;
+      color: #16a34a;
+      border-color: #bbf7d0;
     }
 
     .inbox-badge { position: absolute; top: -6px; right: -6px; background: #dc2626; color: #fff; font-size: 0.72rem; font-weight: 800; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; display: none; align-items: center; justify-content: center; }
@@ -166,9 +166,9 @@
       </div>
     </div>
     <div class="header-actions">
-      <!-- KOMPAKTER FREIGABE-BUTTON (ROT / GRÜN) -->
+      <!-- SCHLANKER, HARMONISCHER FREIGABE-BUTTON (ROT / GRÜN) -->
       <button id="shiftApprovalBtn" class="btn-shift-approval pending" onclick="toggleShiftApprovalState()">
-        ⏳ Freigeben
+        ⏳ Warte auf Freigabe
       </button>
 
       <button class="btn btn-outline lvl-3-only" onclick="openInboxModal()">📬 Postfach & Anträge <span id="inboxBadge" class="inbox-badge">0</span></button>
@@ -481,7 +481,7 @@
         btn.innerHTML = "✅ Freigegeben";
       } else {
         btn.className = "btn-shift-approval pending";
-        btn.innerHTML = "⏳ Freigeben";
+        btn.innerHTML = "⏳ Warte auf Freigabe";
       }
     }
 
