@@ -12,10 +12,10 @@
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
     body { background-color: var(--bg-gray); min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
     
-    /* DYNAMISCHER BRAND-GRADIENT (BLAU-ROT = WARTET / BLAU-GRÜN = FREIGEGEBEN) */
+    /* DYNAMISCHER BRAND-GRADIENT (KRÄFTIGES BLAU-ROT = WARTET / BLAU-GRÜN = FREIGEGEBEN) */
     .brand-gradient { height: 6px; width: 100%; flex-shrink: 0; transition: background 0.3s ease; }
-    .brand-gradient.pending { background: linear-gradient(90deg, #0091df 0%, #00bcff 50%, #dc2626 100%); }
-    .brand-gradient.approved { background: linear-gradient(90deg, #0091df 0%, #00bcff 50%, #89d329 100%);[span_1](start_span)[span_1](end_span)}
+    .brand-gradient.pending { background: linear-gradient(90deg, #0091df 0%, #ef4444 50%, #dc2626 100%); }
+    .brand-gradient.approved { background: linear-gradient(90deg, #0091df 0%, #00bcff 50%, #89d329 100%);[span_0](start_span)[span_0](end_span)}
 
     header { background: #fff; padding: 10px 24px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 6px rgba(0,0,0,0.06); position: sticky; top: 0; z-index: 50; }
     .header-left { display: flex; align-items: center; gap: 16px; }
@@ -33,7 +33,7 @@
     .btn-outline { border-color: #cbd5e1; background: #fff; color: #475569; }
     .btn-outline:hover { background: #f8fafc; }
 
-    /* KLEINER PLANER-SCHALTER FÜR DEN FREIGABE-STATUS (NUR FÜR PLANER SICHTBAR) */
+    /* PLANER-SCHALTER FÜR DEN FREIGABE-STATUS (NUR FÜR PLANER SICHTBAR) */
     .planner-approval-indicator {
       display: none;
       align-items: center;
@@ -458,7 +458,7 @@
           <div id="profPinMsg" style="display:none; padding:8px 10px; border-radius:6px; font-size:0.82rem; font-weight:700; margin-bottom:10px; text-align:center;"></div>
           <div class="form-group"><label>Aktuelle PIN</label><input type="password" id="profOldPin" class="form-control"></div>
           <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <div class="form-group" style="flex:1; min-width:180px;"><label>Neue PIN</label><input type="password" id="profNewPin" class="form-control"></div>
+            <div class="form-group" style="flex:1; min-width:180px;"><label>Neue PIN</label><input type="password" id="newNewPin" class="form-control"></div>
             <div class="form-group" style="flex:1; min-width:180px;"><label>Wiederholen</label><input type="password" id="profNewPinConfirm" class="form-control" onkeydown="if(event.key==='Enter') saveProfilePinChange()"></div>
           </div>
           <button class="btn btn-primary" style="width:100%;" onclick="saveProfilePinChange()">Aktualisieren</button>
