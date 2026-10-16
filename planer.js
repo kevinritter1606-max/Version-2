@@ -1,5 +1,5 @@
 /* ==========================================================================
-   PLANER-BOARD LOGIK (planer.js) - System-Version 2.6 (Vollständig)
+   PLANER-BOARD LOGIK (planer.js) - System-Version 2.7 (Mit DB-Schutz)
    ========================================================================== */
 
 firebase.initializeApp({
@@ -351,7 +351,6 @@ window.addEventListener("DOMContentLoaded", function() {
   roles.forEach(function(r) { activeRoleFilters[r] = true; });
   updateHeaderDateKw();
 
-  // Ersthelfer-Checkbox dynamisch im Formular ergänzen, falls sie im HTML fehlt
   const noRotChk = document.getElementById("newEmpNoRotation");
   if (noRotChk && !document.getElementById("newEmpFirstAider") && noRotChk.parentElement && noRotChk.parentElement.parentElement) {
     const lbl = document.createElement("label");
@@ -370,6 +369,15 @@ window.addEventListener("DOMContentLoaded", function() {
   } else {
     sessionStorage.removeItem("planner_name"); sessionStorage.removeItem("planner_level"); sessionStorage.removeItem("planner_emp_id"); sessionStorage.removeItem("planner_last_active");
   }
+
+  // Sofortiger erzwungener Ladevorgang von der Cloud beim Start gegen leere Listen
+  boardRef.get().then(function(doc) {
+    if (doc.exists) {
+      applyIncomingDocData(doc.data());
+    }
+  }).catch(function(err) {
+    console.error("Initialer Ladefehler:", err);
+  });
 
   initBoard();
 
@@ -500,7 +508,7 @@ function applyIncomingDocData(d) {
     }
 
     let memoryUpdated = false;
-    if (Array.isArray(d.employees)) {
+    if (Array.isArray(d.employees) && d.employees.length > 0) {
       employees = d.employees.filter(Boolean).map(function(e) {
         if (!e.firstName && e.name) { const p = String(e.name).split(" "); e.firstName = p[0] || ""; e.lastName = p.slice(1).join(" ") || ""; }
         if (!Array.isArray(e.mainLines)) e.mainLines = [];
@@ -535,10 +543,8 @@ function applyIncomingDocData(d) {
 
 boardRef.onSnapshot(function(doc) {
   if (doc.exists) applyIncomingDocData(doc.data());
-  else saveToFirebase();
 }, function(err) {
   console.error("Firebase Snapshot-Fehler:", err);
-  initBoard();
 });
 
 window.forceRefreshFromServer = function() {
@@ -1236,7 +1242,6 @@ function deleteSickLeave(id) {
   sickLeaves = sickLeaves.filter(function(x) { return x.id !== id; });
 
   if (sl) {
-    // Logik-Verbesserung 5: Nur stornieren, wenn keine weiteren Teil-Zeiträume desselben Antrags mehr aktiv sind
     leaveRequests.forEach(function(r) {
       const isLinked = (r.id === sl.requestId || r.linkedSickLeaveId === sl.id || (r.empId === sl.empId && r.startDate === sl.startDate && r.endDate === sl.endDate && (r.status === "approved" || r.status === "accepted_counter")));
       if (isLinked) {
@@ -1250,7 +1255,7 @@ function deleteSickLeave(id) {
     });
 
     const emp = employees.find(function(e) { return e.id === sl.empId; });
-    const hasOtherActive = sickLeaves.some(function(x) { return x.empId === sl.empId && x.startDate <= today && x.endDate >= today; });
+    const hasOtherActive = sickLeaves.some(function(x) { return x.id !== sl.empId && x.empId === sl.empId && x.startDate <= today && x.endDate >= today; });
     if (emp && emp.zone === "absent" && !hasOtherActive) returnEmpFromAbsentOrExtra(emp);
   }
   saveToFirebase(); renderInboxModal(); updateInboxBadge(); renderEmployees();
