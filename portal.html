@@ -49,6 +49,8 @@
     .notice-hint { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; padding: 8px 10px; border-radius: 6px; font-size: 0.76rem; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; line-height: 1.3; }
     .req-item { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 12px; font-size: 0.82rem; margin-bottom: 8px; }
     .stamp-tag { font-size: 0.72rem; color: #475569; margin-top: 6px; padding-top: 5px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }
+    .profile-toggle-btn { width: 100%; text-align: left; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 9px 12px; font-size: 0.82rem; font-weight: 700; color: #334155; cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
+    .profile-toggle-btn:hover { background: #f1f5f9; }
   </style>
 </head>
 <body>
@@ -59,7 +61,7 @@
       <div class="header-title"><h1>Mitarbeiter-Portal</h1><span>Persönliche Schicht-, Urlaubs- & Linienübersicht</span></div>
     </div>
     <div class="header-actions">
-      <button id="changePinBtn" class="btn btn-outline" style="display:none;" onclick="openVoluntaryPinChange()">🔑 PIN</button>
+      <button id="headerProfileBtn" class="btn btn-outline" style="display:none;" onclick="openProfilePinSection()">⚙️ Profil & PIN</button>
       <button id="logoutBtn" class="btn btn-outline" style="display:none;" onclick="logoutEmp()">Abmelden</button>
     </div>
   </header>
@@ -67,11 +69,12 @@
   <div class="container">
     <!-- LOGIN -->
     <div id="loginView" class="card">
-      <h2 style="color:var(--bayer-blue); justify-content:center; margin-bottom:16px;">🔐 Mitarbeiter-Anmeldung</h2>
+      <h2 style="color:var(--bayer-blue); justify-content:center; margin-bottom:4px;">🔐 Mitarbeiter-Anmeldung</h2>
+      <div style="text-align:center; font-size:0.7rem; color:#64748b; margin-bottom:14px;">System-Version 2.8</div>
       <div id="loginError" class="error-msg">Name oder Passwort nicht korrekt!</div>
       <div class="form-group" id="nameSearchGroup">
         <label>Dein Name</label>
-        <input type="text" id="loginEmpInput" class="form-control" placeholder="Vor- und Nachname eingeben..." autocomplete="off" oninput="onNameInput(this.value)" onkeydown="if(event.key==='Enter') el('loginPassword').focus()">
+        <input type="text" id="loginEmpInput" class="form-control" placeholder="Vor- und Nachname eingeben..." autocomplete="off" onfocus="onNameInput(this.value)" oninput="onNameInput(this.value)" onkeydown="if(event.key==='Enter') el('loginPassword').focus()">
         <div id="loginSuggestions" class="suggestions-box"></div>
       </div>
       <div class="form-group">
@@ -81,25 +84,24 @@
       <button class="btn btn-primary" onclick="loginEmp()">Anmelden</button>
     </div>
 
-    <!-- PASSWORT ÄNDERN -->
+    <!-- ERST-LOGIN PASSWORT FESTLEGEN (PFLICHT BEI 1234) -->
     <div id="changePasswordView" class="card" style="display:none;">
       <h2 style="color:var(--bayer-blue); margin-bottom:8px;">🔒 Eigenes Passwort festlegen</h2>
-      <p style="font-size:0.85rem; color:#64748b; margin-bottom:16px;">Hallo <b id="cpEmpName"></b>! Bitte vergib jetzt ein persönliches Passwort / PIN (mind. 4 Zeichen) für deine zukünftigen Anmeldungen.</p>
+      <p style="font-size:0.85rem; color:#64748b; margin-bottom:16px;">Hallo <b id="cpEmpName"></b>! Bitte gib deine aktuelle Start-PIN (1234) und zweimal dein neues persönliches Passwort / PIN (mind. 4 Zeichen) ein.</p>
       <div id="cpError" class="error-msg"></div>
-      <div class="form-group"><label>Neues Passwort / PIN</label><input type="password" id="newPasswordInput" class="form-control" placeholder="Neues Passwort eingeben"></div>
+      <div class="form-group"><label>Aktuelle PIN / Passwort</label><input type="password" id="oldPasswordInput" class="form-control" placeholder="Aktuelle PIN (1234)"></div>
+      <div class="form-group"><label>Neues Passwort / PIN (mind. 4 Zeichen)</label><input type="password" id="newPasswordInput" class="form-control" placeholder="Neues Passwort eingeben"></div>
       <div class="form-group"><label>Neues Passwort wiederholen</label><input type="password" id="newPasswordConfirm" class="form-control" placeholder="Passwort bestätigen" onkeydown="if(event.key==='Enter') saveNewPassword()"></div>
-      <div style="display:flex; gap:8px;">
-        <button id="cancelCpBtn" class="btn btn-outline" style="display:none; flex:1;" onclick="cancelVoluntaryPinChange()">Abbrechen</button>
-        <button class="btn btn-primary" style="flex:2;" onclick="saveNewPassword()">Passwort speichern & weiter</button>
-      </div>
+      <button class="btn btn-primary" onclick="saveNewPassword()">Passwort speichern & weiter</button>
     </div>
 
     <!-- HAUPTANSICHT PORTAL -->
     <div id="portalView" style="display:none;">
-      <div class="card">
+      <!-- MEIN PROFIL, QUALIFIKATIONEN & SICHERHEIT -->
+      <div class="card" id="profileCard">
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
           <div>
-            <div style="font-size:0.78rem; color:#64748b;">Angemeldet als</div>
+            <div style="font-size:0.76rem; color:#64748b; font-weight:600;">👤 Mein Profil</div>
             <div id="empWelcomeName" style="font-size:1.25rem; font-weight:700;"></div>
           </div>
           <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
@@ -107,15 +109,49 @@
             <span id="empRoleBadge" style="background:#f1f5f9; padding:5px 10px; border-radius:6px; font-size:0.8rem; font-weight:700;"></span>
           </div>
         </div>
+
+        <div style="border-top:1px solid #f1f5f9; margin-top:12px; padding-top:10px;">
+          <div style="margin-bottom:8px;">
+            <div style="font-size:0.78rem; font-weight:600; color:#475569;">Meine Stammlinien (Prio-Linien):</div>
+            <div id="empPrioLines" class="line-badge-list"></div>
+          </div>
+          <div>
+            <div style="font-size:0.78rem; font-weight:600; color:#475569;">Weitere Linien (Sek-Linien):</div>
+            <div id="empSecLines" class="line-badge-list"></div>
+          </div>
+        </div>
+
         <div id="pwChangedBanner" class="success-banner" style="margin-top:12px; margin-bottom:0;"></div>
+
+        <!-- AUFKLAPPBARER BEREICH: PIN ÄNDERN IM PROFIL -->
+        <button type="button" class="profile-toggle-btn" onclick="toggleProfilePinBox()">
+          <span>🔑 Profil & Sicherheit: Eigene PIN / Passwort ändern</span>
+          <span id="profilePinArrow" style="color:var(--bayer-blue); font-size:0.75rem;">▼ Öffnen</span>
+        </button>
+        <div id="profilePinBox" style="display:none; background:#f8fafc; border:1px solid #cbd5e1; border-top:none; border-radius:0 0 8px 8px; padding:14px;">
+          <div id="profPinError" class="error-msg"></div>
+          <div class="form-group">
+            <label>Aktuelle PIN / Passwort</label>
+            <input type="password" id="profOldPin" class="form-control" style="background:#fff;" placeholder="Aktuelle PIN eingeben...">
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <div class="form-group" style="flex:1; min-width:180px;">
+              <label>Neue PIN (mind. 4 Zeichen)</label>
+              <input type="password" id="profNewPin" class="form-control" style="background:#fff;" placeholder="Neue PIN...">
+            </div>
+            <div class="form-group" style="flex:1; min-width:180px;">
+              <label>Neue PIN wiederholen</label>
+              <input type="password" id="profNewPinConfirm" class="form-control" style="background:#fff;" placeholder="Neue PIN bestätigen..." onkeydown="if(event.key==='Enter') saveProfilePin()">
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="saveProfilePin()">Neue PIN speichern</button>
+        </div>
       </div>
 
-      <div class="card"><h2>📍 Meine heutige Einteilung</h2><div id="empCurrentStatus" class="status-box status-pool"></div></div>
-
+      <!-- HEUTIGE EINTEILUNG -->
       <div class="card">
-        <h2>⚙️ Meine Linien-Qualifikationen</h2>
-        <div style="margin-bottom:10px;"><div style="font-size:0.8rem; font-weight:600; color:#475569;">Meine Stammlinien (Prio-Linien):</div><div id="empPrioLines" class="line-badge-list"></div></div>
-        <div><div style="font-size:0.8rem; font-weight:600; color:#475569;">Weitere Linien (Sek-Linien):</div><div id="empSecLines" class="line-badge-list"></div></div>
+        <h2>📍 Meine heutige Einteilung</h2>
+        <div id="empCurrentStatus" class="status-box status-pool"></div>
       </div>
 
       <!-- 1. KRANKMELDUNG -->
@@ -215,12 +251,17 @@
       "team-3": { name: "Team 3", color: "#10b981", rotates: true },
       "team-4": { name: "Team 4", color: "#f43f5e", rotates: true }
     };
+    let securityConfig = {
+      boardPwEnabled: false,
+      boardPw: "0110",
+      plannerTimeoutMin: 180,
+      portalTimeoutMin: 60
+    };
 
-    const PORTAL_INACTIVITY_MS = 60 * 60 * 1000;
     let loggedInEmpId = localStorage.getItem("portal_emp_id") || null;
     let portalLastActivityTime = Number(localStorage.getItem("portal_last_active") || Date.now());
     let selectedLoginEmpId = null;
-    let voluntaryPinChangeMode = false;
+    let recoveryAttempted = false;
     const bannerTimers = {};
 
     function resetPortalActivity() {
@@ -228,17 +269,13 @@
       if (loggedInEmpId) localStorage.setItem("portal_last_active", String(portalLastActivityTime));
     }
 
-    if (loggedInEmpId && (Date.now() - portalLastActivityTime > PORTAL_INACTIVITY_MS)) {
-      loggedInEmpId = null;
-      localStorage.removeItem("portal_emp_id");
-      localStorage.removeItem("portal_login_time");
-      localStorage.removeItem("portal_last_active");
-    }
-
     setInterval(function() {
-      if (loggedInEmpId && (Date.now() - portalLastActivityTime > PORTAL_INACTIVITY_MS)) {
-        logoutEmp();
-        alert("🔒 Wegen Inaktivität (1 Stunde) wurdest du automatisch abgemeldet.");
+      const timeoutMin = Number(securityConfig.portalTimeoutMin);
+      if (loggedInEmpId && timeoutMin > 0) {
+        if (Date.now() - portalLastActivityTime > timeoutMin * 60 * 1000) {
+          logoutEmp();
+          alert("🔒 Wegen Inaktivität (" + timeoutMin + " Min.) wurdest du automatisch abgemeldet.");
+        }
       }
     }, 15000);
 
@@ -297,7 +334,24 @@
       try { snap = await boardRef.get({ source: "server" }); } catch(e) { snap = await boardRef.get(); }
       const latest = snap.exists ? snap.data() : {};
       const patch = mutatorFn(latest);
-      await boardRef.set(patch, { merge: true });
+      const cleanPatch = JSON.parse(JSON.stringify(patch));
+      await boardRef.set(cleanPatch, { merge: true });
+    }
+
+    function attemptAutoRecoverFromBackups() {
+      if (recoveryAttempted) return;
+      recoveryAttempted = true;
+      db.collection("shiftplan_backups").orderBy("date", "desc").limit(7).get().then(function(snap) {
+        if (snap.empty) return;
+        let found = null;
+        snap.forEach(function(doc) {
+          const b = doc.data();
+          if (!found && b && Array.isArray(b.employees) && b.employees.length > 0) found = b;
+        });
+        if (found) {
+          boardRef.set(JSON.parse(JSON.stringify({ employees: found.employees })), { merge: true });
+        }
+      }).catch(function(){});
     }
 
     window.addEventListener("DOMContentLoaded", function() {
@@ -322,27 +376,48 @@
         extraShifts = Array.isArray(d.extraShifts) ? d.extraShifts : [];
         shiftRotation = d.shiftRotation || {};
         if (d.teamsConfig && typeof d.teamsConfig === "object") teamsConfig = d.teamsConfig;
-        employees = (d.employees || []).map(function(e) {
-          if (!e.firstName && e.name) { const p = e.name.split(" "); e.firstName = p[0] || ""; e.lastName = p.slice(1).join(" ") || ""; }
-          e.password = e.password || "1234"; if (e.mustChangePw === undefined) e.mustChangePw = (e.password === "1234");
-          if (e.noRotation === undefined) e.noRotation = false;
-          return e;
-        });
-        if (loggedInEmpId) {
+        if (d.securityConfig && typeof d.securityConfig === "object") {
+          securityConfig = Object.assign({ boardPwEnabled: false, boardPw: "0110", plannerTimeoutMin: 180, portalTimeoutMin: 60 }, d.securityConfig);
+        }
+
+        const timeoutMin = Number(securityConfig.portalTimeoutMin);
+        if (loggedInEmpId && timeoutMin > 0 && (Date.now() - portalLastActivityTime > timeoutMin * 60 * 1000)) {
+          logoutEmp();
+          return;
+        }
+
+        if (Array.isArray(d.employees) && d.employees.length > 0) {
+          employees = d.employees.filter(Boolean).map(function(e) {
+            if (!e.firstName && e.name) { const p = String(e.name).split(" "); e.firstName = p[0] || ""; e.lastName = p.slice(1).join(" ") || ""; }
+            e.password = e.password || "1234"; if (e.mustChangePw === undefined) e.mustChangePw = (e.password === "1234");
+            if (e.noRotation === undefined) e.noRotation = false;
+            return e;
+          });
+        } else if (employees.length === 0) {
+          attemptAutoRecoverFromBackups();
+        }
+
+        if (loggedInEmpId && employees.length > 0) {
           const emp = employees.find(function(e) { return e.id === loggedInEmpId; });
           emp ? routeAuthenticatedEmp(emp) : logoutEmp();
         }
       }
     });
 
+    // Sofortige Namensvorschläge beim Klicken oder Tippen
     function onNameInput(val) {
-      selectedLoginEmpId = null; const box = el("loginSuggestions"), q = val.trim().toLowerCase();
-      if (!q) { box.style.display = "none"; return; }
-      const m = employees.filter(function(e) { return fullName(e).toLowerCase().indexOf(q) !== -1 || ((e.lastName || "") + " " + (e.firstName || "")).toLowerCase().indexOf(q) !== -1; });
+      selectedLoginEmpId = null;
+      const box = el("loginSuggestions"), q = (val || "").trim().toLowerCase();
+      if (!employees.length) { box.style.display = "none"; return; }
+      const sorted = employees.slice().sort(function(a, b) { return fullName(a).localeCompare(fullName(b)); });
+      const m = q ? sorted.filter(function(e) {
+        return fullName(e).toLowerCase().indexOf(q) !== -1 || ((e.lastName || "") + " " + (e.firstName || "")).toLowerCase().indexOf(q) !== -1;
+      }) : sorted.slice(0, 15);
       if (!m.length) { box.style.display = "none"; return; }
       box.innerHTML = m.map(function(e) { return '<div class="suggestion-item" onclick="selectLoginEmp(\'' + e.id + '\')"><span><b>' + fullName(e) + '</b></span><small style="color:#64748b;">' + e.role + '</small></div>'; }).join("");
       box.style.display = "block";
     }
+
     function selectLoginEmp(id) {
       const e = employees.find(function(x) { return x.id === id; });
       if (e) { selectedLoginEmpId = e.id; el("loginEmpInput").value = fullName(e); el("loginSuggestions").style.display = "none"; el("loginPassword").focus(); }
@@ -352,7 +427,7 @@
       const q = el("loginEmpInput").value.trim().toLowerCase(), pass = el("loginPassword").value.trim();
       let emp = selectedLoginEmpId ? employees.find(function(e) { return e.id === selectedLoginEmpId; }) : employees.find(function(e) { return fullName(e).toLowerCase() === q; });
       if (!emp && q) { const p = employees.filter(function(e) { return fullName(e).toLowerCase().indexOf(q) !== -1; }); if (p.length === 1) emp = p[0]; }
-      if (!emp || (emp.password || "1234") !== pass) { showTimedBanner("loginError", "Name oder Passwort nicht korrekt!", false); return; }
+      if (!emp || (emp.password || "1234") !== pass) { showTimedBanner("loginError", "❌ Name oder Passwort nicht korrekt!", false); return; }
       el("loginError").style.display = "none"; loggedInEmpId = emp.id;
       localStorage.setItem("portal_emp_id", emp.id); localStorage.setItem("portal_login_time", String(Date.now()));
       resetPortalActivity();
@@ -361,62 +436,87 @@
 
     function routeAuthenticatedEmp(emp) {
       el("loginView").style.display = "none"; el("logoutBtn").style.display = "inline-block";
-      if (emp.mustChangePw || emp.password === "1234" || voluntaryPinChangeMode) {
+      if (emp.mustChangePw || emp.password === "1234") {
         el("portalView").style.display = "none";
-        el("changePinBtn").style.display = "none";
+        el("headerProfileBtn").style.display = "none";
         el("changePasswordView").style.display = "block";
         el("cpEmpName").textContent = fullName(emp);
-        el("cancelCpBtn").style.display = voluntaryPinChangeMode ? "inline-block" : "none";
       } else {
         el("changePasswordView").style.display = "none";
-        el("changePinBtn").style.display = "inline-block";
+        el("headerProfileBtn").style.display = "inline-block";
         showPortalFor(emp);
       }
     }
 
-    function openVoluntaryPinChange() {
-      const emp = employees.find(function(e) { return e.id === loggedInEmpId; });
-      if (!emp) return;
-      voluntaryPinChangeMode = true;
-      el("cpError").style.display = "none";
-      el("newPasswordInput").value = "";
-      el("newPasswordConfirm").value = "";
-      routeAuthenticatedEmp(emp);
-    }
-
-    function cancelVoluntaryPinChange() {
-      voluntaryPinChangeMode = false;
-      const emp = employees.find(function(e) { return e.id === loggedInEmpId; });
-      if (emp) routeAuthenticatedEmp(emp);
-    }
-
     function saveNewPassword() {
+      const oldP = el("oldPasswordInput").value.trim();
       const p1 = el("newPasswordInput").value.trim(), p2 = el("newPasswordConfirm").value.trim();
-      if (p1.length < 4) { showTimedBanner("cpError", "Mindestens 4 Zeichen erforderlich!", false); return; }
-      if (p1 === "1234") { showTimedBanner("cpError", "Bitte nicht die Standard-PIN 1234 verwenden!", false); return; }
-      if (p1 !== p2) { showTimedBanner("cpError", "Passwörter stimmen nicht überein!", false); return; }
       const emp = employees.find(function(e) { return e.id === loggedInEmpId; }); if (!emp) return;
+
+      if (oldP !== (emp.password || "1234")) { showTimedBanner("cpError", "❌ Die aktuelle PIN ist nicht korrekt!", false); return; }
+      if (p1.length < 4) { showTimedBanner("cpError", "❌ Neue PIN muss mindestens 4 Zeichen lang sein!", false); return; }
+      if (p1 === "1234") { showTimedBanner("cpError", "❌ Bitte nicht die Standard-PIN 1234 verwenden!", false); return; }
+      if (p1 !== p2) { showTimedBanner("cpError", "❌ Die neuen Passwörter stimmen nicht überein!", false); return; }
+
       el("cpError").style.display = "none";
-      voluntaryPinChangeMode = false;
       safeUpdateBoard(function(latest) {
         const list = (latest.employees || employees).map(function(e) { return e.id === loggedInEmpId ? Object.assign({}, e, { password: p1, mustChangePw: false }) : e; });
         return { employees: list };
       }).then(function() {
-        el("newPasswordInput").value = el("newPasswordConfirm").value = "";
+        el("oldPasswordInput").value = el("newPasswordInput").value = el("newPasswordConfirm").value = "";
         emp.password = p1; emp.mustChangePw = false;
         routeAuthenticatedEmp(emp);
-        showTimedBanner("pwChangedBanner", "✅ Deine neue PIN wurde erfolgreich gespeichert!", false);
+        showTimedBanner("pwChangedBanner", "✅ Deine neue persönliche PIN wurde erfolgreich gespeichert!", false);
+      });
+    }
+
+    // PIN ändern direkt im Bereich "Mein Profil & Sicherheit"
+    function toggleProfilePinBox(forceOpen) {
+      const box = el("profilePinBox"), arr = el("profilePinArrow");
+      if (!box || !arr) return;
+      const isOpen = forceOpen !== undefined ? forceOpen : (box.style.display === "none");
+      box.style.display = isOpen ? "block" : "none";
+      arr.textContent = isOpen ? "▲ Schließen" : "▼ Öffnen";
+    }
+
+    function openProfilePinSection() {
+      toggleProfilePinBox(true);
+      const card = el("profileCard");
+      if (card && card.scrollIntoView) card.scrollIntoView({ behavior: "smooth" });
+      el("profOldPin").focus();
+    }
+
+    function saveProfilePin() {
+      const oldP = el("profOldPin").value.trim();
+      const p1 = el("profNewPin").value.trim();
+      const p2 = el("profNewPinConfirm").value.trim();
+      const emp = employees.find(function(e) { return e.id === loggedInEmpId; }); if (!emp) return;
+
+      if (oldP !== (emp.password || "1234")) { showTimedBanner("profPinError", "❌ Deine aktuelle PIN ist nicht korrekt!", false); return; }
+      if (p1.length < 4) { showTimedBanner("profPinError", "❌ Die neue PIN muss mindestens 4 Zeichen haben!", false); return; }
+      if (p1 === "1234") { showTimedBanner("profPinError", "❌ Bitte nicht die Start-PIN 1234 verwenden!", false); return; }
+      if (p1 !== p2) { showTimedBanner("profPinError", "❌ Die beiden neuen PINs stimmen nicht überein!", false); return; }
+
+      el("profPinError").style.display = "none";
+      safeUpdateBoard(function(latest) {
+        const list = (latest.employees || employees).map(function(e) { return e.id === loggedInEmpId ? Object.assign({}, e, { password: p1, mustChangePw: false }) : e; });
+        return { employees: list };
+      }).then(function() {
+        el("profOldPin").value = el("profNewPin").value = el("profNewPinConfirm").value = "";
+        emp.password = p1; emp.mustChangePw = false;
+        toggleProfilePinBox(false);
+        showTimedBanner("pwChangedBanner", "✅ Deine PIN wurde erfolgreich aktualisiert!", false);
       });
     }
 
     function logoutEmp() {
       loggedInEmpId = selectedLoginEmpId = null;
-      voluntaryPinChangeMode = false;
       localStorage.removeItem("portal_emp_id");
       localStorage.removeItem("portal_login_time");
       localStorage.removeItem("portal_last_active");
       el("loginEmpInput").value = "";
-      el("portalView").style.display = el("changePasswordView").style.display = el("logoutBtn").style.display = el("changePinBtn").style.display = "none";
+      toggleProfilePinBox(false);
+      el("portalView").style.display = el("changePasswordView").style.display = el("logoutBtn").style.display = el("headerProfileBtn").style.display = "none";
       el("loginView").style.display = "block";
     }
 
