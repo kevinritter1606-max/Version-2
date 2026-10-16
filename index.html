@@ -27,39 +27,30 @@
     .btn-primary:hover { background: #0077b6; }
     .btn-outline { border-color: #cbd5e1; background: #fff; color: #475569; }
     .btn-outline:hover { background: #f8fafc; }
-    
-    /* SCHICHT-FREIGABE BANNER (ROT / GRÜN) */
-    .shift-approval-banner {
-      padding: 6px 24px;
-      font-size: 0.82rem;
+
+    /* KOMPAKTER FREIGABE-BUTTON IM HEADER (ROT / GRÜN) */
+    .btn-shift-approval {
+      font-size: 0.8rem;
       font-weight: 700;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border-bottom: 1px solid rgba(0,0,0,0.05);
-      transition: background 0.2s, color 0.2s;
-    }
-    .shift-approval-banner.pending {
-      background: #fef2f2;
-      color: #991b1b;
-      border-bottom-color: #fecaca;
-    }
-    .shift-approval-banner.approved {
-      background: #f0fdf4;
-      color: #166534;
-      border-bottom-color: #bbf7d0;
-    }
-    .btn-approval-toggle {
-      display: none;
-      font-size: 0.75rem;
-      padding: 3px 10px;
-      border-radius: 4px;
+      padding: 7px 12px;
+      border-radius: 6px;
       cursor: pointer;
-      font-weight: 700;
-      border: 1px solid currentColor;
-      background: #fff;
+      border: 1.5px solid transparent;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
     }
-    body.planner-active .btn-approval-toggle { display: inline-block; }
+    .btn-shift-approval.pending {
+      background: #fee2e2;
+      color: #b91c1c;
+      border-color: #fca5a5;
+    }
+    .btn-shift-approval.approved {
+      background: #dcfce7;
+      color: #15803d;
+      border-color: #86efac;
+    }
 
     .inbox-badge { position: absolute; top: -6px; right: -6px; background: #dc2626; color: #fff; font-size: 0.72rem; font-weight: 800; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; display: none; align-items: center; justify-content: center; }
     main { padding: 16px; display: flex; gap: 16px; flex: 1; width: 100%; }
@@ -148,7 +139,7 @@
   <div class="brand-gradient"></div>
   <div id="toastBanner" class="toast-banner">Gespeichert</div>
 
-  <!-- START-PASSWORT SPERRE FÜR DIE SCHICHT-ÜBERSICHT -->
+  <!-- START-PASSWORT SPERRE -->
   <div id="boardLockModal" class="modal-overlay" style="background: rgba(15,23,42,0.92); z-index: 180;">
     <div class="modal" style="max-width: 380px; text-align: center;">
       <h3 style="color: var(--bayer-blue); margin-bottom: 6px;">🔒 Schicht- und Linienübersicht</h3>
@@ -175,17 +166,16 @@
       </div>
     </div>
     <div class="header-actions">
+      <!-- KOMPAKTER FREIGABE-BUTTON (ROT / GRÜN) -->
+      <button id="shiftApprovalBtn" class="btn-shift-approval pending" onclick="toggleShiftApprovalState()">
+        ⏳ Freigeben
+      </button>
+
       <button class="btn btn-outline lvl-3-only" onclick="openInboxModal()">📬 Postfach & Anträge <span id="inboxBadge" class="inbox-badge">0</span></button>
       <button class="btn btn-outline admin-element" onclick="openSettingsModal()">⚙️ Einstellungen</button>
       <button class="btn btn-outline admin-element" onclick="logoutPlanner()">Abmelden</button>
     </div>
   </header>
-
-  <!-- DEZENTES SCHICHT-FREIGABE BANNER (ROT / GRÜN) -->
-  <div id="shiftApprovalBanner" class="shift-approval-banner pending">
-    <span id="shiftApprovalText">⏳ Warte auf Freigabe der Schicht</span>
-    <button id="shiftApprovalBtn" class="btn-approval-toggle" onclick="toggleShiftApprovalState()">Freigeben</button>
-  </div>
 
   <main>
     <aside class="sidebar">
@@ -481,32 +471,33 @@
 
   <script src="planer.js"></script>
   <script>
-    // Kleine Zusatzfunktion für das Schicht-Freigabe-Banner in index.html
     let isShiftApproved = false;
+
     function updateShiftApprovalUI() {
-      const banner = el("shiftApprovalBanner");
-      const text = el("shiftApprovalText");
-      const btn = el("shiftApprovalBtn");
-      if (!banner) return;
+      const btn = document.getElementById("shiftApprovalBtn");
+      if (!btn) return;
       if (isShiftApproved) {
-        banner.className = "shift-approval-banner approved";
-        text.innerHTML = "✅ Schichtplan für diese Schicht freigegeben";
-        btn.textContent = "Zurückziehen";
+        btn.className = "btn-shift-approval approved";
+        btn.innerHTML = "✅ Freigegeben";
       } else {
-        banner.className = "shift-approval-banner pending";
-        text.innerHTML = "⏳ Warte auf Freigabe der Frühschicht";
-        btn.textContent = "Freigeben";
+        btn.className = "btn-shift-approval pending";
+        btn.innerHTML = "⏳ Freigeben";
       }
     }
+
     window.toggleShiftApprovalState = function() {
-      if (!isPlanner) {
+      // Prüfen ob Planer angemeldet ist
+      if (!document.body.classList.contains("planner-active")) {
         alert("Nur angemeldete Planer können die Schicht freigeben.");
         return;
       }
       isShiftApproved = !isShiftApproved;
       updateShiftApprovalUI();
-      showToast(isShiftApproved ? "✅ Schichtplan freigegeben!" : "🔒 Freigabe zurückgezogen.");
+      if (typeof showToast === "function") {
+        showToast(isShiftApproved ? "✅ Schicht erfolgreich freigegeben!" : "🔒 Freigabe zurückgezogen.");
+      }
     };
+
     window.addEventListener("DOMContentLoaded", function() {
       updateShiftApprovalUI();
     });
