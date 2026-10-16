@@ -1,5 +1,5 @@
 /* ==========================================================================
-   PLANER-BOARD LOGIK (planer.js) - System-Version 2.6 (Modular)
+   PLANER-BOARD LOGIK (planer.js) - System-Version 2.6 (Vollständig)
    ========================================================================== */
 
 firebase.initializeApp({
@@ -26,10 +26,9 @@ let teamsConfig = {
 let activeTeamFilters = {}, activeRoleFilters = {}, poolSearchQuery = "";
 let inboxSearchQuery = "", inboxUnreadFilter = "all", inboxActiveFilter = "all";
 let selectedManualSickEmpId = null, selectedLoginPlannerId = null;
-let isPlanner = false, plannerLevel = 0, currentPlannerName = "", currentPlannerEmpId = null;
+let isPlanner = false, plannerLevel = 0, currentPlannerName = "", currentPlannerEmpId = null, pendingPinChangeEmpId = null;
 let sortableInstances = [], backupDoneToday = false;
 
-// 3 Stunden Inaktivitäts-Logout für das Planer-Board
 const PLANER_INACTIVITY_MS = 3 * 60 * 60 * 1000;
 let planerLastActivityTime = Date.now();
 function resetPlanerActivity() {
@@ -43,7 +42,6 @@ setInterval(function() {
   }
 }, 30000);
 
-// Datums-Wächter für Mitternacht (00:00 Uhr Aktualisierung)
 let lastCheckedDateIso = getTodayIso();
 setInterval(function() {
   const curDate = getTodayIso();
@@ -52,6 +50,7 @@ setInterval(function() {
     const changed = processSickLeavesAutomation();
     if (changed) saveToFirebase();
     updateHeaderDateKw();
+    initBoard();
   }
 }, 60000);
 
@@ -65,6 +64,51 @@ function extractLineIdFromZone(z) { return (!z || ["pool","absent","extra"].inde
 function extractShiftIdFromZone(z) { return (!z || ["pool","absent","extra"].indexOf(z) !== -1 || z.indexOf("_") === -1) ? null : z.split("_").pop(); }
 function isTeamRotating(teamKey) { return teamsConfig[teamKey] ? (teamsConfig[teamKey].rotates !== false) : true; }
 function isEmpProtectedFromRotation(emp) { return !!(emp.noRotation || !isTeamRotating(emp.team)); }
+
+function parseIsoLocal(iso) {
+  if (!iso || iso.indexOf("-") === -1) return 0;
+  const p = iso.split("-").map(Number);
+  return new Date(p[0], p[1] - 1, p[2], 12, 0, 0).getTime();
+}
+function canMergeDateRanges(s1, e1, s2, e2) {
+  const msDay = 86400000, tS1 = parseIsoLocal(s1), tE1 = parseIsoLocal(e1), tS2 = parseIsoLocal(s2), tE2 = parseIsoLocal(e2);
+  return (tS1 && tE1 && tS2 && tE2) ? (tS1 <= tE2 + msDay * 1.1) && (tS2 <= tE1 + msDay * 1.1) : false;
+}
+function calcSickDays(s, e) {
+  const diff = Math.round((parseIsoLocal(e) - parseIsoLocal(s)) / 86400000) + 1;
+  return diff > 0 ? diff : 1;
+}
+function mergeReasonsText(r1, r2) {
+  const a = (r1 || "").trim(), b = (r2 || "").trim();
+  if (!a || a === "Vom Planer eingetragen") return b || a;
+  if (!b || b === "Vom Planer eingetragen") return a;
+  if (a.toLowerCase().indexOf(b.toLowerCase()) !== -1) return a;
+  if (b.toLowerCase().indexOf(a.toLowerCase()) !== -1) return b;
+  return a + " | " + b;
+}
+
+function getPredeterminedLineForEmp(emp) {
+  if (emp.lastLineId && lines.some(function(l) { return l.id === emp.lastLineId; })) return emp.lastLineId;
+  if (emp.mainLines && emp.mainLines.length > 0 && lines.some(function(l) { return l.id === emp.mainLines[0]; })) {
+    emp.lastLineId = emp.mainLines[0];
+    return emp.mainLines[0];
+  }
+  return null;
+}
+
+function returnEmpFromAbsentOrExtra(emp) {
+  const l = getPredeterminedLineForEmp(emp);
+  if (isEmpProtectedFromRotation(emp) && emp.lastShiftId && l) emp.zone = l + "_" + emp.lastShiftId;
+  else if (emp.team === shiftRotation.frueh && l && !isEmpProtectedFromRotation(emp)) emp.zone = l + "_frueh";
+  else if (emp.team === shiftRotation.spaet && l && !isEmpProtectedFromRotation(emp)) emp.zone = l + "_spaet";
+  else if (emp.team === shiftRotation.nacht && l && !isEmpProtectedFromRotation(emp)) emp.zone = l + "_nacht";
+  else emp.zone = "pool";
+}
+
+window.deletePin = function(id) {
+  const emp = employees.find(function(e) { return e.id === id; });
+  if (emp) { delete emp.lastLineId; saveToFirebase(); renderEmployees(); }
+};
 
 function getCalendarWeek(d) {
   const target = new Date(d.valueOf());
@@ -80,10 +124,8 @@ function updateHeaderDateKw() {
   const el = document.getElementById("headerDateKw");
   if (!el) return;
   const now = new Date();
-  const options = { weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit' };
-  const dateStr = now.toLocaleDateString("de-DE", options);
-  const kw = getCalendarWeek(now);
-  el.textContent = "📅 " + dateStr + " · KW " + kw;
+  const dateStr = now.toLocaleDateString("de-DE", { weekday: "short", year: "numeric", month: "2-digit", day: "2-digit" });
+  el.textContent = "📅 " + dateStr + " · KW " + getCalendarWeek(now);
 }
 
 function showToast(msg) {
@@ -100,9 +142,174 @@ function closeModal(id) {
   if (id === "settingsModal") resetEmpForm();
 }
 
-function openChangePinModal() {
-  if (!isPlanner) return;
-  document.getElementById("changePinError").style.display = "none";
+function styleShiftDropdown(selEl, teamKey) {
+  if (!selEl) return;
+  const tObj = teamsConfig[teamKey];
+  if (tObj) {
+    selEl.style.borderLeft = "6px solid " + tObj.color;
+    selEl.style.color = tObj.color;
+    selEl.style.fontWeight = "700";
+  }
+}
+
+function initBoard() {
+  const headerRow = document.getElementById("headerRow");
+  if (!headerRow) return;
+  if (!Array.isArray(lines) || lines.length === 0) lines = defaultLines.slice();
+
+  headerRow.innerHTML = '<th class="shift-header"><div>Schicht</div><div class="shift-controls"><button class="shift-rotate-btn" onclick="rotateAllShifts()">🔄 Rotieren</button><button class="shift-clear-btn" onclick="clearEntireBoard()">🧹 Alle leeren</button></div></th>';
+  lines.forEach(function(line) {
+    const th = document.createElement("th"); th.className = "line-header";
+    if (isPlanner) th.onclick = function() { openLineEditModal(line.id); };
+    let pCls = line.prio && (line.prio.indexOf("1") !== -1 || line.prio.indexOf("2") !== -1) ? "prio-high" : (line.prio ? "prio-mid" : "");
+    th.innerHTML = '<div class="line-title">' + line.name + '</div><div class="badge-container">' + (line.prio ? '<span class="line-prio ' + pCls + '">' + line.prio + '</span>' : '') + (line.tag ? '<span class="line-status-tag">' + line.tag + '</span>' : '') + '</div>' + (line.note ? '<div class="line-notes">' + line.note + '</div>' : '');
+    headerRow.appendChild(th);
+  });
+
+  const matrixBody = document.getElementById("matrixBody"); matrixBody.innerHTML = "";
+  const keys = Object.keys(teamsConfig).sort();
+  shifts.forEach(function(shift) {
+    const curKey = shiftRotation[shift.id] || keys[0], curObj = teamsConfig[curKey] || { name: "Team", color: "#0091df" };
+    const opts = keys.map(function(k) {
+      return '<option value="' + k + '" style="color:' + teamsConfig[k].color + '; font-weight:700;" ' + (k === curKey ? 'selected' : '') + '>■ ' + teamsConfig[k].name + (isTeamRotating(k) ? ' 🔄' : '') + '</option>';
+    }).join("");
+    const tr = document.createElement("tr"), thS = document.createElement("th");
+    thS.className = "shift-header";
+    thS.innerHTML = '<div>' + shift.name + '</div><div class="shift-team-badge"><span style="color:' + curObj.color + ';">■</span> ' + curObj.name + '</div><div class="shift-controls"><div style="display:flex; gap:4px;"><select id="teamSelect_' + shift.id + '" class="shift-team-select" style="flex:1; border-left:6px solid ' + curObj.color + '; color:' + curObj.color + ';" onchange="styleShiftDropdown(this, this.value)">' + opts + '</select><button class="shift-clear-btn" style="width:26px; padding:0; color:var(--bayer-blue); border-color:var(--bayer-blue);" onclick="loadTeamToShift(\'' + shift.id + '\')" title="Team auf Linien laden">📥</button></div><button class="shift-clear-btn" onclick="clearShiftRow(\'' + shift.id + '\', \'' + shift.name + '\')">🧹 Leeren</button></div>';
+    tr.appendChild(thS);
+    lines.forEach(function(line) {
+      const td = document.createElement("td"), zId = line.id + "_" + shift.id;
+      td.innerHTML = '<div id="' + zId + '" class="card-list drop-zone" data-zone="' + zId + '"></div>';
+      tr.appendChild(td);
+    });
+    matrixBody.appendChild(tr);
+  });
+
+  renderEmployees(); initDragAndDrop(); updateRoleDropdown(); updateTeamDropdowns(); renderTeamFilterCheckboxes(); renderRoleFilterCheckboxes(); applyTeamStyles(); renderLineCheckboxes(); updateInboxBadge();
+}
+
+function renderEmployees() {
+  document.querySelectorAll(".drop-zone").forEach(function(el) { el.innerHTML = ""; });
+  const today = getTodayIso();
+  const displayList = employees.slice();
+  if (isPlanner && poolSearchQuery) {
+    displayList.sort(function(a, b) {
+      if (a.zone !== "pool" || b.zone !== "pool") return 0;
+      const aM = (a.mainLines && a.mainLines.some(function(id) { const l = lines.find(function(x){return x.id===id;}); return l && l.name.toLowerCase().indexOf(poolSearchQuery) !== -1; })) ? 2 : ((a.secLines && a.secLines.some(function(id) { const l = lines.find(function(x){return x.id===id;}); return l && l.name.toLowerCase().indexOf(poolSearchQuery) !== -1; })) ? 1 : 0);
+      const bM = (b.mainLines && b.mainLines.some(function(id) { const l = lines.find(function(x){return x.id===id;}); return l && l.name.toLowerCase().indexOf(poolSearchQuery) !== -1; })) ? 2 : ((b.secLines && b.secLines.some(function(id) { const l = lines.find(function(x){return x.id===id;}); return l && l.name.toLowerCase().indexOf(poolSearchQuery) !== -1; })) ? 1 : 0);
+      return bM - aM;
+    });
+  }
+
+  displayList.forEach(function(emp) {
+    const fName = fullName(emp);
+    if (isPlanner && emp.zone === "pool") {
+      if (activeTeamFilters[emp.team] === false || activeRoleFilters[emp.role] === false) return;
+      if (poolSearchQuery) {
+        const nMatch = fName.toLowerCase().indexOf(poolSearchQuery) !== -1;
+        const pMatch = emp.mainLines && emp.mainLines.some(function(id) { const l = lines.find(function(x){return x.id===id;}); return l && l.name.toLowerCase().indexOf(poolSearchQuery) !== -1; });
+        const sMatch = emp.secLines && emp.secLines.some(function(id) { const l = lines.find(function(x){return x.id===id;}); return l && l.name.toLowerCase().indexOf(poolSearchQuery) !== -1; });
+        if (!nMatch && !pMatch && !sMatch) return;
+      }
+    }
+
+    const card = document.createElement("div");
+    card.className = "employee-card " + emp.team; card.setAttribute("data-id", emp.id);
+    let parts = [];
+    if (emp.lastLineId) {
+      const lastL = lines.find(function(x) { return x.id === emp.lastLineId; });
+      if (lastL) {
+        const delBtn = emp.zone === "pool" ? '<span onclick="event.stopPropagation(); deletePin(\'' + emp.id + '\')" style="cursor:pointer; color:#ef4444; font-size:0.75rem; padding:0 3px;">✖</span>' : "";
+        parts.push('<span style="color:#0284c7; font-weight:700;">📌 ' + lastL.name.replace(/Linie\s*/i, '') + ' ' + delBtn + '</span>');
+      }
+    }
+    if (emp.mainLines && emp.mainLines.length) {
+      parts.push("<b>Prio:</b> " + emp.mainLines.map(function(id) { const l = lines.find(function(x){return x.id===id;}); return l ? l.name.replace(/Linie\s*/i, '') : null; }).filter(Boolean).join(", "));
+    }
+    if (emp.secLines && emp.secLines.length) {
+      parts.push('<span style="color:#94a3b8;">Sek:</span> ' + emp.secLines.map(function(id) { const l = lines.find(function(x){return x.id===id;}); return l ? l.name.replace(/Linie\s*/i, '') : null; }).filter(Boolean).join(", "));
+    }
+
+    const fixHtml = emp.noRotation ? '<span class="card-fix-tag" title="Fixiert (rotiert nicht)">⚓ Fix</span>' : '';
+    const activeSl = sickLeaves.find(function(sl) { return sl.empId === emp.id && sl.startDate <= today && sl.endDate >= today; });
+    const sickHtml = activeSl ? '<span class="card-sick-tag">' + (activeSl.category && activeSl.category.indexOf('Urlaub') !== -1 ? '🌴' : '🏥') + ' Bis ' + formatDateDe(activeSl.endDate) + '</span>' : '';
+    const activeEs = extraShifts.find(function(es) { return es.empId === emp.id && es.status === "approved" && es.date >= today; });
+    const extraHtml = activeEs ? '<span class="card-extra-tag">➕ ' + formatDateDe(activeEs.date) + ' (' + (shiftsLabel[activeEs.shift] || activeEs.shift) + ' | ' + (activeEs.note || 'BS') + ')</span>' : '';
+
+    card.innerHTML =
+      '<div class="card-name">' + fName + '</div>' +
+      '<div style="display:flex; justify-content:space-between; align-items:center; gap:4px;">' +
+        '<div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap;">' +
+          '<span class="card-role">' + emp.role + '</span>' +
+          fixHtml +
+        '</div>' +
+        '<div style="display:flex; align-items:center; gap:3px;">' +
+          '<button class="quick-sick-btn" onclick="openInboxModal(\'' + emp.id + '\', true)" title="Abwesenheit eintragen">🏥</button>' +
+          (emp.ersthelfer ? '<span style="color:#dc2626; font-size:1.2rem; font-weight:900; line-height:0.5;" title="Ersthelfer">+</span>' : '') +
+        '</div>' +
+      '</div>' +
+      (parts.length ? '<div class="card-lines-info">' + parts.join(" | ") + '</div>' : '') +
+      extraHtml + sickHtml;
+
+    const targetZone = document.getElementById(emp.zone) || document.getElementById("pool");
+    if (targetZone) targetZone.appendChild(card);
+  });
+
+  const pEl = document.getElementById("pool"), eEl = document.getElementById("extra"), aEl = document.getElementById("absent");
+  if (document.getElementById("poolCount")) document.getElementById("poolCount").textContent = "(" + (pEl ? pEl.children.length : 0) + ")";
+  if (document.getElementById("extraCount")) document.getElementById("extraCount").textContent = "(" + (eEl ? eEl.children.length : 0) + ")";
+  if (document.getElementById("absentCount")) document.getElementById("absentCount").textContent = "(" + (aEl ? aEl.children.length : 0) + ")";
+
+  const extraListEl = document.getElementById("approvedExtraList");
+  if (extraListEl) {
+    const appr = extraShifts.filter(function(es) {
+      if (es.status !== "approved" || es.date < today) return false;
+      const isSickOnThatDay = sickLeaves.some(function(sl) { return sl.empId === es.empId && sl.startDate <= es.date && sl.endDate >= es.date; });
+      return !isSickOnThatDay;
+    }).sort(function(a,b) { return a.date.localeCompare(b.date); });
+
+    extraListEl.innerHTML = appr.map(function(es) {
+      return '<div style="display:flex; justify-content:space-between; align-items:center; background:#dcfce7; padding:3px 6px; border-radius:4px; margin-top:3px; color:#166534;">' +
+        '<span><b>' + es.empName + '</b>: ' + formatDateDe(es.date) + ' (' + shiftsLabel[es.shift] + ')</span>' +
+        '<div style="display:flex; gap:4px;">' +
+          '<button onclick="pullExtraShiftToBox(\'' + es.id + '\')" style="border:none; background:#16a34a; color:#fff; border-radius:3px; padding:1px 5px; cursor:pointer; font-size:0.68rem;" title="Karte vorab in dieses Zusatz-Fenster holen">📥</button>' +
+          '<button onclick="deleteExtraShift(\'' + es.id + '\')" style="border:none; background:none; color:#b91c1c; cursor:pointer; font-size:0.72rem;" title="Bringschicht entfernen">✖</button>' +
+        '</div>' +
+      '</div>';
+    }).join("");
+  }
+}
+
+function initDragAndDrop() {
+  sortableInstances.forEach(function(s) { s.destroy(); }); sortableInstances = [];
+  document.querySelectorAll(".drop-zone").forEach(function(zone) {
+    sortableInstances.push(new Sortable(zone, {
+      group: "shared-shifts", animation: 150, disabled: !isPlanner,
+      onEnd: function (evt) {
+        const empId = evt.item.getAttribute("data-id"), newZone = evt.to.getAttribute("data-zone");
+        const emp = employees.find(function(e) { return e.id === empId; });
+        if (emp) {
+          emp.zone = newZone;
+          const nL = extractLineIdFromZone(newZone), nS = extractShiftIdFromZone(newZone);
+          if (nL && nS) emp.lastShiftId = nS;
+          if (nL && (!emp.lastLineId || (nS && shiftRotation[nS] === emp.team) || isEmpProtectedFromRotation(emp))) emp.lastLineId = nL;
+          saveToFirebase(); renderEmployees();
+        }
+      }
+    }));
+  });
+}
+
+function openChangePinModal(isMandatory) {
+  if (!isPlanner && !pendingPinChangeEmpId) return;
+  const err = document.getElementById("changePinError");
+  if (isMandatory) {
+    err.style.background = "#fef3c7"; err.style.color = "#b45309";
+    err.textContent = "🔒 Erst-Anmeldung mit Start-PIN 1234: Bitte vergib jetzt deine eigene Planer-PIN!";
+    err.style.display = "block";
+  } else {
+    err.style.display = "none";
+  }
   document.getElementById("newPlannerPinInput").value = "";
   document.getElementById("newPlannerPinConfirm").value = "";
   document.getElementById("changePinModal").style.display = "flex";
@@ -112,20 +319,31 @@ function saveNewPlannerPin() {
   const p1 = document.getElementById("newPlannerPinInput").value.trim();
   const p2 = document.getElementById("newPlannerPinConfirm").value.trim();
   const err = document.getElementById("changePinError");
+  err.style.background = "#fee2e2"; err.style.color = "#b91c1c";
   err.style.display = "none";
 
   if (p1.length < 4) { err.textContent = "Mindestens 4 Zeichen erforderlich!"; err.style.display = "block"; return; }
   if (p1 === "1234") { err.textContent = "Bitte nicht die Standard-PIN 1234 verwenden!"; err.style.display = "block"; return; }
   if (p1 !== p2) { err.textContent = "Passwörter stimmen nicht überein!"; err.style.display = "block"; return; }
 
-  const emp = employees.find(function(e) { return e.id === currentPlannerEmpId; });
-  if (!emp) { alert("Admin-Modus oder kein Mitarbeiter-Profil verknüpft."); closeModal("changePinModal"); return; }
+  const targetId = pendingPinChangeEmpId || currentPlannerEmpId;
+  const emp = employees.find(function(e) { return e.id === targetId; });
+  if (!emp) {
+    alert("Du bist als allgemeiner Admin angemeldet. Bitte melde dich mit deinem eigenen Namen an, um deine persönliche PIN zu ändern.");
+    closeModal("changePinModal"); return;
+  }
 
   emp.password = p1;
   emp.mustChangePw = false;
+  pendingPinChangeEmpId = null;
   saveToFirebase();
   closeModal("changePinModal");
-  showToast("✅ Planer-PIN erfolgreich geändert!");
+
+  if (!isPlanner) {
+    applyPlannerLoginState(fullName(emp), Number(emp.accessLevel) || 2, emp.id);
+    initBoard();
+  }
+  showToast("✅ Planer-PIN erfolgreich gespeichert!");
 }
 
 window.addEventListener("DOMContentLoaded", function() {
@@ -133,16 +351,22 @@ window.addEventListener("DOMContentLoaded", function() {
   roles.forEach(function(r) { activeRoleFilters[r] = true; });
   updateHeaderDateKw();
 
+  // Ersthelfer-Checkbox dynamisch im Formular ergänzen, falls sie im HTML fehlt
+  const noRotChk = document.getElementById("newEmpNoRotation");
+  if (noRotChk && !document.getElementById("newEmpFirstAider") && noRotChk.parentElement && noRotChk.parentElement.parentElement) {
+    const lbl = document.createElement("label");
+    lbl.style.cssText = "display:flex; align-items:center; gap:6px; cursor:pointer;";
+    lbl.innerHTML = '<input type="checkbox" id="newEmpFirstAider"> Ersthelfer <span style="color:#dc2626; font-weight:900;">+</span>';
+    noRotChk.parentElement.parentElement.insertBefore(lbl, noRotChk.parentElement);
+  }
+
   const savedName = sessionStorage.getItem("planner_name");
   const savedLvl = Number(sessionStorage.getItem("planner_level") || 0);
   const savedEmpId = sessionStorage.getItem("planner_emp_id");
   const lastAct = Number(sessionStorage.getItem("planner_last_active") || Date.now());
 
   if (savedName && savedLvl >= 2 && (Date.now() - lastAct <= PLANER_INACTIVITY_MS)) {
-    isPlanner = true; plannerLevel = savedLvl; currentPlannerName = savedName; currentPlannerEmpId = savedEmpId;
-    document.body.classList.add("planner-active");
-    document.body.classList.toggle("planner-lvl-3", savedLvl === 3);
-    document.getElementById("plannerStatusBadge").textContent = "👤 " + savedName + " (Stufe " + savedLvl + ")";
+    applyPlannerLoginState(savedName, savedLvl, savedEmpId);
   } else {
     sessionStorage.removeItem("planner_name"); sessionStorage.removeItem("planner_level"); sessionStorage.removeItem("planner_emp_id"); sessionStorage.removeItem("planner_last_active");
   }
@@ -221,11 +445,10 @@ function verifyPin() {
     errBox.textContent = "⛔ Bitte kontaktiere deinen Vorgesetzten für Administrationsrechte (Aktuell: Stufe 1)."; errBox.style.display = "block"; return;
   }
 
-  // Prüfen auf Erst-Login mit Standard-PIN 1234
   if (emp.password === "1234" || emp.mustChangePw) {
     closeModal("pinModal");
-    currentPlannerEmpId = emp.id;
-    openChangePinModal();
+    pendingPinChangeEmpId = emp.id;
+    openChangePinModal(true);
     return;
   }
 
@@ -233,7 +456,7 @@ function verifyPin() {
 }
 
 function applyPlannerLoginState(name, lvl, empId) {
-  isPlanner = true; plannerLevel = lvl; currentPlannerName = name; currentPlannerEmpId = empId;
+  isPlanner = true; plannerLevel = lvl; currentPlannerName = name; currentPlannerEmpId = empId || null;
   sessionStorage.setItem("planner_name", name);
   sessionStorage.setItem("planner_level", lvl);
   if (empId) sessionStorage.setItem("planner_emp_id", empId);
@@ -244,7 +467,7 @@ function applyPlannerLoginState(name, lvl, empId) {
 }
 
 function logoutPlanner() {
-  isPlanner = false; plannerLevel = 0; currentPlannerName = ""; currentPlannerEmpId = null;
+  isPlanner = false; plannerLevel = 0; currentPlannerName = ""; currentPlannerEmpId = null; pendingPinChangeEmpId = null;
   sessionStorage.removeItem("planner_name"); sessionStorage.removeItem("planner_level"); sessionStorage.removeItem("planner_emp_id"); sessionStorage.removeItem("planner_last_active");
   document.body.classList.remove("planner-active", "planner-lvl-3");
   closeModal("pinModal"); closeModal("inboxModal"); closeModal("settingsModal"); closeModal("lineEditModal"); closeModal("changePinModal");
@@ -531,12 +754,7 @@ window.rejectLeaveRequest = function(reqId) {
 
 window.acknowledgeLeaveCancel = function(reqId) {
   const req = leaveRequests.find(function(r) { return r.id === reqId; });
-  if (req) { req.cancelUnreadByPlanner = false; saveToFirebase(); renderInboxModal(); updateInboxBadge(); }
-};
-
-window.acknowledgeCounterResponse = function(reqId) {
-  const req = leaveRequests.find(function(r) { return r.id === reqId; });
-  if (req) { req.counterResponseUnread = false; saveToFirebase(); renderInboxModal(); updateInboxBadge(); }
+  if (req) { req.cancelUnreadByPlanner = false; req.counterResponseUnread = false; saveToFirebase(); renderInboxModal(); updateInboxBadge(); }
 };
 
 window.acknowledgeExtraCancel = function(esId) {
@@ -581,8 +799,10 @@ window.approveExtraShift = function(esId) {
   const today = getTodayIso();
   es.status = "approved"; es.approvedBy = currentPlannerName; es.approvedAt = new Date().toLocaleString("de-DE");
   const emp = employees.find(function(e) { return e.id === es.empId; });
-  const hasActiveAbsence = sickLeaves.some(function(sl) { return sl.empId === emp.id && sl.startDate <= today && sl.endDate >= today; });
-  if (emp && emp.zone === "pool" && es.date === today && !hasActiveAbsence) { emp.zone = "extra"; es.placedOnBoard = true; }
+  if (emp) {
+    const hasActiveAbsence = sickLeaves.some(function(sl) { return sl.empId === emp.id && sl.startDate <= today && sl.endDate >= today; });
+    if (emp.zone === "pool" && es.date === today && !hasActiveAbsence) { emp.zone = "extra"; es.placedOnBoard = true; }
+  }
   saveToFirebase(); renderInboxModal(); updateInboxBadge(); renderEmployees();
 };
 
@@ -597,7 +817,15 @@ window.pullExtraShiftToBox = function(esId) {
   const es = extraShifts.find(function(x) { return x.id === esId; });
   if (!es) return;
   const emp = employees.find(function(e) { return e.id === es.empId; });
-  if (emp) { emp.zone = "extra"; es.placedOnBoard = true; saveToFirebase(); renderEmployees(); }
+  if (emp) {
+    const today = getTodayIso();
+    const isAbsentToday = sickLeaves.some(function(sl) { return sl.empId === emp.id && sl.startDate <= today && sl.endDate >= today; });
+    if (isAbsentToday || emp.zone === "absent") {
+      alert("⚠️ Dieser Mitarbeiter ist heute als abwesend (Krank/Urlaub) gemeldet und kann nicht ins Bringschicht-Fenster gezogen werden!");
+      return;
+    }
+    emp.zone = "extra"; es.placedOnBoard = true; saveToFirebase(); renderEmployees();
+  }
 };
 
 window.deleteExtraShift = function(esId) {
@@ -648,7 +876,7 @@ window.saveSickLeaveDates = function(id) {
   sl.approvedAt = new Date().toLocaleString("de-DE");
 
   const linkedReq = leaveRequests.find(function(r) { return r.id === sl.requestId || r.linkedSickLeaveId === sl.id || (r.empId === sl.empId && r.startDate === oldStart && r.endDate === oldEnd && r.status === "approved"); });
-  if (linkedReq) {
+  if (linkedReq && linkedReq.status === "approved") {
     linkedReq.startDate = sl.startDate;
     linkedReq.endDate = sl.endDate;
     linkedReq.approvedBy = currentPlannerName;
@@ -752,7 +980,7 @@ function addManualSickLeave() {
   }
   selectedManualSickEmpId = null; document.getElementById("manualSickEmpInput").value = ""; document.getElementById("manualSickReason").value = "";
   toggleManualEntryBox(false);
-  saveToFirebase(); renderInboxModal(); renderEmployees();
+  saveToFirebase(); renderInboxModal(); renderEmployees(); showToast("✅ Zeitraum eingetragen!");
 }
 
 function renderInboxModal() {
@@ -799,23 +1027,25 @@ function renderInboxModal() {
       if (!matchesInboxSearch([lr.empName, lr.type, lr.reason, formatDateDe(lr.startDate), formatDateDe(lr.endDate), lr.startDate, lr.endDate, "storno", "antwort"])) return;
       let titleText = '🚫 Stornierung durch Mitarbeiter: ' + lr.empName;
       let bodyText = 'Der Mitarbeiter hat seinen <b>' + lr.type + ' (' + formatDateDe(lr.startDate) + ' – ' + formatDateDe(lr.endDate) + ')</b> storniert.';
+      let cardStyle = 'border-left-color:#dc2626;';
       if (lr.counterResponseUnread) {
         if (lr.status === "accepted_counter") {
           titleText = '✅ Gegenvorschlag angenommen: ' + lr.empName;
-          bodyText = 'Der Mitarbeiter hat deinen Gegenvorschlag für <b>' + lr.type + '</b> akzeptiert.';
+          bodyText = 'Der Mitarbeiter hat deinen Gegenvorschlag für <b>' + lr.type + '</b> angenommen (bereits im Plan aktiv).';
+          cardStyle = 'background:#f0fdf4; border-color:#bbf7d0; border-left-color:#16a34a;';
         } else if (lr.status === "declined_counter") {
           titleText = '❌ Gegenvorschlag abgelehnt: ' + lr.empName;
           bodyText = 'Der Mitarbeiter hat deinen Gegenvorschlag für <b>' + lr.type + '</b> abgelehnt.';
         }
       }
-      html += '<div class="sick-card unread" style="border-left-color:#dc2626;">' +
+      html += '<div class="sick-card unread" style="' + cardStyle + '">' +
         '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">' +
           '<div>' +
-            '<div style="font-weight:700; color:#9f1239;">' + titleText + '</div>' +
+            '<div style="font-weight:700; color:#0f172a;">' + titleText + '</div>' +
             '<div style="font-size:0.8rem; margin-top:3px;">' + bodyText + '</div>' +
-            '<div style="font-size:0.65rem; color:#64748b; margin-top:2px;">🕒 Gemeldet am: ' + (lr.cancelledAt || lr.createdAt || '-') + '</div>' +
+            '<div style="font-size:0.65rem; color:#64748b; margin-top:2px;">🕒 Gemeldet am: ' + (lr.cancelledAt || lr.counterRespondedAt || lr.createdAt || '-') + '</div>' +
           '</div>' +
-          '<button class="btn btn-primary" style="padding:5px 10px; font-size:0.75rem;" onclick="acknowledgeLeaveCancel(\'' + lr.id + '\'); acknowledgeCounterResponse(\'' + lr.id + '\')">✓ Gelesen</button>' +
+          '<button class="btn btn-primary" style="padding:5px 10px; font-size:0.75rem;" onclick="acknowledgeLeaveCancel(\'' + lr.id + '\')">✓ Gelesen</button>' +
         '</div>' +
       '</div>';
     });
@@ -842,7 +1072,7 @@ function renderInboxModal() {
       html += '<div class="sick-card" style="background:#f0f9ff; border-left-color:#0284c7; border-color:#bae6fd;">' +
         '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">' +
           '<div style="flex:1;">' +
-            '<div style="font-weight:700; color:#0369a1;">🌴 Antrag (' + lr.type + '): ' + lr.empName + '</div>' +
+            '<div style="font-weight:700; color:#0369a1;">🌴 Antrag (' + lr.type + '): ' + lr.empName + (lr.status === "counter_offered" ? ' <span style="background:#fef08a; color:#854d0e; font-size:0.68rem; padding:1px 6px; border-radius:4px;">⏳ Wartet auf MA-Antwort</span>' : '') + '</div>' +
             '<div style="font-size:0.65rem; color:#0284c7; margin-top:2px;">🕒 Eingereicht am: ' + (lr.createdAt || '-') + '</div>' +
             '<div style="font-size:0.84rem; font-weight:700; margin-top:4px;">📅 Gewünscht: ' + formatDateDe(lr.startDate) + ' bis ' + formatDateDe(lr.endDate) + ' (' + days + ' ' + (days === 1 ? 'Tag' : 'Tage') + ')</div>' +
             (lr.reason ? '<div style="font-size:0.8rem; margin-top:4px; color:#334155;">💬 "' + lr.reason + '"</div>' : '') +
@@ -1001,22 +1231,28 @@ function markAllSickLeavesRead() {
 }
 
 function deleteSickLeave(id) {
-  if (!confirm("Abwesenheit beenden / löschen? Der Eintrag wird auch beim Mitarbeiter im Portal als storniert markiert.")) return;
+  if (!confirm("Abwesenheit beenden / löschen?")) return;
   const sl = sickLeaves.find(function(x) { return x.id === id; }), today = getTodayIso(), nowStr = new Date().toLocaleString("de-DE");
+  sickLeaves = sickLeaves.filter(function(x) { return x.id !== id; });
+
   if (sl) {
+    // Logik-Verbesserung 5: Nur stornieren, wenn keine weiteren Teil-Zeiträume desselben Antrags mehr aktiv sind
     leaveRequests.forEach(function(r) {
-      if (r.id === sl.requestId || r.linkedSickLeaveId === sl.id || (r.empId === sl.empId && r.startDate === sl.startDate && r.endDate === sl.endDate && (r.status === "approved" || r.status === "accepted_counter"))) {
-        r.status = "cancelled_by_planner";
-        r.approvedBy = currentPlannerName;
-        r.approvedAt = nowStr;
+      const isLinked = (r.id === sl.requestId || r.linkedSickLeaveId === sl.id || (r.empId === sl.empId && r.startDate === sl.startDate && r.endDate === sl.endDate && (r.status === "approved" || r.status === "accepted_counter")));
+      if (isLinked) {
+        const hasRemainingLinkedSlices = sickLeaves.some(function(otherSl) { return otherSl.requestId === r.id; });
+        if (!hasRemainingLinkedSlices) {
+          r.status = "cancelled_by_planner";
+          r.approvedBy = currentPlannerName;
+          r.approvedAt = nowStr;
+        }
       }
     });
 
     const emp = employees.find(function(e) { return e.id === sl.empId; });
-    const hasOtherActive = sickLeaves.some(function(x) { return x.id !== id && x.empId === sl.empId && x.startDate <= today && x.endDate >= today; });
+    const hasOtherActive = sickLeaves.some(function(x) { return x.empId === sl.empId && x.startDate <= today && x.endDate >= today; });
     if (emp && emp.zone === "absent" && !hasOtherActive) returnEmpFromAbsentOrExtra(emp);
   }
-  sickLeaves = sickLeaves.filter(function(x) { return x.id !== id; });
   saveToFirebase(); renderInboxModal(); updateInboxBadge(); renderEmployees();
 }
 
@@ -1081,7 +1317,7 @@ function applyTeamStyles() {
   if (!st) { st = document.createElement("style"); st.id = "dynamicTeamStyles"; document.head.appendChild(st); }
   st.textContent = Object.keys(teamsConfig).sort().map(function(k) {
     return ".employee-card." + k + " { border-left-color: " + teamsConfig[k].color + " !important; }" +
-           ".team-dot-" + k + " { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background-color: " + teamsConfig[k].color + "; margin-right: 5px; vertical-align: middle; }";
+           ".team-dot-" + k + " { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background-color: " + teamsConfig[k].color + "; margin-right: 4px; vertical-align: middle; }";
   }).join("\n");
 }
 
@@ -1089,29 +1325,27 @@ function updateTeamDropdowns() {
   const keys = Object.keys(teamsConfig).sort();
   const newEmpTeam = document.getElementById("newEmpTeam");
   if (newEmpTeam) {
+    const prevVal = newEmpTeam.value;
     newEmpTeam.innerHTML = keys.map(function(k) {
       return '<option value="' + k + '" style="color:' + teamsConfig[k].color + '; font-weight:700;">■ ' + teamsConfig[k].name + (isTeamRotating(k) ? ' 🔄' : '') + '</option>';
     }).join("");
-    const curVal = newEmpTeam.value || keys[0];
-    onEmpTeamChange(curVal);
+    if (prevVal && teamsConfig[prevVal]) newEmpTeam.value = prevVal;
+    onEmpTeamChange(newEmpTeam.value || keys[0]);
   }
   const freiSel = document.getElementById("teamSelect_frei");
   if (freiSel) {
+    const curFreiKey = shiftRotation.frei || keys[0];
     freiSel.innerHTML = keys.map(function(k) {
-      return '<option value="' + k + '" ' + (shiftRotation.frei === k ? 'selected' : '') + '>🏖️ Frei: ' + teamsConfig[k].name + (isTeamRotating(k) ? ' 🔄' : '') + '</option>';
+      return '<option value="' + k + '" style="color:' + teamsConfig[k].color + '; font-weight:700;" ' + (curFreiKey === k ? 'selected' : '') + '>🏖️ Frei: ' + teamsConfig[k].name + (isTeamRotating(k) ? ' 🔄' : '') + '</option>';
     }).join("");
+    freiSel.onchange = function() { styleShiftDropdown(this, this.value); };
+    styleShiftDropdown(freiSel, curFreiKey);
   }
 }
 
 function onEmpTeamChange(teamKey) {
   const sel = document.getElementById("newEmpTeam");
-  if (!sel) return;
-  const tObj = teamsConfig[teamKey];
-  if (tObj) {
-    sel.style.borderLeft = "6px solid " + tObj.color;
-    sel.style.color = tObj.color;
-    sel.style.fontWeight = "700";
-  }
+  styleShiftDropdown(sel, teamKey);
 }
 
 function updatePoolSearch(val) {
@@ -1275,21 +1509,28 @@ function filterSettingsEmployees(query) {
 }
 
 function renderSettingsLists(searchFilter) {
+  const searchInp = document.getElementById("settingsEmpSearchInput");
+  const activeQuery = searchFilter !== undefined ? searchFilter : (searchInp ? searchInp.value.trim().toLowerCase() : "");
+
   document.getElementById("roleList").innerHTML = roles.map(function(r, i) { return '<div class="item-row"><span>' + r + '</span><button class="btn btn-outline" style="padding:4px 10px; color:#ef4444;" onclick="deleteRole(' + i + ')">Löschen</button></div>'; }).join("");
   
   let sortedEmps = employees.slice().sort(function(a, b) { return fullName(a).localeCompare(fullName(b)); });
-  if (searchFilter) {
-    sortedEmps = sortedEmps.filter(function(e) { return fullName(e).toLowerCase().indexOf(searchFilter) !== -1 || e.role.toLowerCase().indexOf(searchFilter) !== -1; });
+  if (activeQuery) {
+    sortedEmps = sortedEmps.filter(function(e) {
+      const tName = (teamsConfig[e.team] && teamsConfig[e.team].name) ? teamsConfig[e.team].name.toLowerCase() : "";
+      return fullName(e).toLowerCase().indexOf(activeQuery) !== -1 || e.role.toLowerCase().indexOf(activeQuery) !== -1 || tName.indexOf(activeQuery) !== -1;
+    });
   }
 
   document.getElementById("employeeList").innerHTML = sortedEmps.map(function(e) {
     const fName = fullName(e), lvl = Number(e.accessLevel) || 1;
     const tObj = teamsConfig[e.team] || { name: e.team, color: "#94a3b8" };
-    const teamBadge = '<span class="team-dot-' + e.team + '"></span><span style="font-size:0.75rem; font-weight:700; color:' + tObj.color + ';">' + tObj.name + '</span>';
+    const teamBadge = '<span class="team-dot-' + e.team + '"></span><span style="font-size:0.74rem; font-weight:700; color:' + tObj.color + ';">' + tObj.name + '</span>';
     const lvlBadge = '<span style="background:#f1f5f9; color:#475569; font-size:0.68rem; padding:1px 5px; border-radius:4px; font-weight:700;">Stufe ' + lvl + '</span>';
     const pwBadge = (e.mustChangePw || !e.password || e.password === "1234") ? '<span style="font-size:0.7rem; color:#d97706;">⏳ PIN: 1234</span>' : '<span style="font-size:0.7rem; color:#15803d;">🔒 Eigenes PW</span>';
     const fixBadge = e.noRotation ? '<span style="background:#fef08a; color:#854d0e; font-size:0.68rem; padding:1px 5px; border-radius:4px; font-weight:700;">⚓ Fix</span>' : '';
-    return '<div class="item-row"><div style="flex:1;"><b>' + fName + '</b> ' + teamBadge + ' <small>(' + e.role + ')</small> ' + fixBadge + ' ' + lvlBadge + ' ' + pwBadge + '</div><div style="display:flex; gap:5px;"><button class="btn btn-outline" style="padding:4px 8px; font-size:0.75rem; color:#0284c7;" onclick="resetEmpPassword(\'' + e.id + '\')">🔄 PIN</button><button class="btn btn-outline" style="padding:4px 8px; font-size:0.75rem;" onclick="editEmployee(\'' + e.id + '\')">Bearbeiten</button><button class="btn btn-outline" style="padding:4px 8px; font-size:0.75rem; color:#ef4444;" onclick="deleteEmployee(\'' + e.id + '\')">Löschen</button></div></div>';
+    const faBadge = e.ersthelfer ? '<span style="color:#dc2626; font-weight:900;" title="Ersthelfer">+</span>' : '';
+    return '<div class="item-row"><div style="flex:1;"><b>' + fName + '</b> ' + faBadge + ' · ' + teamBadge + ' <small>(' + e.role + ')</small> ' + fixBadge + ' ' + lvlBadge + ' ' + pwBadge + '</div><div style="display:flex; gap:5px;"><button class="btn btn-outline" style="padding:4px 8px; font-size:0.75rem; color:#0284c7;" onclick="resetEmpPassword(\'' + e.id + '\')">🔄 PIN</button><button class="btn btn-outline" style="padding:4px 8px; font-size:0.75rem;" onclick="editEmployee(\'' + e.id + '\')">Bearbeiten</button><button class="btn btn-outline" style="padding:4px 8px; font-size:0.75rem; color:#ef4444;" onclick="deleteEmployee(\'' + e.id + '\')">Löschen</button></div></div>';
   }).join("");
 
   document.getElementById("lineSettingsList").innerHTML = lines.map(function(l, i) { return '<div class="item-row"><span><b>' + l.name + '</b></span><div style="display:flex; gap:6px;"><button class="btn btn-outline" style="padding:2px 8px;" ' + (i === 0 ? 'disabled' : '') + ' onclick="moveLine(' + i + ',-1)">▲</button><button class="btn btn-outline" style="padding:2px 8px;" ' + (i === lines.length - 1 ? 'disabled' : '') + ' onclick="moveLine(' + i + ',1)">▼</button><button class="btn btn-outline" style="padding:4px 10px; color:#ef4444;" onclick="deleteLine(\'' + l.id + '\')">Löschen</button></div></div>'; }).join("");
@@ -1309,7 +1550,7 @@ function renderSettingsLists(searchFilter) {
 
 function resetEmpPassword(id) {
   const emp = employees.find(function(e) { return e.id === id; }); if (!emp || !confirm('PIN von "' + fullName(emp) + '" auf 1234 zurücksetzen?')) return;
-  emp.password = "1234"; emp.mustChangePw = true; saveToFirebase(); renderSettingsLists(); showToast("🔄 PIN zurückgesetzt!");
+  emp.password = "1234"; emp.mustChangePw = true; saveToFirebase(); renderSettingsLists(); showToast("🔄 PIN auf 1234 zurückgesetzt!");
 }
 
 function addLine() {
@@ -1337,6 +1578,7 @@ function saveEmployee() {
   const team = document.getElementById("newEmpTeam").value, role = document.getElementById("newEmpRole").value;
   const lvl = Number(document.getElementById("newEmpAccessLevel").value) || 1;
   const isFix = document.getElementById("newEmpNoRotation").checked;
+  const faChk = document.getElementById("newEmpFirstAider");
   const mLines = Array.from(document.querySelectorAll(".main-line-chk:checked")).map(function(c) { return c.value; });
   const sLines = Array.from(document.querySelectorAll(".sec-line-chk:checked")).map(function(c) { return c.value; });
   if (!fName && !lName) { alert("Bitte Namen eingeben!"); return; }
@@ -1347,9 +1589,10 @@ function saveEmployee() {
     const emp = employees.find(function(e) { return e.id === idInp; });
     if (emp) {
       const oldFullName = fullName(emp);
-      emp.firstName = fName; emp.lastName = lName; emp.team = team; emp.role = role; emp.accessLevel = lvl; emp.noRotation = isFix; emp.mainLines = mLines; emp.secLines = sLines; if (!emp.lastLineId && mLines.length) emp.lastLineId = mLines[0];
+      emp.firstName = fName; emp.lastName = lName; emp.team = team; emp.role = role; emp.accessLevel = lvl; emp.noRotation = isFix;
+      if (faChk) emp.ersthelfer = faChk.checked;
+      emp.mainLines = mLines; emp.secLines = sLines; if (!emp.lastLineId && mLines.length) emp.lastLineId = mLines[0];
       
-      // Logik-Verbesserung 4: Namen auch in laufenden Anträgen & Abwesenheiten aktualisieren
       if (oldFullName !== newFullName) {
         sickLeaves.forEach(function(sl) { if (sl.empId === emp.id) sl.empName = newFullName; });
         leaveRequests.forEach(function(lr) { if (lr.empId === emp.id) lr.empName = newFullName; });
@@ -1357,7 +1600,11 @@ function saveEmployee() {
       }
     }
   } else {
-    employees.push({ id: "e_" + Date.now(), firstName: fName, lastName: lName, team: team, role: role, accessLevel: lvl, password: "1234", mustChangePw: true, noRotation: isFix, mainLines: mLines, secLines: sLines, lastLineId: mLines[0] || null, zone: "pool" });
+    employees.push({
+      id: "e_" + Date.now(), firstName: fName, lastName: lName, team: team, role: role, accessLevel: lvl,
+      password: "1234", mustChangePw: true, ersthelfer: faChk ? faChk.checked : false, noRotation: isFix,
+      mainLines: mLines, secLines: sLines, lastLineId: mLines[0] || null, zone: "pool"
+    });
   }
   resetEmpForm(); saveToFirebase(); renderEmployees(); renderSettingsLists(); showToast("✅ Mitarbeiter gespeichert!");
 }
@@ -1372,6 +1619,8 @@ function editEmployee(id) {
   document.getElementById("newEmpRole").value = emp.role || roles[0];
   document.getElementById("newEmpAccessLevel").value = String(emp.accessLevel || 1);
   document.getElementById("newEmpNoRotation").checked = !!emp.noRotation;
+  const faChk = document.getElementById("newEmpFirstAider");
+  if (faChk) faChk.checked = !!emp.ersthelfer;
   renderLineCheckboxes(emp.mainLines || [], emp.secLines || []);
   document.getElementById("btnSaveEmp").textContent = "Aktualisieren";
   document.getElementById("btnCancelEditEmp").style.display = "inline-block";
@@ -1380,6 +1629,8 @@ function editEmployee(id) {
 function resetEmpForm() {
   document.getElementById("editEmpId").value = ""; document.getElementById("newEmpFirstName").value = ""; document.getElementById("newEmpLastName").value = "";
   document.getElementById("newEmpAccessLevel").value = "1"; document.getElementById("newEmpNoRotation").checked = false;
+  const faChk = document.getElementById("newEmpFirstAider");
+  if (faChk) faChk.checked = false;
   renderLineCheckboxes([], []); document.getElementById("btnSaveEmp").textContent = "Hinzufügen / Speichern"; document.getElementById("btnCancelEditEmp").style.display = "none";
   const tSel = document.getElementById("newEmpTeam"); if (tSel && tSel.value) onEmpTeamChange(tSel.value);
 }
