@@ -1,5 +1,5 @@
 /* ==========================================================================
-   PLANER-BOARD LOGIK (planer.js) - Stabile Version
+   PLANER-BOARD LOGIK (planer.js) - Vollständige & Stabile Version
    ========================================================================== */
 
 firebase.initializeApp({
@@ -16,7 +16,7 @@ const defaultLines = ["32","33","34","09","22","39","36","37","38","54"].map(fun
 let shiftRotation = { frueh: "team-1", spaet: "team-2", nacht: "team-3", frei: "team-4" };
 let lines = defaultLines.slice();
 let roles = ["Bediener", "LOP", "TL", "Schichtexperte", "Waschraumoperator"];
-let employees = [], sickLeaves = [], leaveRequests = [], extraShifts = [];
+let employees = [], sickLeaves = [], leaveRequests = [], extraShifts = [], historyLogs = [];
 let teamsConfig = {
   "team-1": { name: "Team 1", color: "#0091df", rotates: true },
   "team-2": { name: "Team 2", color: "#f59e0b", rotates: true },
@@ -27,8 +27,11 @@ let securityConfig = { boardPwEnabled: false, boardPw: "0110", plannerTimeoutMin
 
 let hasLoadedFromCloud = false;
 let activeTeamFilters = {}, activeRoleFilters = {}, poolSearchQuery = "";
-let isPlanner = false, plannerLevel = 0, currentPlannerName = "", currentPlannerEmpId = null, selectedLoginPlannerId = null;
+let inboxSearchQuery = "", inboxUnreadFilter = "all", inboxActiveFilter = "all";
+let selectedManualSickEmpId = null, selectedLoginPlannerId = null;
+let isPlanner = false, plannerLevel = 0, currentPlannerName = "", currentPlannerEmpId = null;
 let sortableInstances = [];
+let toastTimer = null;
 
 function getCurrentActiveShiftId() {
   const hour = new Date().getHours();
@@ -67,6 +70,15 @@ function updateHeaderDateKw() {
   el.textContent = dateStr + " · KW " + getCalendarWeek(now) + " (" + shiftsLabel[activeShift] + " aktiv)";
 }
 
+function showToast(msg) {
+  const t = document.getElementById("toastBanner");
+  if (!t) return;
+  if (toastTimer) clearTimeout(toastTimer);
+  t.textContent = msg;
+  t.style.display = "block";
+  toastTimer = setTimeout(function() { t.style.display = "none"; }, 4000);
+}
+
 function showTimedBoxMsg(elId, text, isSuccess) {
   const box = document.getElementById(elId);
   if (!box) return;
@@ -80,6 +92,7 @@ function showTimedBoxMsg(elId, text, isSuccess) {
 function closeModal(id) {
   const el = document.getElementById(id);
   if (el) el.style.display = "none";
+  if (id === "settingsModal") resetEmpForm();
 }
 
 function checkBoardLockState() {
@@ -144,7 +157,7 @@ function initBoard() {
     matrixBody.appendChild(tr);
   });
 
-  renderEmployees(); initDragAndDrop(); updateRoleDropdown(); updateTeamDropdowns(); renderTeamFilterCheckboxes(); renderRoleFilterCheckboxes(); applyTeamStyles(); checkBoardLockState();
+  renderEmployees(); initDragAndDrop(); updateRoleDropdown(); updateTeamDropdowns(); renderTeamFilterCheckboxes(); renderRoleFilterCheckboxes(); applyTeamStyles(); renderLineCheckboxes(); updateInboxBadge(); checkBoardLockState();
 }
 
 function renderEmployees() {
@@ -158,7 +171,8 @@ function renderEmployees() {
       if (activeTeamFilters[emp.team] === false || activeRoleFilters[emp.role] === false) return;
       if (poolSearchQuery) {
         const nMatch = fName.toLowerCase().indexOf(poolSearchQuery) !== -1;
-        if (!nMatch) return;
+        const pMatch = emp.mainLines && emp.mainLines.some(function(id) { const l = lines.find(function(x){return x.id===id;}); return l && l.name.toLowerCase().indexOf(poolSearchQuery) !== -1; });
+        if (!nMatch && !pMatch) return;
       }
     }
 
@@ -168,7 +182,8 @@ function renderEmployees() {
     if (emp.lastLineId) {
       const lastL = lines.find(function(x) { return x.id === emp.lastLineId; });
       if (lastL) {
-        parts.push('<span style="color:#0284c7; font-weight:700;">📌 ' + lastL.name.replace(/Linie\s*/i, '') + '</span>');
+        const delBtn = emp.zone === "pool" ? '<span onclick="event.stopPropagation(); deletePin(\'' + emp.id + '\')" style="cursor:pointer; color:#ef4444; font-size:0.75rem; padding:0 3px;">✖</span>' : "";
+        parts.push('<span style="color:#0284c7; font-weight:700;">📌 ' + lastL.name.replace(/Linie\s*/i, '') + ' ' + delBtn + '</span>');
       }
     }
 
@@ -351,6 +366,46 @@ window.addPortalLeaveRequest = function(empId, start, end, cat, reason) {
   saveToFirebase(); renderEmployees();
 };
 
+function updateInboxBadge() {
+  const badge = document.getElementById("inboxBadge");
+  if (!badge) return;
+  const total = sickLeaves.filter(function(sl) { return !sl.readByPlanner; }).length;
+  badge.textContent = total;
+  badge.style.display = total > 0 ? "inline-flex" : "none";
+}
+
+function openInboxModal() {
+  document.getElementById("inboxModal").style.display = "flex";
+  renderInboxLists();
+}
+
+function renderInboxLists() {
+  const unreadEl = document.getElementById("unreadSickList");
+  const activeEl = document.getElementById("activeSickList");
+  if (!unreadEl || !activeEl) return;
+
+  const today = getTodayIso();
+  const unread = sickLeaves.filter(function(sl) { return !sl.readByPlanner; });
+  const active = sickLeaves.filter(function(sl) { return sl.endDate >= today; });
+
+  unreadEl.innerHTML = unread.length ? unread.map(function(sl) {
+    const emp = employees.find(function(e) { return e.id === sl.empId; });
+    const name = emp ? fullName(emp) : "Unbekannt";
+    return '<div class="sick-card unread"><b>' + name + '</b> (' + (sl.category || 'Abwesend') + ')<br><small>Von ' + formatDateDe(sl.startDate) + ' bis ' + formatDateDe(sl.endDate) + '</small><br><em>' + (sl.reason || '') + '</em><div style="margin-top:6px;"><button class="btn btn-outline" style="padding:2px 8px; font-size:0.7rem;" onclick="markSickRead(\'' + sl.id + '\')">Gelesen</button></div></div>';
+  }).join("") : '<p style="font-size:0.82rem; color:#64748b;">Keine offenen Anträge.</p>';
+
+  activeEl.innerHTML = active.length ? active.map(function(sl) {
+    const emp = employees.find(function(e) { return e.id === sl.empId; });
+    const name = emp ? fullName(emp) : "Unbekannt";
+    return '<div class="sick-card"><b>' + name + '</b> (' + (sl.category || 'Abwesend') + ')<br><small>Von ' + formatDateDe(sl.startDate) + ' bis ' + formatDateDe(sl.endDate) + '</small></div>';
+  }).join("") : '<p style="font-size:0.82rem; color:#64748b;">Keine aktiven Abwesenheiten.</p>';
+}
+
+window.markSickRead = function(id) {
+  const sl = sickLeaves.find(function(x) { return x.id === id; });
+  if (sl) { sl.readByPlanner = true; saveToFirebase(); renderInboxLists(); updateInboxBadge(); }
+};
+
 function applyTeamStyles() {
   let st = document.getElementById("dynamicTeamStyles");
   if (!st) { st = document.createElement("style"); st.id = "dynamicTeamStyles"; document.head.appendChild(st); }
@@ -392,6 +447,17 @@ function updateRoleDropdown() {
   sel.innerHTML = roles.map(function(r) { return '<option value="' + r + '">' + r + '</option>'; }).join("");
 }
 
+function renderLineCheckboxes(selMain, selSec) {
+  selMain = selMain || []; selSec = selSec || [];
+  const mC = document.getElementById("mainLinesCheckboxes"), sC = document.getElementById("secLinesCheckboxes"); if (!mC || !sC) return;
+  const build = function(cls, sel) {
+    return lines.map(function(l) {
+      return '<label><input type="checkbox" value="' + l.id + '" class="' + cls + '" ' + (sel.indexOf(l.id) !== -1 ? 'checked' : '') + '> ' + l.name + '</label>';
+    }).join("");
+  };
+  mC.innerHTML = build("main-line-chk", selMain); sC.innerHTML = build("sec-line-chk", selSec);
+}
+
 function openLineEditModal(lineId) {
   const l = lines.find(function(x) { return x.id === lineId; }); if (!l) return;
   document.getElementById("editLineId").value = l.id;
@@ -402,13 +468,13 @@ function openLineEditModal(lineId) {
   document.getElementById("lineEditModal").style.display = "flex";
 }
 
-function saveLineDetails() {
+window.saveLineDetails = function() {
   const l = lines.find(function(x) { return x.id === document.getElementById("editLineId").value; }); if (!l) return;
   l.prio = document.getElementById("editLinePrio").value;
   l.tag = document.getElementById("editLineTag").value.trim();
   l.note = document.getElementById("editLineNote").value.trim();
   saveToFirebase(); initBoard(); closeModal("lineEditModal");
-}
+};
 
 function openSettingsModal() {
   if (plannerLevel < 2) return;
@@ -429,4 +495,10 @@ function autoSaveSecurityConfig() {
   securityConfig.boardPwEnabled = chk ? chk.checked : false;
   securityConfig.boardPw = pwInp ? pwInp.value.trim() : "0110";
   saveToFirebase();
+}
+
+function resetEmpForm() {
+  document.getElementById("editEmpId").value = "";
+  document.getElementById("newEmpFirstName").value = "";
+  document.getElementById("newEmpLastName").value = "";
 }
