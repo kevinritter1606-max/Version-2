@@ -138,8 +138,20 @@
     body.planner-active .card-sick-tag { display: inline-block; }
     .card-extra-tag { font-size: 0.62rem; color: #166534; background: #dcfce7; padding: 1px 5px; border-radius: 4px; font-weight: 700; margin-top: 1px; align-self: flex-start; }
 
-    .board-container { flex: 1; background: #fff; border-radius: 10px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: flex; flex-direction: column; overflow-x: auto; }
-    .board-table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 780px; }
+    .board-container { flex: 1; background: #fff; border-radius: 10px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: flex; flex-direction: column; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .board-table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 1120px; }
+    .board-table th.shift-header { position: sticky; left: 0; z-index: 15; box-shadow: 2px 0 4px rgba(0,0,0,0.04); }
+
+    @media (max-width: 768px) {
+      header { padding: 10px 12px; }
+      .bayer-logo-btn { width: 46px; height: 46px; }
+      .header-title h1 { font-size: 1.1rem; }
+      main { padding: 8px; flex-direction: column; gap: 10px; }
+      .sidebar { width: 100%; }
+      .board-container { width: 100%; }
+      .board-table { min-width: 1050px; }
+      .shift-header { width: 84px; padding: 10px 4px; font-size: 0.82rem; }
+    }
     .board-table th, .board-table td { border: 1px solid #e2e8f0; vertical-align: top; }
     .line-header { background: #f8fafc; padding: 10px 4px; text-align: center; position: relative; }
     body.planner-active .line-header { cursor: pointer; }
@@ -541,32 +553,21 @@
         <div id="lineSettingsList" style="max-height: 260px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
       </div>
 
-      <!-- 4. TEAMS & SCHICHTMODELL -->
+     <!-- 4. TEAMS & SCHICHTMODELL -->
       <div id="tabTeams" class="tab-content">
         <div class="settings-card">
           <div class="settings-card-title">
             <span>🔄 Schichtmodell & Automatische Rotation</span>
-            <span style="font-size:0.72rem; color:#64748b; font-weight:600;">Umschaltung jeweils 21:00 Uhr (1h vor 22:00 Nachtschicht)</span>
-          </div>
-          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
-            <div style="flex:1.2; min-width:180px;">
-              <label style="font-size:0.78rem; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Schichtmodell</label>
-              <select id="cfgShiftModel" class="form-control" onchange="saveShiftModelSettings()">
-                <option value="vollkonti_sonntag_frei">Vollkonti (2-Tage-Rhythmus · Sonntags Früh/Spät frei)</option>
-                <option value="vollkonti">Vollkonti (Durchgehend)</option>
-                <option value="dreierschicht">Dreierschicht (Wochenwechsel · Sonntags frei)</option>
-              </select>
-            </div>
-            <div style="flex:1; min-width:150px;">
-              <label style="font-size:0.78rem; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Startdatum (ab 21:00 Uhr)</label>
-              <input type="date" id="cfgRotationStartDate" class="form-control" onchange="saveShiftModelSettings()">
-            </div>
+            <span style="font-size:0.72rem; color:#64748b; font-weight:600;">8-Werktage-Rhythmus · Umschaltung 21:00 Uhr</span>
           </div>
           <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
-            <label style="display:flex; align-items:center; gap:6px; font-size:0.82rem; font-weight:600; color:#1e293b; cursor:pointer;">
-              <input type="checkbox" id="cfgAutoRotate" checked onchange="saveShiftModelSettings()"> Automatische Rotation aktiv
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.86rem; font-weight:700; color:#1e293b; cursor:pointer;">
+              <input type="checkbox" id="cfgAutoRotate" checked onchange="saveShiftModelSettings()"> Automatische Rotation aktiv (Sonntags Früh/Spät frei)
             </label>
-            <span id="cfgRotationStatusHint" style="font-size:0.74rem; color:#0369a1; font-weight:600;"></span>
+            <span id="cfgRotationStatusHint" style="font-size:0.75rem; color:#166534; font-weight:700;"></span>
+          </div>
+          <div style="font-size:0.74rem; color:#64748b; margin-top:8px;">
+            ℹ️ Es rotieren automatisch alle Teams, bei denen unten in der Liste der Haken <b>„Rotiert mit“</b> gesetzt ist.
           </div>
         </div>
 
