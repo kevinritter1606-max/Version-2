@@ -11,19 +11,19 @@
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
     body { background-color: var(--bg-gray); min-height: 100vh; display: flex; flex-direction: column; }
     
-    /* DYNAMISCHER BRAND-GRADIENT AUCH IM PORTAL */
+    /* DYNAMISCHER BRAND-GRADIENT (BLAU-ROT = WARTET AUF FREIGABE / BLAU-GRÜN = FREIGEGEBEN) */
     .brand-gradient { height: 6px; width: 100%; flex-shrink: 0; transition: background 0.3s ease; }
     .brand-gradient.pending { background: linear-gradient(90deg, #0091df 0%, #ef4444 45%, #dc2626 100%); }
     .brand-gradient.approved { background: linear-gradient(90deg, #0091df 0%, #00bcff 50%, #89d329 100%); }
 
-    header { background: #fff; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 6px rgba(0,0,0,0.06); flex-wrap: wrap; gap: 12px; }
+    header { background: #fff; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 6px rgba(0,0,0,0.06); flex-wrap: wrap; gap: 12px; position: sticky; top: 0; z-index: 50; }
     .header-left { display: flex; align-items: center; gap: 16px; }
-    .bayer-logo { width: 48px; height: 48px; object-fit: contain; }
-    .header-title h1 { font-size: 1.25rem; font-weight: 700; color: var(--bayer-blue); }
+    .bayer-logo { width: 52px; height: 52px; object-fit: contain; flex-shrink: 0; }
+    .header-title h1 { font-size: 1.25rem; font-weight: 700; color: var(--bayer-blue); margin: 0; }
     .header-meta { font-size: 0.78rem; color: #64748b; font-weight: 600; margin-top: 2px; }
-    .portal-model-tag { display: inline-block; font-size: 0.72rem; font-weight: 700; color: #0369a1; background: #f0f9ff; border: 1px solid #bae6fd; padding: 2px 8px; border-radius: 999px; margin-top: 4px; }
+    .portal-model-tag { display: inline-block; font-size: 0.72rem; font-weight: 700; color: #0369a1; background: #f0f9ff; border: 1px solid #bae6fd; padding: 2px 9px; border-radius: 999px; margin-top: 4px; }
     
-    /* KLARE FREIGABE-ANZEIGE FÜR MITARBEITER */
+    /* FREIGABE-ANZEIGE FÜR MITARBEITER IM HEADER */
     .portal-shift-status {
       display: inline-flex;
       align-items: center;
@@ -45,21 +45,55 @@
     .btn-primary:hover { background: #0077b6; }
     .btn-outline { border-color: #cbd5e1; background: #fff; color: #475569; }
     .btn-outline:hover { background: #f8fafc; }
-    main { padding: 24px; max-width: 900px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 20px; }
+
+    main { padding: 20px 16px; max-width: 760px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 16px; }
     .card { background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; }
-    .card h2 { font-size: 1.05rem; color: #1e293b; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .card h2 { font-size: 1.02rem; color: #1e293b; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    
+    /* PERSÖNLICHE STATUS-KARTE FÜR DEN AUSGEWÄHLTEN MITARBEITER */
+    .emp-live-status-box {
+      display: none;
+      margin-top: 12px;
+      padding: 14px;
+      border-radius: 8px;
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-left: 5px solid var(--bayer-blue);
+    }
+    .emp-live-grid { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; }
+    .emp-assignment-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      background: #fff;
+      border: 1px solid #cbd5e1;
+      color: #0f172a;
+    }
+
     .form-group { margin-bottom: 14px; position: relative; }
     .form-group label { display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; color: #475569; }
-    .form-control { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.95rem; }
-    .suggestions-box { display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 8px 20px rgba(0,0,0,0.12); max-height: 200px; overflow-y: auto; z-index: 60; margin-top: 2px; }
+    .form-control { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.92rem; background: #fff; }
+    .search-clear { display: none; position: absolute; right: 10px; top: 34px; cursor: pointer; color: #64748b; font-weight: bold; font-size: 1.1rem; }
+    .suggestions-box { display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 8px 20px rgba(0,0,0,0.12); max-height: 210px; overflow-y: auto; z-index: 60; margin-top: 2px; }
     .suggestion-item { padding: 10px 12px; font-size: 0.9rem; cursor: pointer; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
     .suggestion-item:hover { background: #f0f9ff; color: var(--bayer-blue); }
-    .toast { display: none; position: fixed; bottom: 20px; right: 20px; background: #16a34a; color: #fff; padding: 10px 18px; border-radius: 8px; font-weight: 700; font-size: 0.9rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 100; }
+    
+    .portal-tabs { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 2px solid #e2e8f0; }
+    .portal-tab-btn { padding: 8px 14px; background: none; border: none; border-bottom: 2px solid transparent; font-weight: 700; font-size: 0.86rem; color: #64748b; cursor: pointer; margin-bottom: -2px; }
+    .portal-tab-btn.active { color: var(--bayer-blue); border-bottom-color: var(--bayer-blue); }
+    .portal-tab-section { display: none; }
+    .portal-tab-section.active { display: block; }
+
+    .inline-feedback { display: none; padding: 10px 12px; border-radius: 6px; font-size: 0.84rem; font-weight: 700; margin-bottom: 12px; text-align: center; }
   </style>
 </head>
 <body>
+  <!-- DYNAMISCHER BALKEN GANZ OBEN -->
   <div id="brandGradientBar" class="brand-gradient pending"></div>
-  <div id="toast" class="toast">Erfolgreich gespeichert</div>
 
   <header>
     <div class="header-left">
@@ -67,7 +101,7 @@
       <div class="header-title">
         <h1>Mitarbeiter Portal</h1>
         <div id="headerDate" class="header-meta">Lade Datum...</div>
-        <span id="portalModelBadge" class="portal-model-tag">⚙️ Modell: Vollkonti (Auto-Rotation)</span>
+        <span id="portalModelBadge" class="portal-model-tag">Modell: Vollkonti (Sonntags frei) · Auto-Rotation aktiv</span>
       </div>
     </div>
     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
@@ -80,75 +114,285 @@
   </header>
 
   <main>
+    <!-- 1. MITARBEITER-AUSWAHL & PERSÖNLICHER LIVE-STATUS -->
     <div class="card">
-      <h2>🌴 Urlaub oder Abwesenheit melden / anfragen</h2>
-      <div class="form-group" style="position: relative;">
+      <h2>
+        <span>👤 Meine Schicht & Einteilung prüfen</span>
+        <small style="font-size:0.74rem; color:#64748b; font-weight:600;">Live-Abgleich</small>
+      </h2>
+      <div class="form-group" style="margin-bottom: 4px;">
         <label>Dein Name</label>
-        <input type="text" id="portalEmpInput" class="form-control" placeholder="🔍 Vor- und Nachname tippen..." autocomplete="off" onfocus="onPortalNameInput(this.value)" oninput="onPortalNameInput(this.value)">
+        <input type="text" id="portalEmpInput" class="form-control" placeholder="🔍 Vor- und Nachname tippen oder auswählen..." autocomplete="off" onfocus="onPortalNameInput(this.value)" oninput="onPortalNameInput(this.value)">
+        <span id="portalClearEmpBtn" class="search-clear" onclick="clearPortalEmpSelection()">&times;</span>
         <div id="portalSuggestions" class="suggestions-box"></div>
       </div>
-      <div style="display:flex; gap:12px;">
-        <div class="form-group" style="flex:1;"><label>Von Datum</label><input type="date" id="portalStart" class="form-control"></div>
-        <div class="form-group" style="flex:1;"><label>Bis Datum</label><input type="date" id="portalEnd" class="form-control"></div>
+
+      <!-- ERSCHEINT AUTOMATISCH, SOBALD EIN NAME GEWÄHLT WURDE -->
+      <div id="empLiveStatusBox" class="emp-live-status-box">
+        <div class="emp-live-grid">
+          <div>
+            <div id="empLiveName" style="font-size:0.95rem; font-weight:800; color:#0f172a;"></div>
+            <div id="empLiveTeamRole" style="font-size:0.78rem; color:#475569; font-weight:600; margin-top:2px;"></div>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
+            <div id="empLiveAssignment" class="emp-assignment-pill">Einteilung wird geladen...</div>
+            <div id="empLiveApprovalNote" style="font-size:0.74rem; font-weight:700;"></div>
+          </div>
+        </div>
       </div>
-      <div class="form-group">
-        <label>Art der Abwesenheit</label>
-        <select id="portalCategory" class="form-control">
-          <option value="Urlaub - bezahlt">🌴 Urlaub</option>
-          <option value="Arbeitsunfähigkeit (Krank)">🏥 Arbeitsunfähigkeit (Krank)</option>
-          <option value="Freizeitausgleich / Gleittag">⏱️ Freizeitausgleich / Gleittag</option>
-          <option value="Kind krank">Kind krank</option>
-          <option value="Sonderurlaub">Sonderurlaub</option>
-        </select>
+    </div>
+
+    <!-- 2. ANTRÄGE & MELDUNGEN (URLAUB / ABWESENHEIT / BRINGSCHICHT) -->
+    <div class="card">
+      <div class="portal-tabs">
+        <button class="portal-tab-btn active" onclick="switchPortalTab('tabLeave', this)">🌴 Urlaub & Abwesenheit</button>
+        <button class="portal-tab-btn" onclick="switchPortalTab('tabExtra', this)">➕ Bringschicht / Zusatzschicht</button>
       </div>
-      <div class="form-group"><label>Notiz / Grund (optional)</label><input type="text" id="portalReason" class="form-control" placeholder="Zusatzinfo..."></div>
-      <button class="btn btn-primary" style="width:100%;" onclick="submitPortalRequest()">Antrag absenden</button>
+
+      <div id="portalFeedbackBox" class="inline-feedback"></div>
+
+      <!-- TAB A: URLAUB & ABWESENHEIT -->
+      <div id="tabLeave" class="portal-tab-section active">
+        <div style="display:flex; gap:12px; flex-wrap:wrap;">
+          <div class="form-group" style="flex:1; min-width:140px;"><label>Von Datum</label><input type="date" id="portalStart" class="form-control"></div>
+          <div class="form-group" style="flex:1; min-width:140px;"><label>Bis Datum</label><input type="date" id="portalEnd" class="form-control"></div>
+        </div>
+        <div class="form-group">
+          <label>Art der Meldung</label>
+          <select id="portalCategory" class="form-control">
+            <option value="Urlaub">Urlaub</option>
+            <option value="Arbeitsunfähigkeit">Arbeitsunfähigkeit</option>
+            <option value="Freizeitausgleich / Gleittag">Freizeitausgleich / Gleittag</option>
+            <option value="Kind krank">Kind krank</option>
+            <option value="Sonderurlaub">Sonderurlaub</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Notiz / Hinweis (optional)</label><input type="text" id="portalReason" class="form-control" placeholder="Optional..."></div>
+        <button class="btn btn-primary" style="width:100%;" onclick="submitPortalRequest()">Meldung absenden</button>
+      </div>
+
+      <!-- TAB B: BRINGSCHICHT / ZUSATZSCHICHT -->
+      <div id="tabExtra" class="portal-tab-section">
+        <div style="display:flex; gap:12px; flex-wrap:wrap;">
+          <div class="form-group" style="flex:1; min-width:140px;"><label>Datum der Schicht</label><input type="date" id="portalExtraDate" class="form-control"></div>
+          <div class="form-group" style="flex:1; min-width:140px;">
+            <label>Gewünschte Schicht</label>
+            <select id="portalExtraShift" class="form-control">
+              <option value="frueh">Frühschicht</option>
+              <option value="spaet">Spätschicht</option>
+              <option value="nacht">Nachtschicht</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group"><label>Bemerkung (optional)</label><input type="text" id="portalExtraNote" class="form-control" placeholder="z.B. bevorzugte Linie oder Zeitfenster..."></div>
+        <button class="btn btn-primary" style="width:100%;" onclick="submitPortalExtraShift()">Bringschicht eintragen</button>
+      </div>
     </div>
   </main>
 
   <script src="planer.js"></script>
   <script>
     let selectedPortalEmpId = null;
-    function onPortalNameInput(val) {
-      selectedPortalEmpId = null;
-      const box = document.getElementById("portalSuggestions"), q = (val || "").trim().toLowerCase();
-      if (!employees || !employees.length) { box.style.display = "none"; return; }
-      const matches = q ? employees.filter(function(e) {
-        const full = ((e.firstName || "") + " " + (e.lastName || "")).toLowerCase();
-        return full.indexOf(q) !== -1;
-      }) : employees.slice(0, 15);
 
-      if (!matches.length) { box.style.display = "none"; return; }
+    function updatePortalHeaderClock() {
+      const dEl = document.getElementById("headerDate");
+      if (!dEl) return;
+      const now = new Date();
+      const ld = typeof getLogicalDateObj === "function" ? getLogicalDateObj(now) : now;
+      const kw = typeof getCalendarWeek === "function" ? getCalendarWeek(ld) : "";
+      const activeShift = typeof getCurrentActiveShiftId === "function" ? getCurrentActiveShiftId() : "frueh";
+      const sundayOff = typeof isSundayOffWindow === "function" ? isSundayOffWindow() : false;
+      const sLabel = sundayOff ? "Sonntag · Schichtfrei" : ((typeof shiftsLabel !== "undefined" && shiftsLabel[activeShift]) ? shiftsLabel[activeShift] : activeShift);
+      const dateStr = now.toLocaleDateString("de-DE", { weekday: "long", year: "numeric", month: "2-digit", day: "2-digit" });
+      dEl.textContent = dateStr + (kw ? " · KW " + kw : "") + " (" + sLabel + ")";
+    }
+
+    function switchPortalTab(tabId, btnEl) {
+      document.querySelectorAll(".portal-tab-btn").forEach(function(b) { b.classList.remove("active"); });
+      if (btnEl) btnEl.classList.add("active");
+      document.querySelectorAll(".portal-tab-section").forEach(function(s) { s.classList.remove("active"); });
+      const target = document.getElementById(tabId);
+      if (target) target.classList.add("active");
+    }
+
+    function showPortalInlineMsg(text, isSuccess) {
+      const box = document.getElementById("portalFeedbackBox");
+      if (!box) return;
+      box.style.background = isSuccess ? "#dcfce7" : "#fee2e2";
+      box.style.color = isSuccess ? "#166534" : "#b91c1c";
+      box.textContent = text;
+      box.style.display = "block";
+      setTimeout(function() { box.style.display = "none"; }, 4000);
+    }
+
+    function onPortalNameInput(val) {
+      const box = document.getElementById("portalSuggestions");
+      const clearBtn = document.getElementById("portalClearEmpBtn");
+      const q = (val || "").trim().toLowerCase();
+      if (clearBtn) clearBtn.style.display = q ? "block" : "none";
+
+      if (!employees || !employees.length) {
+        box.style.display = "none";
+        return;
+      }
+      const sorted = employees.slice().sort(function(a, b) { return fullName(a).localeCompare(fullName(b)); });
+      const matches = q ? sorted.filter(function(e) {
+        return fullName(e).toLowerCase().indexOf(q) !== -1;
+      }) : sorted.slice(0, 18);
+
+      if (!matches.length) {
+        box.style.display = "none";
+        return;
+      }
       box.innerHTML = matches.map(function(e) {
-        const name = ((e.firstName || "") + " " + (e.lastName || "")).trim();
+        const name = fullName(e);
         const tName = (teamsConfig && teamsConfig[e.team]) ? teamsConfig[e.team].name : e.team;
-        return '<div class="suggestion-item" onclick="selectPortalEmp(\'' + e.id + '\', \'' + name + '\')"><span><b>' + name + '</b></span><small style="color:#64748b;">' + tName + '</small></div>';
+        return '<div class="suggestion-item" onclick="selectPortalEmp(\'' + e.id + '\')"><span><b>' + name + '</b></span><small style="color:#64748b;">' + tName + ' · ' + (e.role || '') + '</small></div>';
       }).join("");
       box.style.display = "block";
     }
-    function selectPortalEmp(id, name) {
-      selectedPortalEmpId = id;
-      document.getElementById("portalEmpInput").value = name;
+
+    function selectPortalEmp(id) {
+      const emp = employees.find(function(x) { return x.id === id; });
+      if (!emp) return;
+      selectedPortalEmpId = emp.id;
+      sessionStorage.setItem("portal_selected_emp_id", emp.id);
+      document.getElementById("portalEmpInput").value = fullName(emp);
+      document.getElementById("portalClearEmpBtn").style.display = "block";
       document.getElementById("portalSuggestions").style.display = "none";
+      renderSelectedPortalEmpStatus();
     }
+
+    function clearPortalEmpSelection() {
+      selectedPortalEmpId = null;
+      sessionStorage.removeItem("portal_selected_emp_id");
+      document.getElementById("portalEmpInput").value = "";
+      document.getElementById("portalClearEmpBtn").style.display = "none";
+      document.getElementById("empLiveStatusBox").style.display = "none";
+    }
+
+    function renderSelectedPortalEmpStatus() {
+      const box = document.getElementById("empLiveStatusBox");
+      if (!box || !selectedPortalEmpId) return;
+      const emp = employees.find(function(x) { return x.id === selectedPortalEmpId; });
+      if (!emp) {
+        box.style.display = "none";
+        return;
+      }
+
+      const tObj = (teamsConfig && teamsConfig[emp.team]) ? teamsConfig[emp.team] : { name: emp.team, color: "#0091df" };
+      box.style.borderLeftColor = tObj.color || "#0091df";
+      document.getElementById("empLiveName").textContent = fullName(emp);
+      document.getElementById("empLiveTeamRole").textContent = tObj.name + " · " + (emp.role || "Mitarbeiter");
+
+      const assignEl = document.getElementById("empLiveAssignment");
+      const noteEl = document.getElementById("empLiveApprovalNote");
+      const approved = typeof isCurrentShiftApproved === "function" ? isCurrentShiftApproved() : false;
+
+      if (!emp.zone || emp.zone === "pool") {
+        assignEl.textContent = "📋 Aktuell im Pool / Schichtfrei";
+      } else if (emp.zone === "absent") {
+        assignEl.textContent = "🏥 Als abwesend eingetragen";
+      } else if (emp.zone === "extra") {
+        assignEl.textContent = "➕ Bringschicht / Zusatzpool";
+      } else {
+        const lId = extractLineIdFromZone(emp.zone);
+        const sId = extractShiftIdFromZone(emp.zone);
+        const lineObj = lines.find(function(l) { return l.id === lId; });
+        const lineName = lineObj ? lineObj.name : lId;
+        const shiftName = (typeof shiftsLabel !== "undefined" && shiftsLabel[sId]) ? shiftsLabel[sId] : sId;
+        assignEl.textContent = "🏭 " + lineName + " (" + shiftName + ")";
+      }
+
+      if (approved) {
+        noteEl.style.color = "#166534";
+        noteEl.textContent = "✅ Aktuelle Schicht ist vom Planer bestätigt";
+      } else {
+        noteEl.style.color = "#b91c1c";
+        noteEl.textContent = "⏳ Aktuelle Schicht ist noch nicht vom Planer bestätigt";
+      }
+
+      box.style.display = "block";
+    }
+
     function submitPortalRequest() {
-      if (!selectedPortalEmpId) { alert("Bitte wähle deinen Namen aus der Liste aus."); return; }
-      const start = document.getElementById("portalStart").value, end = document.getElementById("portalEnd").value;
-      const cat = document.getElementById("portalCategory").value, reason = document.getElementById("portalReason").value.trim();
-      if (!start || !end) { alert("Bitte Start- und Enddatum angeben."); return; }
+      if (!selectedPortalEmpId) {
+        showPortalInlineMsg("Bitte wähle zuerst oben deinen Namen aus.", false);
+        return;
+      }
+      const start = document.getElementById("portalStart").value;
+      const end = document.getElementById("portalEnd").value;
+      const cat = document.getElementById("portalCategory").value;
+      const reason = document.getElementById("portalReason").value.trim();
+      if (!start || !end) {
+        showPortalInlineMsg("Bitte Von- und Bis-Datum auswählen.", false);
+        return;
+      }
       if (typeof window.addPortalLeaveRequest === "function") {
         window.addPortalLeaveRequest(selectedPortalEmpId, start, end, cat, reason);
-        showPortalToast();
+        document.getElementById("portalStart").value = "";
+        document.getElementById("portalEnd").value = "";
+        document.getElementById("portalReason").value = "";
+        showPortalInlineMsg("✅ Deine Meldung wurde direkt an den Planer übermittelt.", true);
       }
     }
-    function showPortalToast() {
-      const t = document.getElementById("toast");
-      t.style.display = "block";
-      setTimeout(function() { t.style.display = "none"; window.location.reload(); }, 1800);
+
+    function submitPortalExtraShift() {
+      if (!selectedPortalEmpId) {
+        showPortalInlineMsg("Bitte wähle zuerst oben deinen Namen aus.", false);
+        return;
+      }
+      const dateVal = document.getElementById("portalExtraDate").value;
+      const shiftVal = document.getElementById("portalExtraShift").value;
+      const noteVal = document.getElementById("portalExtraNote").value.trim();
+      if (!dateVal) {
+        showPortalInlineMsg("Bitte ein Datum für die Bringschicht auswählen.", false);
+        return;
+      }
+      extraShifts.push({
+        id: "es_" + Date.now(),
+        empId: selectedPortalEmpId,
+        date: dateVal,
+        shift: shiftVal,
+        note: noteVal,
+        status: "approved"
+      });
+      if (typeof logHistory === "function") {
+        const emp = employees.find(function(x) { return x.id === selectedPortalEmpId; });
+        logHistory("Bringschicht", (emp ? fullName(emp) : "") + " am " + formatDateDe(dateVal) + " (" + shiftVal + ")");
+      }
+      saveToFirebase();
+      document.getElementById("portalExtraDate").value = "";
+      document.getElementById("portalExtraNote").value = "";
+      showPortalInlineMsg("✅ Bringschicht erfolgreich eingetragen.", true);
+      renderSelectedPortalEmpStatus();
     }
+
+    // Aktualisiert die persönliche Status-Karte automatisch mit, sobald Firebase neue Daten liefert
+    boardRef.onSnapshot(function() {
+      updatePortalHeaderClock();
+      if (typeof updateShiftApprovalUI === "function") updateShiftApprovalUI();
+      if (typeof updateAutoRotationUI === "function") updateAutoRotationUI();
+      if (!selectedPortalEmpId) {
+        const savedId = sessionStorage.getItem("portal_selected_emp_id");
+        if (savedId && employees.some(function(e) { return e.id === savedId; })) {
+          selectPortalEmp(savedId);
+        }
+      } else {
+        renderSelectedPortalEmpStatus();
+      }
+    });
+
+    document.addEventListener("click", function(e) {
+      const box = document.getElementById("portalSuggestions");
+      const inp = document.getElementById("portalEmpInput");
+      if (box && inp && e.target !== inp && !box.contains(e.target)) {
+        box.style.display = "none";
+      }
+    });
+
     window.addEventListener("DOMContentLoaded", function() {
-      const d = document.getElementById("headerDate");
-      if (d) d.textContent = new Date().toLocaleDateString("de-DE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+      updatePortalHeaderClock();
       if (typeof updateShiftApprovalUI === "function") updateShiftApprovalUI();
       if (typeof updateAutoRotationUI === "function") updateAutoRotationUI();
     });
