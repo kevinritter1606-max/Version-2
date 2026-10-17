@@ -3,896 +3,155 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mitarbeiter-Portal | Schichtplanung</title>
+  <title>Mitarbeiter Portal - Schichtplan</title>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   <style>
     :root { --bayer-blue: #0091df; --bg-gray: #f4f6f9; }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
-    body { background: var(--bg-gray); min-height: 100vh; display: flex; flex-direction: column; color: #1e293b; }
-    .brand-gradient { height: 6px; background: linear-gradient(90deg, #0091df 0%, #00bcff 50%, #89d329 100%); width: 100%; }
-    header { background: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 6px rgba(0,0,0,0.06); position: sticky; top: 0; z-index: 40; gap: 10px; }
-    .header-left { display: flex; align-items: center; gap: 12px; }
-    .header-left img { width: 48px; height: 48px; object-fit: contain; }
-    .header-title h1 { font-size: 1.2rem; color: var(--bayer-blue); font-weight: 700; }
-    .header-title span { font-size: 0.75rem; color: #64748b; display: block; }
-    .header-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
-    .container { width: 100%; max-width: 540px; margin: 20px auto; padding: 0 16px 40px; flex: 1; }
-    .card { background: #fff; border-radius: 12px; padding: 18px 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; margin-bottom: 16px; }
-    .card h2 { font-size: 1.05rem; color: #0f172a; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-    .form-group { margin-bottom: 12px; position: relative; }
-    .form-group label { display: block; font-size: 0.83rem; font-weight: 600; margin-bottom: 5px; color: #475569; }
-    .form-control { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.92rem; background: #f8fafc; }
-    .form-control:focus { outline: none; border-color: var(--bayer-blue); background: #fff; }
-    textarea.form-control { resize: vertical; min-height: 70px; }
-    .suggestions-box { display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.12); max-height: 190px; overflow-y: auto; z-index: 50; margin-top: 4px; }
-    .suggestion-item { padding: 10px 12px; font-size: 0.92rem; cursor: pointer; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; }
-    .suggestion-item:hover { background: #f0f9ff; color: var(--bayer-blue); }
-    .btn { padding: 11px 16px; border-radius: 8px; font-size: 0.92rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; width: 100%; transition: 0.15s; }
-    .btn:disabled { cursor: not-allowed; opacity: 0.7; }
+    body { background-color: var(--bg-gray); min-height: 100vh; display: flex; flex-direction: column; }
+    
+    /* DYNAMISCHER BRAND-GRADIENT AUCH IM PORTAL */
+    .brand-gradient { height: 6px; width: 100%; flex-shrink: 0; transition: background 0.3s ease; }
+    .brand-gradient.pending { background: linear-gradient(90deg, #0091df 0%, #ef4444 45%, #dc2626 100%); }
+    .brand-gradient.approved { background: linear-gradient(90deg, #0091df 0%, #00bcff 50%, #89d329 100%); }
+
+    header { background: #fff; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 6px rgba(0,0,0,0.06); flex-wrap: wrap; gap: 12px; }
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .bayer-logo { width: 48px; height: 48px; object-fit: contain; }
+    .header-title h1 { font-size: 1.25rem; font-weight: 700; color: var(--bayer-blue); }
+    .header-meta { font-size: 0.78rem; color: #64748b; font-weight: 600; margin-top: 2px; }
+    .portal-model-tag { display: inline-block; font-size: 0.72rem; font-weight: 700; color: #0369a1; background: #f0f9ff; border: 1px solid #bae6fd; padding: 2px 8px; border-radius: 999px; margin-top: 4px; }
+    
+    /* KLARE FREIGABE-ANZEIGE FÜR MITARBEITER */
+    .portal-shift-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      transition: 0.2s;
+    }
+    .portal-shift-status.pending { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+    .portal-shift-status.approved { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
+    .portal-shift-status.sunday { background: #f0f9ff; color: #0369a1; border-color: #bae6fd; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #dc2626; flex-shrink: 0; }
+
+    .btn { padding: 8px 16px; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; transition: 0.15s; }
     .btn-primary { background: var(--bayer-blue); color: #fff; }
-    .btn-primary:hover:not(:disabled) { background: #0077b6; }
-    .btn-outline { border-color: #cbd5e1; background: #fff; color: #475569; width: auto; padding: 7px 12px; font-size: 0.82rem; }
+    .btn-primary:hover { background: #0077b6; }
+    .btn-outline { border-color: #cbd5e1; background: #fff; color: #475569; }
     .btn-outline:hover { background: #f8fafc; }
-    .btn-sm-danger { border: 1px solid #fecaca; background: #fff1f2; color: #dc2626; padding: 3px 8px; border-radius: 5px; font-size: 0.73rem; font-weight: 600; cursor: pointer; width: auto; }
-    .btn-sm-danger:hover { background: #fee2e2; }
-    .status-box { padding: 15px; border-radius: 10px; font-weight: 600; display: flex; flex-direction: column; gap: 4px; }
-    .status-assigned { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
-    .status-pool { background: #e0f2fe; color: #075985; border: 1px solid #bae6fd; }
-    .status-absent { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
-    .line-badge-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-    .line-badge { padding: 4px 9px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; }
-    .badge-prio { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; font-weight: 700; }
-    .badge-sec { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
-    .success-banner { display: none; background: #dcfce7; color: #166534; border: 1px solid #86efac; padding: 12px; border-radius: 8px; margin-bottom: 12px; font-size: 0.86rem; font-weight: 600; line-height: 1.4; }
-    .error-msg { display: none; background: #fee2e2; color: #b91c1c; padding: 10px; border-radius: 6px; font-size: 0.84rem; margin-bottom: 12px; text-align: center; font-weight: 600; line-height: 1.35; }
-    .notice-hint { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; padding: 8px 10px; border-radius: 6px; font-size: 0.76rem; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; line-height: 1.3; }
-    .req-item { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 12px; font-size: 0.82rem; margin-bottom: 8px; }
-    .stamp-tag { font-size: 0.72rem; color: #475569; margin-top: 6px; padding-top: 5px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }
-    .profile-toggle-btn { width: 100%; text-align: left; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 9px 12px; font-size: 0.82rem; font-weight: 700; color: #334155; cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
-    .profile-toggle-btn:hover { background: #f1f5f9; }
+    main { padding: 24px; max-width: 900px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 20px; }
+    .card { background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; }
+    .card h2 { font-size: 1.05rem; color: #1e293b; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .form-group { margin-bottom: 14px; position: relative; }
+    .form-group label { display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; color: #475569; }
+    .form-control { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.95rem; }
+    .suggestions-box { display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 8px 20px rgba(0,0,0,0.12); max-height: 200px; overflow-y: auto; z-index: 60; margin-top: 2px; }
+    .suggestion-item { padding: 10px 12px; font-size: 0.9rem; cursor: pointer; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
+    .suggestion-item:hover { background: #f0f9ff; color: var(--bayer-blue); }
+    .toast { display: none; position: fixed; bottom: 20px; right: 20px; background: #16a34a; color: #fff; padding: 10px 18px; border-radius: 8px; font-weight: 700; font-size: 0.9rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 100; }
   </style>
 </head>
 <body>
-  <div class="brand-gradient"></div>
+  <div id="brandGradientBar" class="brand-gradient pending"></div>
+  <div id="toast" class="toast">Erfolgreich gespeichert</div>
+
   <header>
     <div class="header-left">
-      <img src="logo.png" alt="Logo" onerror="this.style.display='none'">
-      <div class="header-title"><h1>Mitarbeiter-Portal</h1><span>Persönliche Schicht-, Urlaubs- & Linienübersicht</span></div>
+      <img src="logo.png" alt="Bayer Logo" class="bayer-logo" onerror="this.style.display='none'">
+      <div class="header-title">
+        <h1>Mitarbeiter Portal</h1>
+        <div id="headerDate" class="header-meta">Lade Datum...</div>
+        <span id="portalModelBadge" class="portal-model-tag">⚙️ Modell: Vollkonti (Auto-Rotation)</span>
+      </div>
     </div>
-    <div class="header-actions">
-      <button id="headerProfileBtn" class="btn btn-outline" style="display:none;" onclick="openProfilePinSection()">⚙️ Profil & PIN</button>
-      <button id="logoutBtn" class="btn btn-outline" style="display:none;" onclick="logoutEmp()">Abmelden</button>
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+      <div id="portalShiftStatusBadge" class="portal-shift-status pending">
+        <span id="portalStatusDot" class="status-dot"></span>
+        <span id="portalStatusText">Schicht ist noch nicht bestätigt</span>
+      </div>
+      <button class="btn btn-outline" onclick="window.location.href='index.html'">Zur Schichtübersicht</button>
     </div>
   </header>
 
-  <div class="container">
-    <!-- LOGIN -->
-    <div id="loginView" class="card">
-      <h2 style="color:var(--bayer-blue); justify-content:center; margin-bottom:4px;">🔐 Mitarbeiter-Anmeldung</h2>
-      <div style="text-align:center; font-size:0.7rem; color:#64748b; margin-bottom:14px;">System-Version 2.8</div>
-      <div id="loginError" class="error-msg">Name oder Passwort nicht korrekt!</div>
-      <div class="form-group" id="nameSearchGroup">
+  <main>
+    <div class="card">
+      <h2>🌴 Urlaub oder Abwesenheit melden / anfragen</h2>
+      <div class="form-group" style="position: relative;">
         <label>Dein Name</label>
-        <input type="text" id="loginEmpInput" class="form-control" placeholder="Vor- und Nachname eingeben..." autocomplete="off" onfocus="onNameInput(this.value)" oninput="onNameInput(this.value)" onkeydown="if(event.key==='Enter') el('loginPassword').focus()">
-        <div id="loginSuggestions" class="suggestions-box"></div>
+        <input type="text" id="portalEmpInput" class="form-control" placeholder="🔍 Vor- und Nachname tippen..." autocomplete="off" onfocus="onPortalNameInput(this.value)" oninput="onPortalNameInput(this.value)">
+        <div id="portalSuggestions" class="suggestions-box"></div>
+      </div>
+      <div style="display:flex; gap:12px;">
+        <div class="form-group" style="flex:1;"><label>Von Datum</label><input type="date" id="portalStart" class="form-control"></div>
+        <div class="form-group" style="flex:1;"><label>Bis Datum</label><input type="date" id="portalEnd" class="form-control"></div>
       </div>
       <div class="form-group">
-        <label>Passwort / PIN (Erst-Login: 1234)</label>
-        <input type="password" id="loginPassword" class="form-control" placeholder="Passwort eingeben" onkeydown="if(event.key==='Enter') loginEmp()">
+        <label>Art der Abwesenheit</label>
+        <select id="portalCategory" class="form-control">
+          <option value="Urlaub - bezahlt">🌴 Urlaub</option>
+          <option value="Arbeitsunfähigkeit (Krank)">🏥 Arbeitsunfähigkeit (Krank)</option>
+          <option value="Freizeitausgleich / Gleittag">⏱️ Freizeitausgleich / Gleittag</option>
+          <option value="Kind krank">Kind krank</option>
+          <option value="Sonderurlaub">Sonderurlaub</option>
+        </select>
       </div>
-      <button class="btn btn-primary" onclick="loginEmp()">Anmelden</button>
+      <div class="form-group"><label>Notiz / Grund (optional)</label><input type="text" id="portalReason" class="form-control" placeholder="Zusatzinfo..."></div>
+      <button class="btn btn-primary" style="width:100%;" onclick="submitPortalRequest()">Antrag absenden</button>
     </div>
+  </main>
 
-    <!-- ERST-LOGIN PASSWORT FESTLEGEN (PFLICHT BEI 1234) -->
-    <div id="changePasswordView" class="card" style="display:none;">
-      <h2 style="color:var(--bayer-blue); margin-bottom:8px;">🔒 Eigenes Passwort festlegen</h2>
-      <p style="font-size:0.85rem; color:#64748b; margin-bottom:16px;">Hallo <b id="cpEmpName"></b>! Bitte gib deine aktuelle Start-PIN (1234) und zweimal dein neues persönliches Passwort / PIN (mind. 4 Zeichen) ein.</p>
-      <div id="cpError" class="error-msg"></div>
-      <div class="form-group"><label>Aktuelle PIN / Passwort</label><input type="password" id="oldPasswordInput" class="form-control" placeholder="Aktuelle PIN (1234)"></div>
-      <div class="form-group"><label>Neues Passwort / PIN (mind. 4 Zeichen)</label><input type="password" id="newPasswordInput" class="form-control" placeholder="Neues Passwort eingeben"></div>
-      <div class="form-group"><label>Neues Passwort wiederholen</label><input type="password" id="newPasswordConfirm" class="form-control" placeholder="Passwort bestätigen" onkeydown="if(event.key==='Enter') saveNewPassword()"></div>
-      <button class="btn btn-primary" onclick="saveNewPassword()">Passwort speichern & weiter</button>
-    </div>
-
-    <!-- HAUPTANSICHT PORTAL -->
-    <div id="portalView" style="display:none;">
-      <!-- MEIN PROFIL, QUALIFIKATIONEN & SICHERHEIT -->
-      <div class="card" id="profileCard">
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-          <div>
-            <div style="font-size:0.76rem; color:#64748b; font-weight:600;">👤 Mein Profil</div>
-            <div id="empWelcomeName" style="font-size:1.25rem; font-weight:700;"></div>
-          </div>
-          <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-            <span id="empTeamBadge" style="background:#f8fafc; border:1px solid #e2e8f0; padding:5px 10px; border-radius:6px; font-size:0.8rem; font-weight:700;"></span>
-            <span id="empRoleBadge" style="background:#f1f5f9; padding:5px 10px; border-radius:6px; font-size:0.8rem; font-weight:700;"></span>
-          </div>
-        </div>
-
-        <div style="border-top:1px solid #f1f5f9; margin-top:12px; padding-top:10px;">
-          <div style="margin-bottom:8px;">
-            <div style="font-size:0.78rem; font-weight:600; color:#475569;">Meine Stammlinien (Prio-Linien):</div>
-            <div id="empPrioLines" class="line-badge-list"></div>
-          </div>
-          <div>
-            <div style="font-size:0.78rem; font-weight:600; color:#475569;">Weitere Linien (Sek-Linien):</div>
-            <div id="empSecLines" class="line-badge-list"></div>
-          </div>
-        </div>
-
-        <div id="pwChangedBanner" class="success-banner" style="margin-top:12px; margin-bottom:0;"></div>
-
-        <!-- AUFKLAPPBARER BEREICH: PIN ÄNDERN IM PROFIL -->
-        <button type="button" class="profile-toggle-btn" onclick="toggleProfilePinBox()">
-          <span>🔑 Profil & Sicherheit: Eigene PIN / Passwort ändern</span>
-          <span id="profilePinArrow" style="color:var(--bayer-blue); font-size:0.75rem;">▼ Öffnen</span>
-        </button>
-        <div id="profilePinBox" style="display:none; background:#f8fafc; border:1px solid #cbd5e1; border-top:none; border-radius:0 0 8px 8px; padding:14px;">
-          <div id="profPinError" class="error-msg"></div>
-          <div class="form-group">
-            <label>Aktuelle PIN / Passwort</label>
-            <input type="password" id="profOldPin" class="form-control" style="background:#fff;" placeholder="Aktuelle PIN eingeben...">
-          </div>
-          <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <div class="form-group" style="flex:1; min-width:180px;">
-              <label>Neue PIN (mind. 4 Zeichen)</label>
-              <input type="password" id="profNewPin" class="form-control" style="background:#fff;" placeholder="Neue PIN...">
-            </div>
-            <div class="form-group" style="flex:1; min-width:180px;">
-              <label>Neue PIN wiederholen</label>
-              <input type="password" id="profNewPinConfirm" class="form-control" style="background:#fff;" placeholder="Neue PIN bestätigen..." onkeydown="if(event.key==='Enter') saveProfilePin()">
-            </div>
-          </div>
-          <button class="btn btn-primary" onclick="saveProfilePin()">Neue PIN speichern</button>
-        </div>
-      </div>
-
-      <!-- HEUTIGE EINTEILUNG -->
-      <div class="card">
-        <h2>📍 Meine heutige Einteilung</h2>
-        <div id="empCurrentStatus" class="status-box status-pool"></div>
-      </div>
-
-      <!-- 1. KRANKMELDUNG -->
-      <div class="card">
-        <h2>🏥 Krankmeldung (Arbeitsunfähigkeit)</h2>
-        
-        <div id="earlyReturnBox" style="display:none; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:14px; margin-bottom:16px;">
-          <h3 style="font-size:0.92rem; color:#166534; margin-bottom:6px;">✅ Gesundmeldung (Frühere Rückkehr)</h3>
-          <p style="font-size:0.78rem; color:#15803d; margin-bottom:10px; line-height:1.35;">Bist du früher wieder fit als geplant? Teile dem Planer hier deinen ersten Arbeitstag mit.</p>
-          <div class="form-group"><label style="color:#166534;">Wieder einsatzbereit am:</label><input type="date" id="earlyReturnDate" class="form-control" style="border-color:#bbf7d0;"></div>
-          <button id="earlyReturnBtn" class="btn btn-primary" style="background:#16a34a; font-size:0.85rem;" onclick="submitEarlyReturn()">Korrektur an Planer senden</button>
-          <div id="earlyReturnSuccess" class="success-banner" style="margin-top:8px; margin-bottom:0;"></div>
-          <div id="earlyReturnError" class="error-msg" style="margin-top:8px; margin-bottom:0;"></div>
-        </div>
-
-        <div id="sickSuccessBanner" class="success-banner"></div>
-        <div id="sickErrorBanner" class="error-msg"></div>
-        <div style="display:flex; gap:10px;">
-          <div class="form-group" style="flex:1;"><label>Von (Startdatum)</label><input type="date" id="sickStartDate" class="form-control"></div>
-          <div class="form-group" style="flex:1;"><label>Bis (Einschließlich)</label><input type="date" id="sickEndDate" class="form-control"></div>
-        </div>
-        <div class="form-group"><label>Begleitschreiben / Notiz</label><textarea id="sickReason" class="form-control" placeholder="z.B. Grippe, Arzttermin, Folge-AU..."></textarea></div>
-        
-        <div class="notice-hint">
-          <span>⏰</span>
-          <span>Bitte denke daran, deine Krankmeldung spätestens <b>eine Stunde vor Schichtbeginn</b> abzugeben.</span>
-        </div>
-
-        <button id="sickSubmitBtn" class="btn btn-primary" style="background:#dc2626;" onclick="submitSickLeave()">Krankmeldung absenden</button>
-        <div id="mySickLeavesHistory" style="margin-top:16px;"></div>
-      </div>
-
-      <!-- 2. URLAUBS- & ABWESENHEITSANTRAG -->
-      <div class="card">
-        <h2>🌴 Urlaubs- & Abwesenheitsantrag</h2>
-        <p style="font-size:0.8rem; color:#64748b; margin-bottom:12px;">Dein Antrag wird digital an den Planer/Vorgesetzten zur Genehmigung übermittelt.</p>
-        <div id="leaveSuccessBanner" class="success-banner"></div>
-        <div id="leaveErrorBanner" class="error-msg"></div>
-        <div class="form-group">
-          <label>Art der Abwesenheit</label>
-          <select id="leaveType" class="form-control">
-            <option value="Urlaub - bezahlt">Urlaub – bezahlt</option>
-            <option value="Freizeitausgleich / Gleittag">Freizeitausgleich / Gleittag / Altersfreizeit</option>
-            <option value="Urlaub - unbezahlt">Urlaub – unbezahlt</option>
-            <option value="Aus- und Fortbildung">Aus- und Fortbildung</option>
-            <option value="Dienstreise">Dienstreise</option>
-          </select>
-        </div>
-        <div style="display:flex; gap:10px;">
-          <div class="form-group" style="flex:1;"><label>Von</label><input type="date" id="leaveStartDate" class="form-control"></div>
-          <div class="form-group" style="flex:1;"><label>Bis (Einschließlich)</label><input type="date" id="leaveEndDate" class="form-control"></div>
-        </div>
-        <div class="form-group"><label>Bemerkung (Optional)</label><input type="text" id="leaveReason" class="form-control" placeholder="z.B. Sommerurlaub, Gleittag..."></div>
-        <button id="leaveSubmitBtn" class="btn btn-primary" onclick="submitLeaveRequest()">Antrag zur Prüfung absenden</button>
-        <div id="myLeaveRequestsList" style="margin-top:16px;"></div>
-      </div>
-
-      <!-- 3. MELDUNG VON BRINGSCHICHTEN -->
-      <div class="card">
-        <h2>➕ Meldung von Bringschichten</h2>
-        <p style="font-size:0.8rem; color:#64748b; margin-bottom:12px;">Hier kannst du deine Bringschichten / Zusatzschichten (BS/ZS) beim Planer anmelden.</p>
-        <div id="extraSuccessBanner" class="success-banner"></div>
-        <div id="extraErrorBanner" class="error-msg"></div>
-        <div style="display:flex; gap:10px;">
-          <div class="form-group" style="flex:1.2;"><label>Datum der Bringschicht</label><input type="date" id="extraDate" class="form-control"></div>
-          <div class="form-group" style="flex:1;">
-            <label>Schicht</label>
-            <select id="extraShift" class="form-control">
-              <option value="frueh">Früh</option>
-              <option value="spaet">Spät</option>
-              <option value="nacht">Nacht</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-group"><label>Bemerkung (z.B. BS / ZS)</label><input type="text" id="extraNote" class="form-control" value="BS" placeholder="z.B. BS, ZS, Wunschlinie..."></div>
-        <button id="extraSubmitBtn" class="btn btn-primary" style="background:#16a34a;" onclick="submitExtraShift()">Bringschicht anfragen</button>
-        <div id="myExtraShiftsList" style="margin-top:16px;"></div>
-      </div>
-    </div>
-  </div>
-
+  <script src="planer.js"></script>
   <script>
-    function el(id) { return document.getElementById(id); }
+    let selectedPortalEmpId = null;
+    function onPortalNameInput(val) {
+      selectedPortalEmpId = null;
+      const box = document.getElementById("portalSuggestions"), q = (val || "").trim().toLowerCase();
+      if (!employees || !employees.length) { box.style.display = "none"; return; }
+      const matches = q ? employees.filter(function(e) {
+        const full = ((e.firstName || "") + " " + (e.lastName || "")).toLowerCase();
+        return full.indexOf(q) !== -1;
+      }) : employees.slice(0, 15);
 
-    firebase.initializeApp({
-      apiKey: "AIzaSyBPOYRYyUm5gA-j7YSAZl7EJoxedFhDTl4", authDomain: "schichtplan-bayer.firebaseapp.com",
-      projectId: "schichtplan-bayer", storageBucket: "schichtplan-bayer.firebasestorage.app",
-      messagingSenderId: "152929285194", appId: "1:152929285194:web:00b73aa6058a70aed3a2b3"
-    });
-    const db = firebase.firestore();
-    const boardRef = db.collection("shiftplan").doc("live_board");
-    const shiftsMap = { frueh: "Frühschicht", spaet: "Spätschicht", nacht: "Nachtschicht" };
-    let lines = [], employees = [], sickLeaves = [], leaveRequests = [], extraShifts = [], shiftRotation = {};
-    let teamsConfig = {
-      "team-1": { name: "Team 1", color: "#0091df", rotates: true },
-      "team-2": { name: "Team 2", color: "#f59e0b", rotates: true },
-      "team-3": { name: "Team 3", color: "#10b981", rotates: true },
-      "team-4": { name: "Team 4", color: "#f43f5e", rotates: true }
-    };
-    let securityConfig = {
-      boardPwEnabled: false,
-      boardPw: "0110",
-      plannerTimeoutMin: 180,
-      portalTimeoutMin: 60
-    };
-
-    let loggedInEmpId = localStorage.getItem("portal_emp_id") || null;
-    let portalLastActivityTime = Number(localStorage.getItem("portal_last_active") || Date.now());
-    let selectedLoginEmpId = null;
-    let recoveryAttempted = false;
-    const bannerTimers = {};
-
-    function resetPortalActivity() {
-      portalLastActivityTime = Date.now();
-      if (loggedInEmpId) localStorage.setItem("portal_last_active", String(portalLastActivityTime));
-    }
-
-    setInterval(function() {
-      const timeoutMin = Number(securityConfig.portalTimeoutMin);
-      if (loggedInEmpId && timeoutMin > 0) {
-        if (Date.now() - portalLastActivityTime > timeoutMin * 60 * 1000) {
-          logoutEmp();
-          alert("🔒 Wegen Inaktivität (" + timeoutMin + " Min.) wurdest du automatisch abgemeldet.");
-        }
-      }
-    }, 15000);
-
-    function showTimedBanner(id, message, isHtml) {
-      const box = el(id);
-      if (!box) return;
-      if (bannerTimers[id]) clearTimeout(bannerTimers[id]);
-      if (isHtml) box.innerHTML = message;
-      else box.textContent = message;
+      if (!matches.length) { box.style.display = "none"; return; }
+      box.innerHTML = matches.map(function(e) {
+        const name = ((e.firstName || "") + " " + (e.lastName || "")).trim();
+        const tName = (teamsConfig && teamsConfig[e.team]) ? teamsConfig[e.team].name : e.team;
+        return '<div class="suggestion-item" onclick="selectPortalEmp(\'' + e.id + '\', \'' + name + '\')"><span><b>' + name + '</b></span><small style="color:#64748b;">' + tName + '</small></div>';
+      }).join("");
       box.style.display = "block";
-      bannerTimers[id] = setTimeout(function() {
-        box.style.display = "none";
-      }, 5000);
     }
-
-    function getTodayIso() {
-      const d = new Date();
-      return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    function selectPortalEmp(id, name) {
+      selectedPortalEmpId = id;
+      document.getElementById("portalEmpInput").value = name;
+      document.getElementById("portalSuggestions").style.display = "none";
     }
-    function formatDateDe(s) { return (s && s.indexOf("-") !== -1) ? s.split("-").reverse().join(".") : (s || ""); }
-    function extractLineId(z) { return (!z || ["pool","absent","extra"].indexOf(z) !== -1 || z.indexOf("_") === -1) ? null : z.split("_").slice(0, -1).join("_"); }
-    function extractShiftIdFromZone(z) { return (!z || ["pool","absent","extra"].indexOf(z) !== -1 || z.indexOf("_") === -1) ? null : z.split("_").pop(); }
-    function fullName(e) { return ((e.firstName || "") + " " + (e.lastName || "")).trim(); }
-    function isTeamRotating(teamKey) { return teamsConfig[teamKey] ? (teamsConfig[teamKey].rotates !== false) : true; }
-    function isEmpProtectedFromRotation(emp) { return !!(emp.noRotation || !isTeamRotating(emp.team)); }
-
-    function parseIsoLocal(iso) {
-      if (!iso || iso.indexOf("-") === -1) return 0;
-      const p = iso.split("-").map(Number);
-      return new Date(p[0], p[1] - 1, p[2], 12, 0, 0).getTime();
+    function submitPortalRequest() {
+      if (!selectedPortalEmpId) { alert("Bitte wähle deinen Namen aus der Liste aus."); return; }
+      const start = document.getElementById("portalStart").value, end = document.getElementById("portalEnd").value;
+      const cat = document.getElementById("portalCategory").value, reason = document.getElementById("portalReason").value.trim();
+      if (!start || !end) { alert("Bitte Start- und Enddatum angeben."); return; }
+      if (typeof window.addPortalLeaveRequest === "function") {
+        window.addPortalLeaveRequest(selectedPortalEmpId, start, end, cat, reason);
+        showPortalToast();
+      }
     }
-    function canMergeDateRanges(s1, e1, s2, e2) {
-      const msDay = 86400000, tS1 = parseIsoLocal(s1), tE1 = parseIsoLocal(e1), tS2 = parseIsoLocal(s2), tE2 = parseIsoLocal(e2);
-      return (tS1 && tE1 && tS2 && tE2) ? (tS1 <= tE2 + msDay * 1.1) && (tS2 <= tE1 + msDay * 1.1) : false;
+    function showPortalToast() {
+      const t = document.getElementById("toast");
+      t.style.display = "block";
+      setTimeout(function() { t.style.display = "none"; window.location.reload(); }, 1800);
     }
-    function mergeReasonsText(r1, r2) {
-      const a = (r1 || "").trim(), b = (r2 || "").trim();
-      if (!a) return b;
-      if (!b) return a;
-      if (a.toLowerCase().indexOf(b.toLowerCase()) !== -1) return a;
-      if (b.toLowerCase().indexOf(a.toLowerCase()) !== -1) return b;
-      return a + " | " + b;
-    }
-
-    function getRestoredZoneForEmp(emp) {
-      let l = (emp.lastLineId && lines.some(function(x) { return x.id === emp.lastLineId; })) ? emp.lastLineId : ((emp.mainLines && emp.mainLines.length > 0 && lines.some(function(x) { return x.id === emp.mainLines[0]; })) ? emp.mainLines[0] : null);
-      if (isEmpProtectedFromRotation(emp) && emp.lastShiftId && l) return l + "_" + emp.lastShiftId;
-      if (emp.team === shiftRotation.frueh && l && !isEmpProtectedFromRotation(emp)) return l + "_frueh";
-      if (emp.team === shiftRotation.spaet && l && !isEmpProtectedFromRotation(emp)) return l + "_spaet";
-      if (emp.team === shiftRotation.nacht && l && !isEmpProtectedFromRotation(emp)) return l + "_nacht";
-      return "pool";
-    }
-
-    async function safeUpdateBoard(mutatorFn) {
-      let snap;
-      try { snap = await boardRef.get({ source: "server" }); } catch(e) { snap = await boardRef.get(); }
-      const latest = snap.exists ? snap.data() : {};
-      const patch = mutatorFn(latest);
-      const cleanPatch = JSON.parse(JSON.stringify(patch));
-      await boardRef.set(cleanPatch, { merge: true });
-    }
-
-    function attemptAutoRecoverFromBackups() {
-      if (recoveryAttempted) return;
-      recoveryAttempted = true;
-      db.collection("shiftplan_backups").orderBy("date", "desc").limit(7).get().then(function(snap) {
-        if (snap.empty) return;
-        let found = null;
-        snap.forEach(function(doc) {
-          const b = doc.data();
-          if (!found && b && Array.isArray(b.employees) && b.employees.length > 0) found = b;
-        });
-        if (found) {
-          boardRef.set(JSON.parse(JSON.stringify({ employees: found.employees })), { merge: true });
-        }
-      }).catch(function(){});
-    }
-
     window.addEventListener("DOMContentLoaded", function() {
-      const today = getTodayIso();
-      el("sickStartDate").value = el("sickEndDate").value = el("earlyReturnDate").value = el("leaveStartDate").value = el("leaveEndDate").value = el("extraDate").value = today;
-      
-      ["mousemove", "mousedown", "keydown", "scroll", "touchstart", "click"].forEach(function(evt) {
-        document.addEventListener(evt, resetPortalActivity, { passive: true });
-      });
-
-      document.addEventListener("click", function(e) {
-        if (el("nameSearchGroup") && !el("nameSearchGroup").contains(e.target)) el("loginSuggestions").style.display = "none";
-      });
+      const d = document.getElementById("headerDate");
+      if (d) d.textContent = new Date().toLocaleDateString("de-DE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+      if (typeof updateShiftApprovalUI === "function") updateShiftApprovalUI();
+      if (typeof updateAutoRotationUI === "function") updateAutoRotationUI();
     });
-
-    boardRef.onSnapshot(function(doc) {
-      if (doc.exists) {
-        const d = doc.data();
-        lines = d.lines || [];
-        sickLeaves = Array.isArray(d.sickLeaves) ? d.sickLeaves : [];
-        leaveRequests = Array.isArray(d.leaveRequests) ? d.leaveRequests : [];
-        extraShifts = Array.isArray(d.extraShifts) ? d.extraShifts : [];
-        shiftRotation = d.shiftRotation || {};
-        if (d.teamsConfig && typeof d.teamsConfig === "object") teamsConfig = d.teamsConfig;
-        if (d.securityConfig && typeof d.securityConfig === "object") {
-          securityConfig = Object.assign({ boardPwEnabled: false, boardPw: "0110", plannerTimeoutMin: 180, portalTimeoutMin: 60 }, d.securityConfig);
-        }
-
-        const timeoutMin = Number(securityConfig.portalTimeoutMin);
-        if (loggedInEmpId && timeoutMin > 0 && (Date.now() - portalLastActivityTime > timeoutMin * 60 * 1000)) {
-          logoutEmp();
-          return;
-        }
-
-        if (Array.isArray(d.employees) && d.employees.length > 0) {
-          employees = d.employees.filter(Boolean).map(function(e) {
-            if (!e.firstName && e.name) { const p = String(e.name).split(" "); e.firstName = p[0] || ""; e.lastName = p.slice(1).join(" ") || ""; }
-            e.password = e.password || "1234"; if (e.mustChangePw === undefined) e.mustChangePw = (e.password === "1234");
-            if (e.noRotation === undefined) e.noRotation = false;
-            return e;
-          });
-        } else if (employees.length === 0) {
-          attemptAutoRecoverFromBackups();
-        }
-
-        if (loggedInEmpId && employees.length > 0) {
-          const emp = employees.find(function(e) { return e.id === loggedInEmpId; });
-          emp ? routeAuthenticatedEmp(emp) : logoutEmp();
-        }
-      }
-    });
-
-    // Sofortige Namensvorschläge beim Klicken oder Tippen
-    function onNameInput(val) {
-      selectedLoginEmpId = null;
-      const box = el("loginSuggestions"), q = (val || "").trim().toLowerCase();
-      if (!employees.length) { box.style.display = "none"; return; }
-      const sorted = employees.slice().sort(function(a, b) { return fullName(a).localeCompare(fullName(b)); });
-      const m = q ? sorted.filter(function(e) {
-        return fullName(e).toLowerCase().indexOf(q) !== -1 || ((e.lastName || "") + " " + (e.firstName || "")).toLowerCase().indexOf(q) !== -1;
-      }) : sorted.slice(0, 15);
-      if (!m.length) { box.style.display = "none"; return; }
-      box.innerHTML = m.map(function(e) { return '<div class="suggestion-item" onclick="selectLoginEmp(\'' + e.id + '\')"><span><b>' + fullName(e) + '</b></span><small style="color:#64748b;">' + e.role + '</small></div>'; }).join("");
-      box.style.display = "block";
-    }
-
-    function selectLoginEmp(id) {
-      const e = employees.find(function(x) { return x.id === id; });
-      if (e) { selectedLoginEmpId = e.id; el("loginEmpInput").value = fullName(e); el("loginSuggestions").style.display = "none"; el("loginPassword").focus(); }
-    }
-
-    function loginEmp() {
-      const q = el("loginEmpInput").value.trim().toLowerCase(), pass = el("loginPassword").value.trim();
-      let emp = selectedLoginEmpId ? employees.find(function(e) { return e.id === selectedLoginEmpId; }) : employees.find(function(e) { return fullName(e).toLowerCase() === q; });
-      if (!emp && q) { const p = employees.filter(function(e) { return fullName(e).toLowerCase().indexOf(q) !== -1; }); if (p.length === 1) emp = p[0]; }
-      if (!emp || (emp.password || "1234") !== pass) { showTimedBanner("loginError", "❌ Name oder Passwort nicht korrekt!", false); return; }
-      el("loginError").style.display = "none"; loggedInEmpId = emp.id;
-      localStorage.setItem("portal_emp_id", emp.id); localStorage.setItem("portal_login_time", String(Date.now()));
-      resetPortalActivity();
-      el("loginPassword").value = ""; routeAuthenticatedEmp(emp);
-    }
-
-    function routeAuthenticatedEmp(emp) {
-      el("loginView").style.display = "none"; el("logoutBtn").style.display = "inline-block";
-      if (emp.mustChangePw || emp.password === "1234") {
-        el("portalView").style.display = "none";
-        el("headerProfileBtn").style.display = "none";
-        el("changePasswordView").style.display = "block";
-        el("cpEmpName").textContent = fullName(emp);
-      } else {
-        el("changePasswordView").style.display = "none";
-        el("headerProfileBtn").style.display = "inline-block";
-        showPortalFor(emp);
-      }
-    }
-
-    function saveNewPassword() {
-      const oldP = el("oldPasswordInput").value.trim();
-      const p1 = el("newPasswordInput").value.trim(), p2 = el("newPasswordConfirm").value.trim();
-      const emp = employees.find(function(e) { return e.id === loggedInEmpId; }); if (!emp) return;
-
-      if (oldP !== (emp.password || "1234")) { showTimedBanner("cpError", "❌ Die aktuelle PIN ist nicht korrekt!", false); return; }
-      if (p1.length < 4) { showTimedBanner("cpError", "❌ Neue PIN muss mindestens 4 Zeichen lang sein!", false); return; }
-      if (p1 === "1234") { showTimedBanner("cpError", "❌ Bitte nicht die Standard-PIN 1234 verwenden!", false); return; }
-      if (p1 !== p2) { showTimedBanner("cpError", "❌ Die neuen Passwörter stimmen nicht überein!", false); return; }
-
-      el("cpError").style.display = "none";
-      safeUpdateBoard(function(latest) {
-        const list = (latest.employees || employees).map(function(e) { return e.id === loggedInEmpId ? Object.assign({}, e, { password: p1, mustChangePw: false }) : e; });
-        return { employees: list };
-      }).then(function() {
-        el("oldPasswordInput").value = el("newPasswordInput").value = el("newPasswordConfirm").value = "";
-        emp.password = p1; emp.mustChangePw = false;
-        routeAuthenticatedEmp(emp);
-        showTimedBanner("pwChangedBanner", "✅ Deine neue persönliche PIN wurde erfolgreich gespeichert!", false);
-      });
-    }
-
-    // PIN ändern direkt im Bereich "Mein Profil & Sicherheit"
-    function toggleProfilePinBox(forceOpen) {
-      const box = el("profilePinBox"), arr = el("profilePinArrow");
-      if (!box || !arr) return;
-      const isOpen = forceOpen !== undefined ? forceOpen : (box.style.display === "none");
-      box.style.display = isOpen ? "block" : "none";
-      arr.textContent = isOpen ? "▲ Schließen" : "▼ Öffnen";
-    }
-
-    function openProfilePinSection() {
-      toggleProfilePinBox(true);
-      const card = el("profileCard");
-      if (card && card.scrollIntoView) card.scrollIntoView({ behavior: "smooth" });
-      el("profOldPin").focus();
-    }
-
-    function saveProfilePin() {
-      const oldP = el("profOldPin").value.trim();
-      const p1 = el("profNewPin").value.trim();
-      const p2 = el("profNewPinConfirm").value.trim();
-      const emp = employees.find(function(e) { return e.id === loggedInEmpId; }); if (!emp) return;
-
-      if (oldP !== (emp.password || "1234")) { showTimedBanner("profPinError", "❌ Deine aktuelle PIN ist nicht korrekt!", false); return; }
-      if (p1.length < 4) { showTimedBanner("profPinError", "❌ Die neue PIN muss mindestens 4 Zeichen haben!", false); return; }
-      if (p1 === "1234") { showTimedBanner("profPinError", "❌ Bitte nicht die Start-PIN 1234 verwenden!", false); return; }
-      if (p1 !== p2) { showTimedBanner("profPinError", "❌ Die beiden neuen PINs stimmen nicht überein!", false); return; }
-
-      el("profPinError").style.display = "none";
-      safeUpdateBoard(function(latest) {
-        const list = (latest.employees || employees).map(function(e) { return e.id === loggedInEmpId ? Object.assign({}, e, { password: p1, mustChangePw: false }) : e; });
-        return { employees: list };
-      }).then(function() {
-        el("profOldPin").value = el("profNewPin").value = el("profNewPinConfirm").value = "";
-        emp.password = p1; emp.mustChangePw = false;
-        toggleProfilePinBox(false);
-        showTimedBanner("pwChangedBanner", "✅ Deine PIN wurde erfolgreich aktualisiert!", false);
-      });
-    }
-
-    function logoutEmp() {
-      loggedInEmpId = selectedLoginEmpId = null;
-      localStorage.removeItem("portal_emp_id");
-      localStorage.removeItem("portal_login_time");
-      localStorage.removeItem("portal_last_active");
-      el("loginEmpInput").value = "";
-      toggleProfilePinBox(false);
-      el("portalView").style.display = el("changePasswordView").style.display = el("logoutBtn").style.display = el("headerProfileBtn").style.display = "none";
-      el("loginView").style.display = "block";
-    }
-
-    function showPortalFor(emp) {
-      el("portalView").style.display = "block"; el("empWelcomeName").textContent = fullName(emp);
-      let bHtml = emp.role; if (emp.ersthelfer) bHtml += " (+ Ersthelfer)";
-      el("empRoleBadge").textContent = bHtml;
-
-      const tObj = teamsConfig[emp.team] || { name: emp.team || "Team", color: "#0091df" };
-      const tBadge = el("empTeamBadge");
-      if (tBadge) {
-        tBadge.innerHTML = '<span style="color:' + tObj.color + ';">■</span> ' + tObj.name;
-        tBadge.style.borderColor = tObj.color;
-      }
-
-      const sb = el("empCurrentStatus"), today = getTodayIso();
-      const myActiveAbsences = sickLeaves.filter(function(s) { return s.empId === emp.id && s.endDate >= today; });
-      const currentlyAbsent = myActiveAbsences.find(function(s) { return s.startDate <= today && s.endDate >= today; });
-
-      if (emp.zone === "absent" || currentlyAbsent) {
-        sb.className = "status-box status-absent";
-        sb.innerHTML = '<div style="font-size:1.05rem;">🛑 Status: Abwesend (' + (currentlyAbsent ? (currentlyAbsent.category || 'Krank/Urlaub') : 'Abwesend') + ')</div><div style="font-size:0.83rem; font-weight:normal;">' + (currentlyAbsent ? ('Bis einschließlich <b>' + formatDateDe(currentlyAbsent.endDate) + '</b> eingetragen.') : 'Heute als abwesend eingetragen.') + '</div>';
-      } else if (emp.zone === "extra") {
-        sb.className = "status-box status-assigned";
-        sb.innerHTML = '<div style="font-size:1.05rem;">➕ Status: Bringschicht / Zusatzschicht</div><div style="font-size:0.83rem; font-weight:normal;">Du stehst im Zusatzschicht-Fenster bereit und wirst vom Planer einer Linie zugeteilt.</div>';
-      } else if (!emp.zone || emp.zone === "pool") {
-        sb.className = "status-box status-pool";
-        sb.innerHTML = '<div style="font-size:1.05rem;">🏖️ Status: Schichtfrei / Pool</div><div style="font-size:0.83rem; font-weight:normal;">Du hast heute Schichtfrei (oder wartest auf Einteilung).</div>';
-      } else {
-        const shId = extractShiftIdFromZone(emp.zone), lObj = lines.find(function(l) { return l.id === extractLineId(emp.zone); });
-        sb.className = "status-box status-assigned";
-        sb.innerHTML = '<div style="font-size:0.8rem; text-transform:uppercase;">Heute eingeteilt an:</div><div style="font-size:1.3rem; font-weight:800;">✅ ' + (lObj ? lObj.name : emp.zone) + ' – ' + (shiftsMap[shId] || shId) + '</div>' + (lObj && lObj.note ? '<div style="font-size:0.8rem; font-weight:normal; margin-top:4px;">📌 Linien-Info: ' + lObj.note + '</div>' : '');
-      }
-
-      const mySickOnly = myActiveAbsences.filter(function(s) { return !s.category || s.category.indexOf("Krank") !== -1; });
-      el("earlyReturnBox").style.display = mySickOnly.length > 0 ? "block" : "none";
-
-      const mList = (emp.mainLines || []).map(function(id) { return lines.find(function(l) { return l.id === id; }); }).filter(Boolean);
-      const sList = (emp.secLines || []).map(function(id) { return lines.find(function(l) { return l.id === id; }); }).filter(Boolean);
-      el("empPrioLines").innerHTML = mList.length ? mList.map(function(l) { return '<span class="line-badge badge-prio">' + l.name + '</span>'; }).join("") : '<span style="font-size:0.8rem; color:#94a3b8;">Keine hinterlegt</span>';
-      el("empSecLines").innerHTML = sList.length ? sList.map(function(l) { return '<span class="line-badge badge-sec">' + l.name + '</span>'; }).join("") : '<span style="font-size:0.8rem; color:#94a3b8;">Keine hinterlegt</span>';
-      
-      el("mySickLeavesHistory").innerHTML = !myActiveAbsences.length ? "" : '<div style="font-size:0.82rem; font-weight:700; margin-bottom:6px;">Aktuell aktive Zeiträume im Plan:</div>' + myActiveAbsences.map(function(s) {
-        return '<div class="req-item">' +
-          '<div style="display:flex; justify-content:space-between;">' +
-            '<b>📅 ' + formatDateDe(s.startDate) + ' bis ' + formatDateDe(s.endDate) + '</b>' +
-            '<span style="color:#16a34a; font-weight:700;">✓ ' + (s.category || 'Krank') + '</span>' +
-          '</div>' +
-          (s.returnRequestPending ? '<div style="color:#d97706; font-weight:700; margin-top:3px;">⚠️ Rückkehr-Anfrage für ' + formatDateDe(s.returnRequestDate) + ' in Prüfung</div>' : '') +
-          (s.reason ? '<div style="color:#64748b; margin-top:2px;">Notiz: ' + s.reason + '</div>' : '') +
-          (s.approvedBy ? '<div class="stamp-tag"><span>✍️ Bestätigt durch: <b>' + s.approvedBy + '</b> (' + (s.approvedAt || '') + ')</span></div>' : '') +
-        '</div>';
-      }).join("");
-
-      const myLeaves = leaveRequests.filter(function(lr) { return lr.empId === emp.id && !lr.hiddenForEmp; }).sort(function(a, b) { return (b.createdAt || "").localeCompare(a.createdAt || ""); });
-      el("myLeaveRequestsList").innerHTML = !myLeaves.length ? "" : '<div style="font-size:0.82rem; font-weight:700; margin-bottom:6px;">Meine Anträge:</div>' + myLeaves.map(function(lr) {
-        let effectiveStatus = lr.status || "pending";
-        if ((effectiveStatus === "approved" || effectiveStatus === "accepted_counter") && lr.endDate >= today) {
-          const stillInSickLeaves = sickLeaves.some(function(s) { return s.requestId === lr.id || s.id === lr.linkedSickLeaveId || (s.empId === emp.id && s.startDate <= lr.endDate && s.endDate >= lr.startDate && (!s.category || s.category.indexOf("Krank") === -1)); });
-          if (!stillInSickLeaves) effectiveStatus = "cancelled_by_planner";
-        }
-
-        let statusBadge = '<span style="background:#fef3c7; color:#b45309; padding:2px 6px; border-radius:4px; font-weight:700;">⏳ In Bearbeitung</span>';
-        let actionBtnHtml = '<button class="btn-sm-danger" onclick="cancelOrDeleteLeave(\'' + lr.id + '\', \'' + effectiveStatus + '\')">🗑️ Antrag zurückziehen</button>';
-
-        if (effectiveStatus === "approved" || effectiveStatus === "accepted_counter") {
-          statusBadge = '<span style="background:#dcfce7; color:#166534; padding:2px 6px; border-radius:4px; font-weight:700;">✅ Genehmigt</span>';
-          actionBtnHtml = '<button class="btn-sm-danger" onclick="cancelOrDeleteLeave(\'' + lr.id + '\', \'' + effectiveStatus + '\')">🗑️ Termin stornieren</button>';
-        } else if (effectiveStatus === "rejected") {
-          statusBadge = '<span style="background:#fee2e2; color:#b91c1c; padding:2px 6px; border-radius:4px; font-weight:700;">❌ Abgelehnt</span>';
-          actionBtnHtml = '<button class="btn-sm-danger" onclick="cancelOrDeleteLeave(\'' + lr.id + '\', \'' + effectiveStatus + '\')">✖ Entfernen</button>';
-        } else if (effectiveStatus === "cancelled_by_planner") {
-          statusBadge = '<span style="background:#fee2e2; color:#991b1b; padding:2px 6px; border-radius:4px; font-weight:700;">🚫 Vom Planer beendet/storniert</span>';
-          actionBtnHtml = '<button class="btn-sm-danger" onclick="cancelOrDeleteLeave(\'' + lr.id + '\', \'' + effectiveStatus + '\')">✖ Entfernen</button>';
-        } else if (effectiveStatus === "cancelled_by_emp") {
-          statusBadge = '<span style="background:#f1f5f9; color:#64748b; padding:2px 6px; border-radius:4px; font-weight:700;">🚫 Von dir storniert</span>';
-          actionBtnHtml = '<button class="btn-sm-danger" onclick="cancelOrDeleteLeave(\'' + lr.id + '\', \'' + effectiveStatus + '\')">✖ Entfernen</button>';
-        } else if (effectiveStatus === "declined_counter") {
-          statusBadge = '<span style="background:#f1f5f9; color:#64748b; padding:2px 6px; border-radius:4px; font-weight:700;">Gegenvorschlag abgelehnt</span>';
-          actionBtnHtml = '<button class="btn-sm-danger" onclick="cancelOrDeleteLeave(\'' + lr.id + '\', \'' + effectiveStatus + '\')">✖ Entfernen</button>';
-        } else if (effectiveStatus === "counter_offered") {
-          statusBadge = '<span style="background:#e0f2fe; color:#0369a1; padding:2px 6px; border-radius:4px; font-weight:700;">⚖️ Vorschlag vom Planer</span>';
-          actionBtnHtml = "";
-        }
-
-        let counterHtml = "";
-        if (effectiveStatus === "counter_offered" && lr.proposedRanges) {
-          const rangesText = lr.proposedRanges.map(function(rg, i) { return '<div>• Zeitraum ' + (i + 1) + ': <b>' + formatDateDe(rg.startDate) + ' bis ' + formatDateDe(rg.endDate) + '</b></div>'; }).join("");
-          counterHtml = '<div style="background:#f0f9ff; border:1px solid #7dd3fc; border-radius:6px; padding:10px; margin-top:8px;">' +
-            '<div style="font-weight:700; color:#0369a1; margin-bottom:4px;">⚖️ Der Planer kann folgende Zeiträume genehmigen:</div>' +
-            rangesText +
-            (lr.plannerNote ? '<div style="margin-top:4px; color:#334155;">💬 Info vom Planer: "' + lr.plannerNote + '"</div>' : '') +
-            '<div style="display:flex; gap:8px; margin-top:8px;">' +
-              '<button class="btn btn-primary" style="background:#16a34a; padding:7px; font-size:0.8rem;" onclick="acceptCounterOffer(\'' + lr.id + '\')">✓ Vorschlag annehmen</button>' +
-              '<button class="btn btn-outline" style="color:#ef4444; border-color:#fca5a5; flex:1;" onclick="declineCounterOffer(\'' + lr.id + '\')">✖ Ablehnen</button>' +
-            '</div>' +
-          '</div>';
-        }
-
-        return '<div class="req-item">' +
-          '<div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;">' +
-            '<b>' + lr.type + ': ' + formatDateDe(lr.startDate) + ' – ' + formatDateDe(lr.endDate) + '</b>' +
-            statusBadge +
-          '</div>' +
-          (lr.reason ? '<div style="color:#64748b; margin-top:2px;">Bemerkung: ' + lr.reason + '</div>' : '') +
-          counterHtml +
-          '<div class="stamp-tag">' +
-            '<span>' + (lr.approvedBy ? '✍️ Geprüft durch: <b>' + lr.approvedBy + '</b> (' + (lr.approvedAt || '') + ')' : '🕒 Eingereicht: ' + (lr.createdAt || '-')) + '</span>' +
-            actionBtnHtml +
-          '</div>' +
-        '</div>';
-      }).join("");
-
-      const myExtras = extraShifts.filter(function(es) { return es.empId === emp.id && !es.hiddenForEmp; }).sort(function(a, b) { return b.date.localeCompare(a.date); });
-      el("myExtraShiftsList").innerHTML = !myExtras.length ? "" : '<div style="font-size:0.82rem; font-weight:700; margin-bottom:6px;">Gemeldete Bringschichten:</div>' + myExtras.map(function(es) {
-        let st = '<span style="background:#fef3c7; color:#b45309; padding:2px 6px; border-radius:4px; font-weight:700;">⏳ In Bearbeitung</span>';
-        let btnHtml = '<button class="btn-sm-danger" onclick="cancelOrDeleteExtra(\'' + es.id + '\', \'' + es.status + '\')">🗑️ Zurückziehen</button>';
-        if (es.status === "approved") {
-          st = '<span style="background:#dcfce7; color:#166534; padding:2px 6px; border-radius:4px; font-weight:700;">✅ Bestätigt</span>';
-          btnHtml = '<button class="btn-sm-danger" onclick="cancelOrDeleteExtra(\'' + es.id + '\', \'' + es.status + '\')">🗑️ Absagen / Stornieren</button>';
-        } else if (es.status === "rejected") {
-          st = '<span style="background:#fee2e2; color:#b91c1c; padding:2px 6px; border-radius:4px; font-weight:700;">❌ Abgelehnt</span>';
-          btnHtml = '<button class="btn-sm-danger" onclick="cancelOrDeleteExtra(\'' + es.id + '\', \'' + es.status + '\')">✖ Entfernen</button>';
-        } else if (es.status === "cancelled_by_emp") {
-          st = '<span style="background:#f1f5f9; color:#64748b; padding:2px 6px; border-radius:4px; font-weight:700;">🚫 Von dir abgesagt</span>';
-          btnHtml = '<button class="btn-sm-danger" onclick="cancelOrDeleteExtra(\'' + es.id + '\', \'' + es.status + '\')">✖ Entfernen</button>';
-        }
-        return '<div class="req-item">' +
-          '<div style="display:flex; justify-content:space-between; align-items:center;">' +
-            '<b>📅 ' + formatDateDe(es.date) + ' – ' + (shiftsMap[es.shift] || es.shift) + ' (' + (es.note || 'BS') + ')</b>' +
-            st +
-          '</div>' +
-          '<div class="stamp-tag">' +
-            '<span>' + (es.approvedBy ? '✍️ Bestätigt durch: <b>' + es.approvedBy + '</b> (' + (es.approvedAt || '') + ')' : '🕒 Angefragt: ' + (es.createdAt || '-')) + '</span>' +
-            btnHtml +
-          '</div>' +
-        '</div>';
-      }).join("");
-    }
-
-    function submitLeaveRequest() {
-      const emp = employees.find(function(e) { return e.id === loggedInEmpId; }); if (!emp) return;
-      const type = el("leaveType").value, sD = el("leaveStartDate").value, eD = el("leaveEndDate").value, r = el("leaveReason").value.trim();
-      const err = el("leaveErrorBanner"), succ = el("leaveSuccessBanner"), btn = el("leaveSubmitBtn");
-      err.style.display = "none"; succ.style.display = "none";
-      if (!sD || !eD || eD < sD) { showTimedBanner("leaveErrorBanner", "Bitte einen gültigen Zeitraum (Von - Bis) wählen!", false); return; }
-
-      const hasOverlap = leaveRequests.some(function(lr) { return lr.empId === emp.id && ["pending","counter_offered"].indexOf(lr.status) !== -1 && sD <= lr.endDate && eD >= lr.startDate; }) ||
-                         sickLeaves.some(function(sl) { return sl.empId === emp.id && sD <= sl.endDate && eD >= sl.startDate; });
-      if (hasOverlap) {
-        showTimedBanner("leaveErrorBanner", "⚠️ Für diesen Zeitraum liegt bereits ein offener Antrag oder eine genehmigte Abwesenheit vor!", false);
-        return;
-      }
-
-      btn.disabled = true;
-      safeUpdateBoard(function(latest) {
-        const list = Array.isArray(latest.leaveRequests) ? latest.leaveRequests.slice() : [];
-        list.push({
-          id: "lr_" + Date.now(), empId: emp.id, empName: fullName(emp),
-          type: type, startDate: sD, endDate: eD, reason: r, status: "pending",
-          createdAt: new Date().toLocaleString("de-DE")
-        });
-        return { leaveRequests: list };
-      }).then(function() {
-        el("leaveReason").value = "";
-        showTimedBanner("leaveSuccessBanner", "✅ Dein Antrag wurde zur Prüfung an den Planer gesendet!", false);
-      }).finally(function() { btn.disabled = false; });
-    }
-
-    window.acceptCounterOffer = function(reqId) {
-      const emp = employees.find(function(e) { return e.id === loggedInEmpId; }); if (!emp) return;
-      const today = getTodayIso(), nowStr = new Date().toLocaleString("de-DE");
-      safeUpdateBoard(function(latest) {
-        const lrs = Array.isArray(latest.leaveRequests) ? latest.leaveRequests.slice() : leaveRequests.slice();
-        const sls = Array.isArray(latest.sickLeaves) ? latest.sickLeaves.slice() : sickLeaves.slice();
-        const emps = Array.isArray(latest.employees) ? latest.employees.slice() : employees.slice();
-        const idx = lrs.findIndex(function(r) { return r.id === reqId; });
-        if (idx === -1) return {};
-        const req = Object.assign({}, lrs[idx], { status: "accepted_counter", counterResponseUnread: true, counterRespondedAt: nowStr });
-        lrs[idx] = req;
-        let touchesToday = false;
-        (req.proposedRanges || []).forEach(function(rg, i) {
-          if (rg.startDate <= today && rg.endDate >= today) touchesToday = true;
-          sls.push({
-            id: "sl_" + Date.now() + "_" + i, requestId: req.id, empId: emp.id, empName: fullName(emp),
-            category: req.type, startDate: rg.startDate, endDate: rg.endDate,
-            reason: req.reason || req.type, createdAt: nowStr, readByPlanner: true,
-            approvedBy: req.approvedBy, approvedAt: req.approvedAt
-          });
-        });
-        const updatedEmp = emps.map(function(e) {
-          if (e.id === emp.id && touchesToday && e.zone !== "absent") {
-            const l = extractLineId(e.zone), s = extractShiftIdFromZone(e.zone);
-            return Object.assign({}, e, { lastLineId: l || e.lastLineId, lastShiftId: s || e.lastShiftId, zone: "absent" });
-          }
-          return e;
-        });
-        return { employees: updatedEmp, sickLeaves: sls, leaveRequests: lrs };
-      }).then(function() {
-        showTimedBanner("leaveSuccessBanner", "✅ Gegenvorschlag angenommen und im Schichtplan eingetragen!", false);
-      });
-    };
-
-    window.declineCounterOffer = function(reqId) {
-      const nowStr = new Date().toLocaleString("de-DE");
-      safeUpdateBoard(function(latest) {
-        const lrs = Array.isArray(latest.leaveRequests) ? latest.leaveRequests.slice() : leaveRequests.slice();
-        const idx = lrs.findIndex(function(r) { return r.id === reqId; });
-        if (idx !== -1) lrs[idx] = Object.assign({}, lrs[idx], { status: "declined_counter", counterResponseUnread: true, counterRespondedAt: nowStr });
-        return { leaveRequests: lrs };
-      }).then(function() {
-        showTimedBanner("leaveErrorBanner", "Gegenvorschlag wurde abgelehnt. Der Planer wurde informiert.", false);
-      });
-    };
-
-    window.cancelOrDeleteLeave = function(reqId, effectiveStatus) {
-      const emp = employees.find(function(e) { return e.id === loggedInEmpId; }); if (!emp) return;
-      const today = getTodayIso(), nowStr = new Date().toLocaleString("de-DE");
-
-      if (effectiveStatus === "approved" || effectiveStatus === "accepted_counter") {
-        if (!confirm("Möchtest du diesen bereits genehmigten Termin wirklich stornieren?\n\nDer Planer erhält automatisch eine Benachrichtigung über deine Stornierung.")) return;
-        safeUpdateBoard(function(latest) {
-          const lrs = Array.isArray(latest.leaveRequests) ? latest.leaveRequests.slice() : leaveRequests.slice();
-          const sls = Array.isArray(latest.sickLeaves) ? latest.sickLeaves.slice() : sickLeaves.slice();
-          const emps = Array.isArray(latest.employees) ? latest.employees.slice() : employees.slice();
-          const idx = lrs.findIndex(function(r) { return r.id === reqId; });
-          if (idx === -1) return {};
-          const lr = lrs[idx];
-          const updatedSl = sls.filter(function(s) { return !(s.requestId === lr.id || s.id === lr.linkedSickLeaveId || (s.empId === emp.id && s.startDate === lr.startDate && s.endDate === lr.endDate)); });
-          const stillAbsentToday = updatedSl.some(function(s) { return s.empId === emp.id && s.startDate <= today && s.endDate >= today; });
-          const updatedEmp = emps.map(function(e) { return (e.id === emp.id && e.zone === "absent" && !stillAbsentToday) ? Object.assign({}, e, { zone: getRestoredZoneForEmp(e) }) : e; });
-          lrs[idx] = Object.assign({}, lr, { status: "cancelled_by_emp", cancelUnreadByPlanner: true, cancelledAt: nowStr });
-          return { employees: updatedEmp, sickLeaves: updatedSl, leaveRequests: lrs };
-        });
-      } else {
-        if (effectiveStatus === "pending" && !confirm("Deinen offenen Antrag wirklich zurückziehen?")) return;
-        safeUpdateBoard(function(latest) {
-          let lrs = Array.isArray(latest.leaveRequests) ? latest.leaveRequests.slice() : leaveRequests.slice();
-          const idx = lrs.findIndex(function(r) { return r.id === reqId; });
-          if (idx !== -1) {
-            if (lrs[idx].cancelUnreadByPlanner || lrs[idx].counterResponseUnread) lrs[idx] = Object.assign({}, lrs[idx], { hiddenForEmp: true });
-            else lrs = lrs.filter(function(r) { return r.id !== reqId; });
-          }
-          return { leaveRequests: lrs };
-        });
-      }
-    };
-
-    function submitExtraShift() {
-      const emp = employees.find(function(e) { return e.id === loggedInEmpId; }); if (!emp) return;
-      const d = el("extraDate").value, sh = el("extraShift").value, note = el("extraNote").value.trim() || "BS";
-      const err = el("extraErrorBanner"), succ = el("extraSuccessBanner"), btn = el("extraSubmitBtn");
-      err.style.display = "none"; succ.style.display = "none";
-      if (!d) { showTimedBanner("extraErrorBanner", "Bitte ein Datum wählen!", false); return; }
-
-      const isAbsentOnDate = sickLeaves.some(function(sl) { return sl.empId === emp.id && sl.startDate <= d && sl.endDate >= d; }) ||
-                             leaveRequests.some(function(lr) { return lr.empId === emp.id && ["pending","approved","accepted_counter"].indexOf(lr.status) !== -1 && lr.startDate <= d && lr.endDate >= d; });
-      if (isAbsentOnDate) {
-        showTimedBanner("extraErrorBanner", "⚠️ An diesem Datum bist du bereits als abwesend (Krank/Urlaub) eingetragen!", false);
-        return;
-      }
-
-      const duplicate = extraShifts.some(function(es) { return es.empId === emp.id && es.date === d && ["pending","approved"].indexOf(es.status) !== -1; });
-      if (duplicate) { showTimedBanner("extraErrorBanner", "⚠️ Für diesen Tag hast du bereits eine Bringschicht gemeldet!", false); return; }
-
-      btn.disabled = true;
-      safeUpdateBoard(function(latest) {
-        const list = Array.isArray(latest.extraShifts) ? latest.extraShifts.slice() : [];
-        list.push({
-          id: "es_" + Date.now(), empId: emp.id, empName: fullName(emp),
-          date: d, shift: sh, note: note, status: "pending",
-          createdAt: new Date().toLocaleString("de-DE")
-        });
-        return { extraShifts: list };
-      }).then(function() {
-        showTimedBanner("extraSuccessBanner", "✅ Deine Bringschicht wurde beim Planer angefragt!", false);
-      }).finally(function() { btn.disabled = false; });
-    }
-
-    window.cancelOrDeleteExtra = function(esId, status) {
-      const emp = employees.find(function(e) { return e.id === loggedInEmpId; }); if (!emp) return;
-      const today = getTodayIso(), nowStr = new Date().toLocaleString("de-DE");
-
-      if (status === "approved") {
-        if (!confirm("Möchtest du diese bestätigte Bringschicht wirklich absagen?\n\nDer Planer wird im Postfach über deine Absage informiert.")) return;
-        safeUpdateBoard(function(latest) {
-          const ess = Array.isArray(latest.extraShifts) ? latest.extraShifts.slice() : extraShifts.slice();
-          const emps = Array.isArray(latest.employees) ? latest.employees.slice() : employees.slice();
-          const idx = ess.findIndex(function(x) { return x.id === esId; });
-          if (idx === -1) return {};
-          ess[idx] = Object.assign({}, ess[idx], { status: "cancelled_by_emp", cancelUnreadByPlanner: true, cancelledAt: nowStr });
-          const hasOtherExtraToday = ess.some(function(x) { return x.id !== esId && x.empId === emp.id && x.status === "approved" && x.date === today; });
-          const updatedEmp = emps.map(function(e) { return (e.id === emp.id && e.zone === "extra" && !hasOtherExtraToday) ? Object.assign({}, e, { zone: getRestoredZoneForEmp(e) }) : e; });
-          return { employees: updatedEmp, extraShifts: ess };
-        });
-      } else {
-        if (status === "pending" && !confirm("Bringschicht-Anfrage wirklich zurückziehen?")) return;
-        safeUpdateBoard(function(latest) {
-          let ess = Array.isArray(latest.extraShifts) ? latest.extraShifts.slice() : extraShifts.slice();
-          const idx = ess.findIndex(function(x) { return x.id === esId; });
-          if (idx !== -1) {
-            if (ess[idx].cancelUnreadByPlanner) ess[idx] = Object.assign({}, ess[idx], { hiddenForEmp: true });
-            else ess = ess.filter(function(x) { return x.id !== esId; });
-          }
-          return { extraShifts: ess };
-        });
-      }
-    };
-
-    function submitEarlyReturn() {
-      const emp = employees.find(function(e) { return e.id === loggedInEmpId; }); if (!emp) return;
-      const rDate = el("earlyReturnDate").value, today = getTodayIso();
-      const errBox = el("earlyReturnError"), succBox = el("earlyReturnSuccess"), btn = el("earlyReturnBtn");
-      errBox.style.display = "none"; succBox.style.display = "none";
-      const activeSlIndex = sickLeaves.findIndex(function(s) { return s.empId === emp.id && (!s.category || s.category.indexOf("Krank") !== -1) && s.endDate >= today; });
-      if (activeSlIndex === -1) return;
-      const currentSl = sickLeaves[activeSlIndex];
-      if (!rDate || rDate <= currentSl.startDate) { showTimedBanner("earlyReturnError", "Das Rückkehrdatum muss nach dem Startdatum (" + formatDateDe(currentSl.startDate) + ") liegen!", false); return; }
-      if (rDate > currentSl.endDate) { showTimedBanner("earlyReturnError", "Du bist nur bis zum " + formatDateDe(currentSl.endDate) + " gemeldet!", false); return; }
-      btn.disabled = true;
-      safeUpdateBoard(function(latest) {
-        const sls = Array.isArray(latest.sickLeaves) ? latest.sickLeaves.slice() : sickLeaves.slice();
-        const idx = sls.findIndex(function(s) { return s.id === currentSl.id; });
-        if (idx !== -1) sls[idx] = Object.assign({}, sls[idx], { returnRequestDate: rDate, returnRequestPending: true, readByPlanner: false, returnRequestCreatedAt: new Date().toLocaleString("de-DE") });
-        return { sickLeaves: sls };
-      }).then(function() {
-        showTimedBanner("earlyReturnSuccess", "✅ Deine Rückkehr-Anfrage wurde an den Planer gesendet!", false);
-      }).finally(function() { btn.disabled = false; });
-    }
-
-    function submitSickLeave() {
-      const emp = employees.find(function(e) { return e.id === loggedInEmpId; }); if (!emp) return;
-      const sD = el("sickStartDate").value, eD = el("sickEndDate").value, r = el("sickReason").value.trim(), today = getTodayIso();
-      const errBanner = el("sickErrorBanner"), succBanner = el("sickSuccessBanner"), btn = el("sickSubmitBtn");
-      errBanner.style.display = "none"; succBanner.style.display = "none";
-      if (!sD || !eD || eD < sD) { showTimedBanner("sickErrorBanner", "Bitte einen korrekten Zeitraum (Von - Bis) wählen!", false); return; }
-
-      const existingIdx = sickLeaves.findIndex(function(s) { return s.empId === emp.id && (!s.category || s.category.indexOf("Krank") !== -1) && canMergeDateRanges(s.startDate, s.endDate, sD, eD); });
-      if (existingIdx !== -1) {
-        const ex = sickLeaves[existingIdx];
-        if (sD >= ex.startDate && eD <= ex.endDate) {
-          showTimedBanner("sickErrorBanner", "⚠️ Du bist in diesem Zeitraum bereits bis zum <b>" + formatDateDe(ex.endDate) + "</b> krankgemeldet! Für eine frühere Rückkehr nutze bitte oben die <b>„Gesundmeldung“</b>.", true);
-          return;
-        }
-      }
-
-      btn.disabled = true;
-      const nowStr = new Date().toLocaleString("de-DE");
-      let finalStart = sD, finalEnd = eD;
-
-      safeUpdateBoard(function(latest) {
-        const sls = Array.isArray(latest.sickLeaves) ? latest.sickLeaves.slice() : sickLeaves.slice();
-        const emps = Array.isArray(latest.employees) ? latest.employees.slice() : employees.slice();
-        const idx = sls.findIndex(function(s) { return s.empId === emp.id && (!s.category || s.category.indexOf("Krank") !== -1) && canMergeDateRanges(s.startDate, s.endDate, sD, eD); });
-        if (idx !== -1) {
-          const ex = Object.assign({}, sls[idx]);
-          if (sD < ex.startDate) ex.startDate = sD;
-          if (eD > ex.endDate) ex.endDate = eD;
-          ex.reason = mergeReasonsText(ex.reason, r); ex.createdAt = nowStr; ex.readByPlanner = false;
-          sls[idx] = ex; finalStart = ex.startDate; finalEnd = ex.endDate;
-        } else {
-          sls.push({ id: "sl_" + Date.now(), empId: emp.id, empName: fullName(emp), category: "Arbeitsunfähigkeit (Krank)", startDate: sD, endDate: eD, reason: r, createdAt: nowStr, readByPlanner: false });
-        }
-        const updatedEmp = emps.map(function(e) {
-          if (e.id === emp.id && finalStart <= today && finalEnd >= today && e.zone !== "absent") {
-            const l = extractLineId(e.zone), s = extractShiftIdFromZone(e.zone);
-            return Object.assign({}, e, { lastLineId: l || e.lastLineId, lastShiftId: s || e.lastShiftId, zone: "absent" });
-          }
-          return e;
-        });
-        return { employees: updatedEmp, sickLeaves: sls };
-      }).then(function() {
-        el("sickReason").value = "";
-        showTimedBanner("sickSuccessBanner", "✅ Deine Krankmeldung (" + formatDateDe(finalStart) + " bis " + formatDateDe(finalEnd) + ") wurde übermittelt!", false);
-      }).finally(function() { btn.disabled = false; });
-    }
   </script>
 </body>
 </html>
