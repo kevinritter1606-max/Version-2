@@ -24,8 +24,32 @@
     .bayer-logo-btn img { width: 100%; height: 100%; object-fit: contain; }
     .header-title h1 { font-size: 1.35rem; font-weight: 700; color: var(--bayer-blue); margin: 0; }
     .header-meta { font-size: 0.78rem; color: #64748b; font-weight: 600; margin-top: 2px; }
-    .status-badge { display: none; font-size: 0.75rem; padding: 3px 10px; border-radius: 999px; font-weight: 700; background: #dcfce7; color: #166534; margin-top: 3px; }
+    .header-badges-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+    .status-badge { display: none; font-size: 0.73rem; padding: 3px 10px; border-radius: 999px; font-weight: 700; background: #dcfce7; color: #166534; }
     body.planner-active .status-badge { display: inline-block; }
+
+    /* ANZEIGE FÜR AKTIVE AUTO-ROTATION & SCHICHTMODELL IM DASHBOARD */
+    .auto-rotation-badge {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.73rem;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-weight: 700;
+      cursor: pointer;
+      border: 1px solid #bae6fd;
+      background: #f0f9ff;
+      color: #0369a1;
+      transition: 0.15s;
+    }
+    .auto-rotation-badge.inactive {
+      background: #f1f5f9;
+      color: #64748b;
+      border-color: #cbd5e1;
+    }
+    body.planner-active .auto-rotation-badge { display: inline-flex; }
+
     .header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .btn { padding: 8px 14px; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; position: relative; transition: 0.15s; }
     .btn-primary { background: var(--bayer-blue); color: #fff; }
@@ -117,7 +141,6 @@
     .item-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; gap: 8px; }
     .sick-card { background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid var(--bayer-blue); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
     .sick-card.unread { background: #fff1f2; border-color: #fecdd3; border-left: 4px solid #dc2626; }
-    .inbox-filter-bar { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
     .manual-entry-toggle { width: 100%; text-align: left; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 14px; font-size: 0.86rem; font-weight: 700; color: #0f172a; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
     .manual-entry-toggle:hover { background: #f1f5f9; }
     .lvl-3-only, .admin-element { display: none !important; }
@@ -153,7 +176,13 @@
       <div class="header-title">
         <h1>Schicht und Linienübersicht</h1>
         <div id="headerDateKw" class="header-meta">Lade Datum...</div>
-        <span id="plannerStatusBadge" class="status-badge">Planer-Modus aktiv</span>
+        <div class="header-badges-row">
+          <span id="plannerStatusBadge" class="status-badge">Planer-Modus aktiv</span>
+          <span id="autoRotationBadge" class="auto-rotation-badge active" onclick="openShiftModelSettingsQuick()" title="Klicken, um Schichtmodell & automatische Rotation anzupassen">
+            <span id="autoRotationDot" style="width:7px; height:7px; border-radius:50%; background:#0091df;"></span>
+            <span id="autoRotationText">🔄 Auto-Rotation: Vollkonti</span>
+          </span>
+        </div>
       </div>
     </div>
     <div class="header-actions">
@@ -192,7 +221,7 @@
       <div class="panel">
         <h2>
           <span>Pool <span id="poolCount" style="font-size:0.8rem; color:#64748b;">(0)</span></span>
-          <div style="display:flex; align-items:center; gap:4px;">
+          <div id="poolFreiControlWrap" style="display:flex; align-items:center; gap:4px;">
             <select id="teamSelect_frei" style="font-size:0.72rem; padding:2px 4px; border-radius:4px; border:1px solid #cbd5e1; font-weight:700; color:#334155;"></select>
             <button class="btn btn-outline" style="padding:1px 6px; font-size:0.7rem; color:var(--bayer-blue); border-color:var(--bayer-blue);" onclick="loadTeamToShift('frei')" title="Team als Schichtfrei in den Pool setzen">📥</button>
           </div>
@@ -334,7 +363,7 @@
         <button id="tabBtnEmployees" class="tab-btn lvl-3-only active" onclick="switchTab('tabEmployees', this)">Mitarbeiter</button>
         <button class="tab-btn lvl-3-only" onclick="switchTab('tabRoles', this)">Rollen</button>
         <button class="tab-btn lvl-3-only" onclick="switchTab('tabLines', this)">Linien</button>
-        <button class="tab-btn lvl-3-only" onclick="switchTab('tabTeams', this)">Teams</button>
+        <button id="tabBtnTeams" class="tab-btn lvl-3-only" onclick="switchTab('tabTeams', this)">Teams & Schichtmodell</button>
         <button class="tab-btn lvl-3-only" onclick="switchTab('tabSecurity', this)">Sicherheit</button>
       </div>
       
@@ -384,9 +413,31 @@
         <div id="lineSettingsList" style="max-height: 250px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
       </div>
 
+      <!-- TEAMS & SCHICHTMODELL KONFIGURATION -->
       <div id="tabTeams" class="tab-content">
+        <div style="background:#f0f9ff; padding:14px; border-radius:8px; margin-bottom:14px; border:1px solid #bae6fd;">
+          <h4 style="font-size:0.9rem; color:#0369a1; margin-bottom:10px;">🔄 Schichtmodell & Automatische Rotation</h4>
+          <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+            <div style="flex:1; min-width:180px;">
+              <label style="font-size:0.78rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">Aktives Schichtmodell</label>
+              <select id="cfgShiftModel" class="form-control" onchange="saveShiftModelSettings()">
+                <option value="vollkonti">Vollkonti (4-Team-Rotation mit Freischicht)</option>
+                <option value="dreierschicht">Dreierschicht (3-Team-Rotation Früh / Spät / Nacht)</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:flex; gap:14px; flex-wrap:wrap;">
+            <label style="display:flex; align-items:center; gap:6px; font-size:0.82rem; font-weight:700; cursor:pointer; background:#fff; padding:7px 12px; border-radius:6px; border:1px solid #cbd5e1;">
+              <input type="checkbox" id="cfgAutoRotate" checked onchange="saveShiftModelSettings()"> Automatische Rotation aktiv
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; font-size:0.82rem; font-weight:700; cursor:pointer; background:#fff; padding:7px 12px; border-radius:6px; border:1px solid #cbd5e1;">
+              <input type="checkbox" id="cfgSundayOff" checked onchange="saveShiftModelSettings()"> Immer Sonntags frei (Start So. 22:00 Uhr)
+            </label>
+          </div>
+        </div>
+
         <div style="background:#f8fafc; padding:14px; border-radius:8px; margin-bottom:12px; border:1px solid #e2e8f0;">
-          <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:6px;">Neues Team</label>
+          <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:6px;">Neues Team hinzufügen</label>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
             <input type="color" id="newTeamColor" value="#3b82f6" style="width:40px; height:38px; border:none; cursor:pointer;">
             <input type="text" id="newTeamName" class="form-control" placeholder="Name" style="flex:1; min-width:140px;">
@@ -396,7 +447,7 @@
             <button class="btn btn-primary" onclick="addTeam()">+ Hinzufügen</button>
           </div>
         </div>
-        <div id="teamSettingsList" style="max-height: 240px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
+        <div id="teamSettingsList" style="max-height: 200px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
       </div>
 
       <div id="tabSecurity" class="tab-content">
