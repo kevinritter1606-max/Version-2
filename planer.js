@@ -1,5 +1,5 @@
 /* ==========================================================================
-   PLANER-BOARD LOGIK (planer.js) - Stabile Basis + Live-Schichtfreigabe
+   PLANER-BOARD LOGIK (planer.js) - Inkl. Schichtmodelle & Auto-Rotation
    ========================================================================== */
 
 firebase.initializeApp({
@@ -26,6 +26,14 @@ let teamsConfig = {
 };
 let securityConfig = { boardPwEnabled: false, boardPw: "0110", plannerTimeoutMin: 180 };
 
+// Konfiguration für Schichtmodelle (Vollkonti / Dreierschicht) & Automatik
+let shiftModelConfig = {
+  model: "vollkonti", // "vollkonti" oder "dreierschicht"
+  autoRotate: true,
+  sundayOff: true,
+  lastRotatedWeekKey: ""
+};
+
 // Speichert den Schlüssel der aktuell freigegebenen Schicht (z.B. "2026-10-17_frueh")
 let approvedShiftKey = "";
 
@@ -36,6 +44,22 @@ let selectedManualSickEmpId = null, selectedLoginPlannerId = null;
 let isPlanner = false, plannerLevel = 0, currentPlannerName = "", currentPlannerEmpId = null;
 let sortableInstances = [];
 let toastTimer = null, msgTimers = {};
+
+function getShiftModelLabel(modelKey) {
+  return modelKey === "dreierschicht" ? "Dreierschicht" : "Vollkonti";
+}
+
+// Prüft, ob aktuell das sonntägliche Schichtfrei aktiv ist
+// (Samstag ab 21:00 Uhr nach Spätschicht-Ende bis Sonntag 21:00 Uhr vor Nachtschicht-Vorbereitung)
+function isSundayOffWindow() {
+  if (!shiftModelConfig || shiftModelConfig.sundayOff === false) return false;
+  const now = new Date();
+  const day = now.getDay(); // 0 = Sonntag, 6 = Samstag
+  const hour = now.getHours();
+  if (day === 6 && hour >= 21) return true;
+  if (day === 0 && hour < 21) return true;
+  return false;
+}
 
 // 1-Stunde-vor-Schichtbeginn Logik:
 // 05:00 - 12:59 -> Früh (Start 06:00)
@@ -49,8 +73,6 @@ function getCurrentActiveShiftId() {
 }
 
 // Erzeugt den eindeutigen Schlüssel für die aktuelle Schicht.
-// Zwischen 00:00 und 04:59 Uhr zählt die Nachtschicht noch zum Datum des Vorabends (21:00 Uhr),
-// damit die Freigabe um Mitternacht nicht ungewollt zurückspringt.
 function getCurrentShiftApprovalKey() {
   const now = new Date();
   const hour = now.getHours();
@@ -74,10 +96,53 @@ function isCurrentShiftApproved() {
   return approvedShiftKey === getCurrentShiftApprovalKey();
 }
 
+// Aktualisiert die Anzeige für das Schichtmodell & die Auto-Rotation im Header & Portal
+function updateAutoRotationUI() {
+  const modelName = getShiftModelLabel(shiftModelConfig.model);
+  const isAuto = shiftModelConfig.autoRotate !== false;
+
+  // 1. Planer-Dashboard Badge (index.html)
+  const badge = document.getElementById("autoRotationBadge");
+  const badgeDot = document.getElementById("autoRotationDot");
+  const badgeText = document.getElementById("autoRotationText");
+  if (badge && badgeDot && badgeText) {
+    if (isAuto) {
+      badge.className = "auto-rotation-badge active";
+      badgeDot.style.background = "#0091df";
+      badgeText.textContent = "🔄 Auto-Rotation: " + modelName;
+    } else {
+      badge.className = "auto-rotation-badge inactive";
+      badgeDot.style.background = "#94a3b8";
+      badgeText.textContent = "⏸️ Manuell (" + modelName + ")";
+    }
+  }
+
+  // 2. Portal-Anzeige (portal.html)
+  const portalModelBadge = document.getElementById("portalModelBadge");
+  if (portalModelBadge) {
+    portalModelBadge.textContent = "⚙️ Modell: " + modelName + (isAuto ? " (Auto-Rotation)" : "");
+  }
+
+  // 3. Einstellungs-Felder synchronisieren
+  const selModel = document.getElementById("cfgShiftModel");
+  const chkAuto = document.getElementById("cfgAutoRotate");
+  const chkSun = document.getElementById("cfgSundayOff");
+  if (selModel) selModel.value = shiftModelConfig.model || "vollkonti";
+  if (chkAuto) chkAuto.checked = isAuto;
+  if (chkSun) chkSun.checked = shiftModelConfig.sundayOff !== false;
+
+  // 4. "Frei"-Team-Auswahl im Pool bei Dreierschicht ausblenden/anpassen
+  const freiWrap = document.getElementById("poolFreiControlWrap");
+  if (freiWrap) {
+    freiWrap.style.display = shiftModelConfig.model === "dreierschicht" ? "none" : "flex";
+  }
+}
+
 function updateShiftApprovalUI() {
   const approved = isCurrentShiftApproved();
   const activeShift = getCurrentActiveShiftId();
   const shiftName = shiftsLabel[activeShift] || "Schicht";
+  const sundayOff = isSundayOffWindow();
 
   // 1. Oberer Farbverlaufs-Balken (Board & Portal)
   const bar = document.getElementById("brandGradientBar");
@@ -110,7 +175,11 @@ function updateShiftApprovalUI() {
   const portalDot = document.getElementById("portalStatusDot");
   const portalText = document.getElementById("portalStatusText");
   if (portalBadge && portalDot && portalText) {
-    if (approved) {
+    if (sundayOff && !approved) {
+      portalBadge.className = "portal-shift-status sunday";
+      portalDot.style.background = "#0284c7";
+      portalText.textContent = "Sonntag – Regulär Schichtfrei (Start ab 22:00 Uhr)";
+    } else if (approved) {
       portalBadge.className = "portal-shift-status approved";
       portalDot.style.background = "#16a34a";
       portalText.textContent = shiftName + " ist bestätigt & freigegeben";
@@ -134,7 +203,33 @@ window.toggleShiftApprovalState = function() {
   saveToFirebase();
 };
 
-// Prüft jede halbe Minute, ob ein Schichtwechsel (05:00, 13:00, 21:00 Uhr) stattgefunden hat
+// Prüft, ob ein neuer Wochenzyklus begonnen hat und rotiert bei aktiver Automatik einmalig
+function checkAndRunAutoRotation() {
+  if (!hasLoadedFromCloud || !shiftModelConfig || !shiftModelConfig.autoRotate) return;
+  const now = new Date();
+  // Wochen-Schlüssel basierend auf Kalenderwoche (Rotation erfolgt ab Sonntagabend 21:00 Uhr bzw. Montagmorgen)
+  const d = new Date(now.getTime());
+  if (d.getDay() === 0 && d.getHours() >= 21) {
+    d.setDate(d.getDate() + 1); // Zählt bereits zur neuen Arbeitswoche
+  }
+  const kw = getCalendarWeek(d);
+  const weekKey = d.getFullYear() + "-KW" + kw;
+
+  if (!shiftModelConfig.lastRotatedWeekKey) {
+    shiftModelConfig.lastRotatedWeekKey = weekKey;
+    saveToFirebase();
+    return;
+  }
+
+  // Wenn eine neue Arbeitswoche erreicht wurde (ab Sonntag 21:00 Uhr oder Montag)
+  const isNewWeekStart = (now.getDay() === 0 && now.getHours() >= 21) || (now.getDay() >= 1 && now.getDay() <= 5);
+  if (isNewWeekStart && shiftModelConfig.lastRotatedWeekKey !== weekKey) {
+    shiftModelConfig.lastRotatedWeekKey = weekKey;
+    performShiftRotationLogic(true);
+  }
+}
+
+// Prüft jede halbe Minute auf Schichtwechsel und automatische Rotation
 let lastWatchedShiftKey = getCurrentShiftApprovalKey();
 setInterval(function() {
   const currentKey = getCurrentShiftApprovalKey();
@@ -143,6 +238,7 @@ setInterval(function() {
     updateHeaderDateKw();
     updateShiftApprovalUI();
   }
+  checkAndRunAutoRotation();
 }, 30000);
 
 // Inaktivitäts-Logout für den Planer
@@ -192,7 +288,9 @@ function updateHeaderDateKw() {
   const now = new Date();
   const dateStr = now.toLocaleDateString("de-DE", { weekday: "short", year: "numeric", month: "2-digit", day: "2-digit" });
   const activeShift = getCurrentActiveShiftId();
-  el.textContent = dateStr + " · KW " + getCalendarWeek(now) + " (" + shiftsShortLabel[activeShift] + " aktiv)";
+  const sundayOff = isSundayOffWindow();
+  const shiftInfo = sundayOff ? "Sonntag · Schichtfrei" : (shiftsShortLabel[activeShift] + " aktiv");
+  el.textContent = dateStr + " · KW " + getCalendarWeek(now) + " (" + shiftInfo + ")";
 }
 
 function showTimedBoxMsg(elId, text, isSuccess) {
@@ -252,12 +350,15 @@ window.openPlannerLoginFromLock = function() {
 };
 
 function initBoard() {
+  updateHeaderDateKw();
   updateShiftApprovalUI();
+  updateAutoRotationUI();
   const headerRow = document.getElementById("headerRow");
   if (!headerRow) return;
   if (!Array.isArray(lines) || lines.length === 0) lines = defaultLines.slice();
 
-  headerRow.innerHTML = '<th class="shift-header"><div>Schicht</div><div class="shift-controls"><button class="shift-rotate-btn" onclick="rotateAllShifts()">🔄 Rotieren</button><button class="shift-clear-btn" onclick="clearEntireBoard()">🧹 Alle leeren</button></div></th>';
+  const modelShort = getShiftModelLabel(shiftModelConfig.model);
+  headerRow.innerHTML = '<th class="shift-header"><div>Schicht</div><div style="font-size:0.65rem; color:#0284c7; font-weight:700; margin-top:2px;">' + modelShort + '</div><div class="shift-controls"><button class="shift-rotate-btn" onclick="rotateAllShifts()" title="Rotiert nach aktivem Modell (' + modelShort + ')">🔄 Rotieren</button><button class="shift-clear-btn" onclick="clearEntireBoard()">🧹 Alle leeren</button></div></th>';
   lines.forEach(function(line) {
     const th = document.createElement("th"); th.className = "line-header";
     if (isPlanner) th.onclick = function() { openLineEditModal(line.id); };
@@ -376,6 +477,7 @@ window.addEventListener("DOMContentLoaded", function() {
   roles.forEach(function(r) { activeRoleFilters[r] = true; });
   updateHeaderDateKw();
   updateShiftApprovalUI();
+  updateAutoRotationUI();
 
   const savedName = sessionStorage.getItem("planner_name");
   const savedLvl = Number(sessionStorage.getItem("planner_level") || 0);
@@ -487,10 +589,13 @@ function applyIncomingDocData(d) {
     if (d.shiftRotation && typeof d.shiftRotation === "object") shiftRotation = d.shiftRotation;
     if (d.teamsConfig && typeof d.teamsConfig === "object") teamsConfig = d.teamsConfig;
     if (d.securityConfig && typeof d.securityConfig === "object") securityConfig = Object.assign(securityConfig, d.securityConfig);
+    if (d.shiftModelConfig && typeof d.shiftModelConfig === "object") shiftModelConfig = Object.assign(shiftModelConfig, d.shiftModelConfig);
     if (typeof d.approvedShiftKey === "string") approvedShiftKey = d.approvedShiftKey;
     if (Array.isArray(d.employees)) employees = d.employees;
 
+    checkAndRunAutoRotation();
     updateShiftApprovalUI();
+    updateAutoRotationUI();
     initBoard();
   } catch (err) {
     console.error("Fehler beim Laden:", err);
@@ -507,22 +612,75 @@ function saveToFirebase() {
     lines: lines, roles: roles, employees: employees, teamsConfig: teamsConfig,
     sickLeaves: sickLeaves, leaveRequests: leaveRequests, extraShifts: extraShifts,
     shiftRotation: shiftRotation, securityConfig: securityConfig,
+    shiftModelConfig: shiftModelConfig,
     approvedShiftKey: approvedShiftKey
   }, { merge: true }).catch(function(err){ console.error(err); });
 }
 
-function rotateAllShifts() {
-  const slotOrder = ["frueh", "spaet", "nacht", "frei"];
+// Kernlogik für Schichtrotation (angepasst an Vollkonti oder Dreierschicht)
+function performShiftRotationLogic(autoPlaceEmployees) {
+  const isDreier = shiftModelConfig && shiftModelConfig.model === "dreierschicht";
+  const slotOrder = isDreier ? ["frueh", "spaet", "nacht"] : ["frueh", "spaet", "nacht", "frei"];
   const activeSlots = slotOrder.filter(function(s) { return shiftRotation[s] && isTeamRotating(shiftRotation[s]); });
   if (activeSlots.length < 2) return;
+
   const nextShiftRotation = Object.assign({}, shiftRotation);
   activeSlots.forEach(function(fromSlot, idx) {
     const toSlot = activeSlots[(idx + 1) % activeSlots.length];
     nextShiftRotation[toSlot] = shiftRotation[fromSlot];
   });
   shiftRotation = nextShiftRotation;
-  saveToFirebase(); initBoard();
+
+  // Wenn Mitarbeiter direkt auf ihre Stammlinien/Pool mitrotiert werden sollen
+  if (autoPlaceEmployees) {
+    const activeShiftKeys = ["frueh", "spaet", "nacht"];
+    employees.forEach(function(emp) {
+      if (emp.zone === "absent" || emp.zone === "extra" || isEmpProtectedFromRotation(emp)) return;
+      let targetShift = null;
+      activeShiftKeys.forEach(function(sKey) {
+        if (shiftRotation[sKey] === emp.team) targetShift = sKey;
+      });
+
+      if (targetShift) {
+        const targetLine = (emp.lastLineId && lines.some(function(l){ return l.id === emp.lastLineId; }))
+          ? emp.lastLineId
+          : (emp.mainLines && emp.mainLines[0] ? emp.mainLines[0] : null);
+        emp.zone = targetLine ? (targetLine + "_" + targetShift) : "pool";
+      } else {
+        emp.zone = "pool";
+      }
+    });
+  }
+
+  saveToFirebase();
+  initBoard();
 }
+
+function rotateAllShifts() {
+  performShiftRotationLogic(true);
+}
+
+window.saveShiftModelSettings = function() {
+  const selModel = document.getElementById("cfgShiftModel");
+  const chkAuto = document.getElementById("cfgAutoRotate");
+  const chkSun = document.getElementById("cfgSundayOff");
+  if (selModel) shiftModelConfig.model = selModel.value;
+  if (chkAuto) shiftModelConfig.autoRotate = chkAuto.checked;
+  if (chkSun) shiftModelConfig.sundayOff = chkSun.checked;
+
+  updateAutoRotationUI();
+  updateHeaderDateKw();
+  updateShiftApprovalUI();
+  saveToFirebase();
+  initBoard();
+};
+
+window.openShiftModelSettingsQuick = function() {
+  if (!isPlanner || plannerLevel < 2) return;
+  openSettingsModal();
+  const teamTabBtn = document.getElementById("tabBtnTeams");
+  switchTab("tabTeams", teamTabBtn);
+};
 
 window.loadTeamToShift = function(slotKey) {
   const sel = document.getElementById("teamSelect_" + slotKey);
@@ -754,6 +912,7 @@ window.saveLineDetails = function(keepOpen) {
 function openSettingsModal() {
   if (plannerLevel < 2) return;
   renderSettingsLists();
+  updateAutoRotationUI();
   document.getElementById("settingsModal").style.display = "flex";
 }
 
@@ -780,7 +939,35 @@ function renderSettingsLists() {
       return '<div class="item-row"><span><b>' + fullName(e) + '</b> (' + (teamsConfig[e.team] ? teamsConfig[e.team].name : e.team) + ' · ' + e.role + ')</span><div style="display:flex; gap:6px;"><button class="btn btn-outline" style="padding:2px 8px; font-size:0.75rem;" onclick="editEmployee(\'' + e.id + '\')">✏️</button><button class="btn btn-outline" style="padding:2px 8px; font-size:0.75rem; color:#dc2626;" onclick="deleteEmployee(\'' + e.id + '\')">🗑️</button></div></div>';
     }).join("");
   }
+
+  const teamListEl = document.getElementById("teamSettingsList");
+  if (teamListEl) {
+    const keys = Object.keys(teamsConfig).sort();
+    teamListEl.innerHTML = keys.map(function(k) {
+      const t = teamsConfig[k];
+      const rotChk = t.rotates !== false ? "checked" : "";
+      return '<div class="item-row">' +
+        '<div style="display:flex; align-items:center; gap:8px;">' +
+          '<span style="display:inline-block; width:14px; height:14px; border-radius:3px; background:' + t.color + ';"></span>' +
+          '<b>' + t.name + '</b>' +
+        '</div>' +
+        '<div style="display:flex; align-items:center; gap:10px;">' +
+          '<label style="font-size:0.8rem; display:flex; align-items:center; gap:4px; cursor:pointer;">' +
+            '<input type="checkbox" ' + rotChk + ' onchange="toggleTeamRotateSetting(\'' + k + '\', this.checked)"> Rotiert mit' +
+          '</label>' +
+        '</div>' +
+      '</div>';
+    }).join("");
+  }
 }
+
+window.toggleTeamRotateSetting = function(teamKey, rotates) {
+  if (teamsConfig[teamKey]) {
+    teamsConfig[teamKey].rotates = rotates;
+    saveToFirebase();
+    initBoard();
+  }
+};
 
 window.filterSettingsEmployees = function(val) {
   settingsEmpSearchQuery = (val || "").trim().toLowerCase();
@@ -815,6 +1002,7 @@ function addTeam() {
   const k = "team_" + Date.now();
   teamsConfig[k] = { name: name, color: color, rotates: rotates };
   activeTeamFilters[k] = true;
+  document.getElementById("newTeamName").value = "";
   saveToFirebase(); initBoard();
 }
 
