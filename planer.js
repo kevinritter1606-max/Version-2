@@ -1,5 +1,5 @@
 /* ==========================================================================
-   PLANER-BOARD LOGIK (planer.js) - Inkl. korrigierter Nadel- & Memory-Funktion
+   PLANER-BOARD LOGIK (planer.js) - Optimierte Komplettversion (Version 2.9)
    ========================================================================== */
 
 firebase.initializeApp({
@@ -12,7 +12,9 @@ const boardRef = db.collection("shiftplan").doc("live_board");
 const shifts = [{ id: "frueh", name: "Früh" }, { id: "spaet", name: "Spät" }, { id: "nacht", name: "Nacht" }];
 const shiftsLabel = { frueh: "Frühschicht", spaet: "Spätschicht", nacht: "Nachtschicht" };
 const shiftsShortLabel = { frueh: "Früh", spaet: "Spät", nacht: "Nacht" };
-const defaultLines = ["32","33","34","09","22","39","36","37","38","54"].map(function(n) { return { id: "L" + n, name: "Linie " + n, prio: "", tag: "", note: "" }; });
+const defaultLines = ["32","33","34","09","22","39","36","37","38","54"].map(function(n) {
+  return { id: "L" + n, name: "Linie " + n, prio: "", tag: "", note: "" };
+});
 
 let shiftRotation = { frueh: "team-1", spaet: "team-2", nacht: "team-3", frei: "team-4" };
 let lines = defaultLines.slice();
@@ -26,28 +28,38 @@ let teamsConfig = {
 };
 let securityConfig = { boardPwEnabled: false, boardPw: "0110", plannerTimeoutMin: 180 };
 
+// Schichtmodell-Konfiguration (Tageswechsel immer um 21:00 Uhr = 1h vor 22:00 Uhr Nachtschicht)
 let shiftModelConfig = {
-  model: "vollkonti_sonntag_frei",
+  model: "vollkonti_sonntag_frei", // "vollkonti_sonntag_frei", "vollkonti", "dreierschicht"
   autoRotate: true,
   startDate: "",
-  lastRotatedWeekKey: ""
+  lastRotationStepKey: ""
 };
 
 let approvedShiftKey = "";
 let hasLoadedFromCloud = false;
+let isDraggingCard = false;
 let activeTeamFilters = {}, activeRoleFilters = {}, poolSearchQuery = "", settingsEmpSearchQuery = "";
 let inboxSearchQuery = "";
-let selectedManualSickEmpId = null, selectedLoginPlannerId = null;
+let selectedManualSickEmpId = null, selectedManualExtraEmpId = null, selectedLoginPlannerId = null;
 let isPlanner = false, plannerLevel = 0, currentPlannerName = "", currentPlannerEmpId = null;
 let sortableInstances = [];
-let msgTimers = {};
+let msgTimers = {}, toastTimer = null;
 
-function getShiftModelLabel(modelKey) {
-  if (modelKey === "dreierschicht") return "Dreierschicht";
-  if (modelKey === "vollkonti") return "Vollkonti";
-  return "Vollkonti (Sonntags frei)";
+function showToast(text, isError) {
+  const t = document.getElementById("toastBanner");
+  if (!t) return;
+  if (toastTimer) clearTimeout(toastTimer);
+  t.style.background = isError ? "#dc2626" : "#16a34a";
+  t.textContent = text;
+  t.style.display = "block";
+  toastTimer = setTimeout(function() { t.style.display = "none"; }, 3000);
 }
 
+// ============================================================================
+// ZEIT-, 2-TAGE-RHYTHMUS- & SONNTAGS-LOGIK (UMSCHALTUNG EXAKT UM 21:00 UHR)
+// ============================================================================
+// Um 21:00 Uhr (1h vor der 22:00 Uhr Nachtschicht) beginnt bereits der neue Produktionstag (+3h Offset)
 function getLogicalDateObj(baseDate) {
   const now = baseDate || new Date();
   return new Date(now.getTime() + 3 * 60 * 60 * 1000);
@@ -63,6 +75,10 @@ function getTodayIso() {
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
 
+// 1-Stunde-vor-Schichtbeginn:
+// 05:00 - 12:59 -> Früh (Start 06:00)
+// 13:00 - 20:59 -> Spät (Start 14:00)
+// 21:00 - 04:59 -> Nacht (Start 22:00)
 function getCurrentActiveShiftId() {
   const hour = new Date().getHours();
   if (hour >= 5 && hour < 13) return "frueh";
@@ -70,11 +86,16 @@ function getCurrentActiveShiftId() {
   return "nacht";
 }
 
-function isSundayOffWindow() {
+// Prüft, ob für Früh- und Spätschicht aktuell Sonntags-Frei gilt.
+// Am Sonntag haben Früh- und Spätschicht frei, nur die Nachtschicht läuft in den Sonntag!
+function isSundayDaytimeFree() {
   const m = shiftModelConfig ? shiftModelConfig.model : "vollkonti_sonntag_frei";
   if (m !== "vollkonti_sonntag_frei" && m !== "dreierschicht") return false;
-  const ld = getLogicalDateObj();
-  return ld.getDay() === 0;
+  const now = new Date();
+  const day = now.getDay(); // 0 = Sonntag
+  const hour = now.getHours();
+  // Sonntag von 05:00 Uhr (Ende der Sa->So Nachtschicht) bis 20:59 Uhr (vor Start der So->Mo Nachtschicht)
+  return (day === 0 && hour >= 5 && hour < 21);
 }
 
 function getCurrentShiftApprovalKey() {
@@ -95,53 +116,80 @@ function getCalendarWeek(d) {
   return Math.ceil((firstThursday - target) / (7 * 86400000) + 1);
 }
 
+// Berechnet die Anzahl vergangener Produktionstage seit dem Startdatum (jeweils ab 21:00 Uhr)
+function getDaysSinceStart(logicalIso) {
+  if (!shiftModelConfig.startDate) return 0;
+  const p1 = shiftModelConfig.startDate.split("-");
+  const p2 = logicalIso.split("-");
+  if (p1.length !== 3 || p2.length !== 3) return 0;
+  const utc1 = Date.UTC(Number(p1[0]), Number(p1[1]) - 1, Number(p1[2]));
+  const utc2 = Date.UTC(Number(p2[0]), Number(p2[1]) - 1, Number(p2[2]));
+  return Math.floor((utc2 - utc1) / 86400000);
+}
+
+// Prüft und führt die automatische Rotation exakt um 21:00 Uhr aus:
+// - Bei Vollkonti: im 2-Tage-Rhythmus (alle 2 Produktionstage ab Startdatum)
+// - Bei Dreierschicht: im Wochen-Rhythmus (jeden Sonntag um 21:00 Uhr zum Start der neuen KW)
 function checkAndRunAutoRotation() {
   if (!hasLoadedFromCloud || !shiftModelConfig || !shiftModelConfig.autoRotate) return;
+
   const ld = getLogicalDateObj();
   const logicalIso = getLogicalDateIso();
 
   if (shiftModelConfig.startDate && logicalIso < shiftModelConfig.startDate) return;
-  if (ld.getDay() === 0) return;
 
-  const kw = getCalendarWeek(ld);
-  const weekKey = ld.getFullYear() + "-KW" + kw;
+  let stepKey = "";
+  if (shiftModelConfig.model === "dreierschicht") {
+    if (ld.getDay() === 0) return;
+    stepKey = "KW_" + ld.getFullYear() + "_" + getCalendarWeek(ld);
+  } else {
+    // 2-Tage-Rhythmus für Vollkonti
+    if (shiftModelConfig.startDate) {
+      const daysDiff = getDaysSinceStart(logicalIso);
+      if (daysDiff < 0) return;
+      const cycleIndex = Math.floor(daysDiff / 2);
+      stepKey = "2DAY_" + shiftModelConfig.startDate + "_" + cycleIndex;
+    } else {
+      const epochDays = Math.floor(Date.UTC(ld.getFullYear(), ld.getMonth(), ld.getDate()) / 86400000);
+      stepKey = "2DAY_AUTO_" + Math.floor(epochDays / 2);
+    }
+  }
 
-  if (!shiftModelConfig.lastRotatedWeekKey) {
-    shiftModelConfig.lastRotatedWeekKey = weekKey;
+  if (!shiftModelConfig.lastRotationStepKey) {
+    shiftModelConfig.lastRotationStepKey = stepKey;
     saveToFirebase();
     return;
   }
 
-  if (shiftModelConfig.lastRotatedWeekKey !== weekKey) {
-    shiftModelConfig.lastRotatedWeekKey = weekKey;
-    logHistory("Auto-Rotation", "Wochenwechsel auf KW " + kw + " (" + getShiftModelLabel(shiftModelConfig.model) + ")");
+  if (shiftModelConfig.lastRotationStepKey !== stepKey) {
+    shiftModelConfig.lastRotationStepKey = stepKey;
+    logHistory("Auto-Rotation", "Automatischer Wechsel um 21:00 Uhr ausgeführt");
     performShiftRotationLogic(true);
   }
 }
 
+// Minimalistischer Automatik-Indikator im Header ("🔄 Automatik aktiv" / "⏸️ Manuell")
 function updateAutoRotationUI() {
-  const modelName = getShiftModelLabel(shiftModelConfig.model);
   const isAuto = shiftModelConfig.autoRotate !== false;
-  const startStr = shiftModelConfig.startDate ? formatDateDe(shiftModelConfig.startDate) : "";
 
   const badge = document.getElementById("autoRotationBadge");
-  const badgeDot = document.getElementById("autoRotationDot");
+  const badgeIcon = document.getElementById("autoRotationIcon");
   const badgeText = document.getElementById("autoRotationText");
-  if (badge && badgeDot && badgeText) {
+  if (badge && badgeIcon && badgeText) {
     if (isAuto) {
       badge.className = "auto-rotation-badge active";
-      badgeDot.style.background = "#0091df";
-      badgeText.textContent = "Auto: " + modelName + (startStr ? " (ab " + startStr + ")" : "");
+      badgeIcon.textContent = "🔄";
+      badgeText.textContent = "Automatik aktiv";
     } else {
       badge.className = "auto-rotation-badge";
-      badgeDot.style.background = "#94a3b8";
-      badgeText.textContent = "Manuell: " + modelName;
+      badgeIcon.textContent = "⏸️";
+      badgeText.textContent = "Manuell";
     }
   }
 
   const portalModelBadge = document.getElementById("portalModelBadge");
   if (portalModelBadge) {
-    portalModelBadge.textContent = "Modell: " + modelName + (isAuto ? " · Auto-Rotation aktiv" : "");
+    portalModelBadge.textContent = isAuto ? "🔄 Automatische Schichtrotation aktiv" : "⏸️ Manuelle Schichtplanung";
   }
 
   const selModel = document.getElementById("cfgShiftModel");
@@ -153,13 +201,13 @@ function updateAutoRotationUI() {
   if (chkAuto) chkAuto.checked = isAuto;
   if (hintEl) {
     if (!isAuto) {
-      hintEl.textContent = "Automatik pausiert";
+      hintEl.textContent = "⏸️ Automatik deaktiviert";
       hintEl.style.color = "#64748b";
     } else if (shiftModelConfig.startDate && getLogicalDateIso() < shiftModelConfig.startDate) {
-      hintEl.textContent = "Startet am Vorabend zum " + formatDateDe(shiftModelConfig.startDate) + " um 21:00 Uhr";
+      hintEl.textContent = "⏳ Startet am Vorabend zum " + formatDateDe(shiftModelConfig.startDate) + " um 21:00 Uhr";
       hintEl.style.color = "#0369a1";
     } else {
-      hintEl.textContent = "Aktiv (Wechsel So. 21:00 Uhr)";
+      hintEl.textContent = "✅ Aktiv (Umschaltung jeweils 21:00 Uhr)";
       hintEl.style.color = "#166534";
     }
   }
@@ -174,7 +222,7 @@ function updateShiftApprovalUI() {
   const approved = isCurrentShiftApproved();
   const activeShift = getCurrentActiveShiftId();
   const shiftName = shiftsLabel[activeShift] || "Schicht";
-  const sundayOff = isSundayOffWindow();
+  const sundayFree = isSundayDaytimeFree();
 
   const bar = document.getElementById("brandGradientBar");
   if (bar) bar.className = approved ? "brand-gradient approved" : "brand-gradient pending";
@@ -202,10 +250,10 @@ function updateShiftApprovalUI() {
   const portalDot = document.getElementById("portalStatusDot");
   const portalText = document.getElementById("portalStatusText");
   if (portalBadge && portalDot && portalText) {
-    if (sundayOff && !approved) {
+    if (sundayFree && !approved) {
       portalBadge.className = "portal-shift-status sunday";
       portalDot.style.background = "#0284c7";
-      portalText.textContent = "Sonntag – Schichtfrei (Nachtschicht ab 22:00 Uhr)";
+      portalText.textContent = "Sonntag – Früh & Spät frei (Nachtschicht ab 22:00 Uhr)";
     } else if (approved) {
       portalBadge.className = "portal-shift-status approved";
       portalDot.style.background = "#16a34a";
@@ -226,10 +274,11 @@ window.toggleShiftApprovalState = function() {
     logHistory("Freigabe", "Schichtfreigabe zurückgezogen");
   } else {
     approvedShiftKey = currentKey;
-    logHistory("Freigabe", "Schicht freigegeben");
+    logHistory("Freigabe", "Schicht bestätigt & freigegeben");
   }
   updateShiftApprovalUI();
   saveToFirebase();
+  if (typeof renderPortalView === "function") renderPortalView();
 };
 
 let lastWatchedShiftKey = getCurrentShiftApprovalKey();
@@ -263,7 +312,32 @@ function extractShiftIdFromZone(z) { return (!z || ["pool","absent","extra"].ind
 function isTeamRotating(teamKey) { return teamsConfig[teamKey] ? (teamsConfig[teamKey].rotates !== false) : true; }
 function isEmpProtectedFromRotation(emp) { return !!(emp.noRotation || !isTeamRotating(emp.team)); }
 
-// Nadel-Memory-Funktion: Nadel direkt per Klick löschen
+// Bereinigt ungültige oder gelöschte Team-Verweise sofort (verhindert das "Team 55" Geister-Problem)
+function sanitizeTeamReferences() {
+  const validKeys = Object.keys(teamsConfig);
+  if (validKeys.length === 0) {
+    teamsConfig["team-1"] = { name: "Team 1", color: "#0091df", rotates: true };
+    validKeys.push("team-1");
+  }
+  const fallbackKey = validKeys[0];
+
+  ["frueh", "spaet", "nacht", "frei"].forEach(function(slot) {
+    if (!shiftRotation[slot] || !teamsConfig[shiftRotation[slot]]) {
+      shiftRotation[slot] = fallbackKey;
+    }
+  });
+
+  employees.forEach(function(emp) {
+    if (!emp.team || !teamsConfig[emp.team]) {
+      emp.team = fallbackKey;
+    }
+  });
+
+  Object.keys(activeTeamFilters).forEach(function(k) {
+    if (!teamsConfig[k]) delete activeTeamFilters[k];
+  });
+}
+
 window.deletePin = function(id) {
   const emp = employees.find(function(e) { return e.id === id; });
   if (emp) {
@@ -281,8 +355,8 @@ function updateHeaderDateKw() {
   const ld = getLogicalDateObj(now);
   const dateStr = now.toLocaleDateString("de-DE", { weekday: "short", year: "numeric", month: "2-digit", day: "2-digit" });
   const activeShift = getCurrentActiveShiftId();
-  const sundayOff = isSundayOffWindow();
-  const shiftInfo = sundayOff ? "Sonntag · Schichtfrei" : (shiftsShortLabel[activeShift] + " aktiv");
+  const sundayFree = isSundayDaytimeFree();
+  const shiftInfo = sundayFree ? "Sonntag · Früh/Spät frei" : (shiftsShortLabel[activeShift] + " aktiv");
   el.textContent = dateStr + " · KW " + getCalendarWeek(ld) + " (" + shiftInfo + ")";
 }
 
@@ -353,9 +427,12 @@ function logHistory(action, details) {
 }
 
 function initBoard() {
+  if (isDraggingCard) return;
+  sanitizeTeamReferences();
   updateHeaderDateKw();
   updateShiftApprovalUI();
   updateAutoRotationUI();
+
   const headerRow = document.getElementById("headerRow");
   if (!headerRow) return;
   if (!Array.isArray(lines) || lines.length === 0) lines = defaultLines.slice();
@@ -371,27 +448,52 @@ function initBoard() {
 
   const matrixBody = document.getElementById("matrixBody"); matrixBody.innerHTML = "";
   const keys = Object.keys(teamsConfig).sort();
+  const sundayFree = isSundayDaytimeFree();
+
   shifts.forEach(function(shift) {
-    const curKey = shiftRotation[shift.id] || keys[0], curObj = teamsConfig[curKey] || { name: "Team", color: "#0091df" };
+    const curKey = shiftRotation[shift.id] || keys[0];
+    const curObj = teamsConfig[curKey] || { name: "Team", color: "#0091df" };
     const opts = keys.map(function(k) {
       return '<option value="' + k + '" style="color:' + teamsConfig[k].color + '; font-weight:700;" ' + (k === curKey ? 'selected' : '') + '>■ ' + teamsConfig[k].name + (isTeamRotating(k) ? ' 🔄' : '') + '</option>';
     }).join("");
+
+    const isShiftSundayOff = sundayFree && (shift.id === "frueh" || shift.id === "spaet");
+    const sunBadge = isShiftSundayOff ? '<div style="font-size:0.64rem; color:#0284c7; background:#e0f2fe; padding:2px 4px; border-radius:4px; margin-top:3px;">So. Frei</div>' : '';
+
     const tr = document.createElement("tr"), thS = document.createElement("th");
     thS.className = "shift-header";
-    thS.innerHTML = '<div>' + shift.name + '</div><div class="shift-team-badge"><span style="color:' + curObj.color + ';">■</span> ' + curObj.name + '</div><div class="shift-controls"><div style="display:flex; gap:4px;"><select id="teamSelect_' + shift.id + '" class="shift-team-select" style="flex:1; border-left:6px solid ' + curObj.color + '; color:' + curObj.color + ';" onchange="styleShiftDropdown(this, this.value)">' + opts + '</select><button class="shift-clear-btn" style="width:26px; padding:0; color:var(--bayer-blue); border-color:var(--bayer-blue);" onclick="loadTeamToShift(\'' + shift.id + '\')" title="Team auf Linien laden">📥</button></div><button class="shift-clear-btn" onclick="clearShiftRow(\'' + shift.id + '\', \'' + shift.name + '\')">🧹 Leeren</button></div>';
+    thS.innerHTML = '<div>' + shift.name + '</div>' + sunBadge + '<div class="shift-team-badge" style="border-left:4px solid ' + curObj.color + ';"><span style="color:' + curObj.color + ';">■</span> ' + curObj.name + '</div><div class="shift-controls"><div style="display:flex; gap:4px;"><select id="teamSelect_' + shift.id + '" class="shift-team-select" style="flex:1; border-left:6px solid ' + curObj.color + '; color:' + curObj.color + ';" onchange="onShiftTeamDropdownChange(\'' + shift.id + '\', this)">' + opts + '</select><button class="shift-clear-btn" style="width:26px; padding:0; color:var(--bayer-blue); border-color:var(--bayer-blue);" onclick="loadTeamToShift(\'' + shift.id + '\')" title="Team auf Linien laden">📥</button></div><button class="shift-clear-btn" onclick="clearShiftRow(\'' + shift.id + '\')">🧹 Leeren</button></div>';
     tr.appendChild(thS);
     lines.forEach(function(line) {
       const td = document.createElement("td"), zId = line.id + "_" + shift.id;
-      td.innerHTML = '<div id="' + zId + '" class="card-list drop-zone" data-zone="' + zId + '"></div>';
+      td.innerHTML = '<div id="' + zId + '" class="card-list drop-zone" data-zone="' + zId + '"' + (isShiftSundayOff ? ' style="background:#f1f5f9; opacity:0.85;"' : '') + '></div>';
       tr.appendChild(td);
     });
     matrixBody.appendChild(tr);
   });
 
-  renderEmployees(); initDragAndDrop(); updateRoleDropdown(); updateTeamDropdowns(); renderTeamFilterCheckboxes(); renderRoleFilterCheckboxes(); applyTeamStyles(); renderLineCheckboxes(); renderSettingsLists(); updateInboxBadge(); checkBoardLockState();
+  applyTeamStyles();
+  updateRoleDropdown();
+  updateTeamDropdowns();
+  renderTeamFilterCheckboxes();
+  renderRoleFilterCheckboxes();
+  renderLineCheckboxes();
+  renderEmployees();
+  initDragAndDrop();
+  renderSettingsLists();
+  updateInboxBadge();
+  checkBoardLockState();
 }
 
+window.onShiftTeamDropdownChange = function(shiftId, selEl) {
+  const newTeamKey = selEl.value;
+  styleShiftDropdown(selEl, newTeamKey);
+  shiftRotation[shiftId] = newTeamKey;
+  saveToFirebase();
+};
+
 function renderEmployees() {
+  if (isDraggingCard) return;
   const dropZones = document.querySelectorAll(".drop-zone");
   if (!dropZones.length) return;
   dropZones.forEach(function(el) { el.innerHTML = ""; });
@@ -410,18 +512,26 @@ function renderEmployees() {
       }
     }
 
+    const teamObj = teamsConfig[emp.team] || { name: "Team", color: "#0091df" };
     const card = document.createElement("div");
-    card.className = "employee-card " + emp.team; card.setAttribute("data-id", emp.id);
+    card.className = "employee-card";
+    card.setAttribute("data-id", emp.id);
+    // Garantierte farbliche Kennzeichnung der Teams direkt am linken Rand der Karte
+    card.style.borderLeft = "5px solid " + (teamObj.color || "#0091df");
+
     let parts = [];
     if (emp.lastLineId) {
       const lastL = lines.find(function(x) { return x.id === emp.lastLineId; });
       if (lastL) {
-        const delBtn = '<span onclick="event.stopPropagation(); deletePin(\'' + emp.id + '\')" style="cursor:pointer; color:#ef4444; font-size:0.75rem; padding:0 3px;" title="Nadel entfernen">✖</span>';
+        const delBtn = isPlanner ? '<span onclick="event.stopPropagation(); deletePin(\'' + emp.id + '\')" style="cursor:pointer; color:#ef4444; font-size:0.75rem; padding:0 3px;" title="Nadel entfernen">✖</span>' : '';
         parts.push('<span style="color:#0284c7; font-weight:700;" title="Gemerkte Stammlinie (Memory-Effekt)">📌 ' + lastL.name.replace(/Linie\s*/i, '') + ' ' + delBtn + '</span>');
       }
     }
     if (emp.mainLines && emp.mainLines.length) {
       parts.push("<b>Prio:</b> " + emp.mainLines.map(function(id) { const l = lines.find(function(x){return x.id===id;}); return l ? l.name.replace(/Linie\s*/i, '') : null; }).filter(Boolean).join(", "));
+    }
+    if (emp.secLines && emp.secLines.length) {
+      parts.push("<b>Sek:</b> " + emp.secLines.map(function(id) { const l = lines.find(function(x){return x.id===id;}); return l ? l.name.replace(/Linie\s*/i, '') : null; }).filter(Boolean).join(", "));
     }
 
     const fixHtml = emp.noRotation ? '<span class="card-fix-tag" title="Fixiert">⚓ Fix</span>' : '';
@@ -452,23 +562,49 @@ function renderEmployees() {
   if (document.getElementById("poolCount")) document.getElementById("poolCount").textContent = "(" + (pEl ? pEl.children.length : 0) + ")";
   if (document.getElementById("extraCount")) document.getElementById("extraCount").textContent = "(" + (eEl ? eEl.children.length : 0) + ")";
   if (document.getElementById("absentCount")) document.getElementById("absentCount").textContent = "(" + (aEl ? aEl.children.length : 0) + ")";
+
+  renderApprovedExtraSidebar();
 }
 
-// DRAG-AND-DROP MIT ROBUSTER NADEL-LOGIK (MEMORY-EFFEKT)
+function renderApprovedExtraSidebar() {
+  const box = document.getElementById("approvedExtraList");
+  if (!box) return;
+  const today = getTodayIso();
+  const upcoming = extraShifts.filter(function(es) { return es.date >= today; }).sort(function(a, b) { return a.date.localeCompare(b.date); });
+  if (!upcoming.length) {
+    box.innerHTML = "";
+    return;
+  }
+  box.innerHTML = upcoming.map(function(es) {
+    const emp = employees.find(function(e) { return e.id === es.empId; });
+    const name = emp ? fullName(emp) : "Unbekannt";
+    return '<div style="display:flex; justify-content:space-between; align-items:center; padding:3px 6px; background:#dcfce7; color:#166534; border-radius:4px; margin-bottom:3px;">' +
+      '<span><b>' + name + '</b> · ' + formatDateDe(es.date) + ' (' + (shiftsShortLabel[es.shift] || es.shift) + ')</span>' +
+      (isPlanner ? '<span style="cursor:pointer; color:#dc2626; font-weight:bold; padding-left:6px;" onclick="deleteExtraShift(\'' + es.id + '\')" title="Bringschicht löschen">✖</span>' : '') +
+    '</div>';
+  }).join("");
+}
+
 function initDragAndDrop() {
-  sortableInstances.forEach(function(s) { s.destroy(); }); sortableInstances = [];
+  sortableInstances.forEach(function(s) { s.destroy(); });
+  sortableInstances = [];
   document.querySelectorAll(".drop-zone").forEach(function(zone) {
     sortableInstances.push(new Sortable(zone, {
-      group: "shared-shifts", animation: 150, disabled: !isPlanner,
+      group: "shared-shifts",
+      animation: 150,
+      disabled: !isPlanner,
+      onStart: function() {
+        isDraggingCard = true;
+      },
       onEnd: function (evt) {
+        isDraggingCard = false;
         const empId = evt.item.getAttribute("data-id"), newZone = evt.to.getAttribute("data-zone");
         const emp = employees.find(function(e) { return e.id === empId; });
         if (emp) {
           emp.zone = newZone;
           const nL = extractLineIdFromZone(newZone), nS = extractShiftIdFromZone(newZone);
           if (nL && nS) emp.lastShiftId = nS;
-          
-          // Sobald der Mitarbeiter auf eine Linie gezogen wird, merkt sich das System diese Linie als seine Stamm-Nadel
+          // Nadel-Memory-Effekt: Merkt sich zuverlässig die Linie, auf die der Mitarbeiter gezogen wurde
           if (nL) {
             emp.lastLineId = nL;
           }
@@ -560,6 +696,10 @@ function verifyPin() {
     showTimedBoxMsg("loginModalError", "❌ Name oder PIN nicht korrekt!", false); return;
   }
 
+  if (Number(emp.accessLevel || 1) < 2) {
+    showTimedBoxMsg("loginModalError", "❌ Kein Planer-Zugriff für dieses Profil freigeschaltet.", false); return;
+  }
+
   sessionStorage.setItem("board_unlocked", "true");
   applyPlannerLoginState(fullName(emp), Number(emp.accessLevel) || 2, emp.id); closeModal("pinModal"); initBoard();
 }
@@ -608,32 +748,47 @@ function applyIncomingDocData(d) {
     if (typeof d.approvedShiftKey === "string") approvedShiftKey = d.approvedShiftKey;
     if (Array.isArray(d.employees)) employees = d.employees;
 
+    sanitizeTeamReferences();
     checkAndRunAutoRotation();
     updateShiftApprovalUI();
     updateAutoRotationUI();
     initBoard();
+    if (typeof renderPortalView === "function") renderPortalView();
   } catch (err) {
     console.error("Fehler beim Laden:", err);
   }
 }
 
 boardRef.onSnapshot(function(doc) {
-  if (doc.exists) applyIncomingDocData(doc.data());
+  if (doc.exists && !isDraggingCard) applyIncomingDocData(doc.data());
 });
 
+// WICHTIG: Nutzt .update() statt .set(..., {merge:true}), damit gelöschte Teams (wie "55")
+// in teamsConfig vollständig aus Firestore verschwinden und nicht wieder zurückkommen!
 function saveToFirebase() {
   if (!hasLoadedFromCloud) return;
-  boardRef.set({
-    lines: lines, roles: roles, employees: employees, teamsConfig: teamsConfig,
-    sickLeaves: sickLeaves, leaveRequests: leaveRequests, extraShifts: extraShifts,
-    historyLogs: historyLogs, backups: backups,
-    shiftRotation: shiftRotation, securityConfig: securityConfig,
+  sanitizeTeamReferences();
+  const payload = {
+    lines: lines,
+    roles: roles,
+    employees: employees,
+    teamsConfig: teamsConfig,
+    sickLeaves: sickLeaves,
+    leaveRequests: leaveRequests,
+    extraShifts: extraShifts,
+    historyLogs: historyLogs,
+    backups: backups,
+    shiftRotation: shiftRotation,
+    securityConfig: securityConfig,
     shiftModelConfig: shiftModelConfig,
     approvedShiftKey: approvedShiftKey
-  }, { merge: true }).catch(function(err){ console.error(err); });
+  };
+  boardRef.update(payload).catch(function() {
+    boardRef.set(payload);
+  });
 }
 
-// Rotations-Logik unter Berücksichtigung der gemerkten Nadel (lastLineId)
+// Rotations-Logik unter Berücksichtigung der gemerkten Nadel (lastLineId) & Sonntags-Regel
 function performShiftRotationLogic(autoPlaceEmployees) {
   const isDreier = shiftModelConfig && shiftModelConfig.model === "dreierschicht";
   const slotOrder = isDreier ? ["frueh", "spaet", "nacht"] : ["frueh", "spaet", "nacht", "frei"];
@@ -649,6 +804,8 @@ function performShiftRotationLogic(autoPlaceEmployees) {
 
   if (autoPlaceEmployees) {
     const activeShiftKeys = ["frueh", "spaet", "nacht"];
+    const sundayFree = isSundayDaytimeFree();
+
     employees.forEach(function(emp) {
       if (emp.zone === "absent" || emp.zone === "extra" || isEmpProtectedFromRotation(emp)) return;
       let targetShift = null;
@@ -656,8 +813,13 @@ function performShiftRotationLogic(autoPlaceEmployees) {
         if (shiftRotation[sKey] === emp.team) targetShift = sKey;
       });
 
+      // Am Sonntag tagsüber bleiben Früh & Spät automatisch frei im Pool, nur Nachtschicht wird besetzt
+      if (sundayFree && (targetShift === "frueh" || targetShift === "spaet")) {
+        emp.zone = "pool";
+        return;
+      }
+
       if (targetShift) {
-        // Beim Rotieren greift exakt der Memory-Effekt (lastLineId)
         const targetLine = (emp.lastLineId && lines.some(function(l){ return l.id === emp.lastLineId; }))
           ? emp.lastLineId
           : (emp.mainLines && emp.mainLines[0] ? emp.mainLines[0] : null);
@@ -673,7 +835,7 @@ function performShiftRotationLogic(autoPlaceEmployees) {
 }
 
 function rotateAllShifts() {
-  logHistory("Rotation", "Schichtrotation ausgelöst (" + getShiftModelLabel(shiftModelConfig.model) + ")");
+  logHistory("Rotation", "Schichtrotation ausgelöst");
   performShiftRotationLogic(true);
 }
 
@@ -686,7 +848,7 @@ window.saveShiftModelSettings = function() {
   if (inpStart) shiftModelConfig.startDate = inpStart.value;
   if (chkAuto) shiftModelConfig.autoRotate = chkAuto.checked;
 
-  logHistory("Schichtmodell", "Modell: " + getShiftModelLabel(shiftModelConfig.model));
+  logHistory("Schichtmodell", "Rotationseinstellungen aktualisiert");
   updateAutoRotationUI();
   updateHeaderDateKw();
   updateShiftApprovalUI();
@@ -746,10 +908,13 @@ window.clearEntireBoard = function() {
   saveToFirebase(); renderEmployees();
 };
 
+// ============================================================================
+// POSTFACH: ABWESENHEITEN & MANUELLE BRINGSCHICHTEN
+// ============================================================================
 window.addPortalLeaveRequest = function(empId, start, end, cat, reason) {
   sickLeaves.push({
     id: "sl_" + Date.now(), empId: empId, startDate: start, endDate: end,
-    category: cat, reason: reason || "Vom Mitarbeiter gemeldet", readByPlanner: false
+    category: cat, reason: reason || "Vom Mitarbeiter im Portal gemeldet", readByPlanner: false
   });
   saveToFirebase(); renderEmployees();
 };
@@ -757,16 +922,21 @@ window.addPortalLeaveRequest = function(empId, start, end, cat, reason) {
 function updateInboxBadge() {
   const badge = document.getElementById("inboxBadge");
   if (!badge) return;
-  const total = sickLeaves.filter(function(sl) { return !sl.readByPlanner; }).length;
+  const unreadSick = sickLeaves.filter(function(sl) { return !sl.readByPlanner; }).length;
+  const pendingExtra = extraShifts.filter(function(es) { return es.status === "pending"; }).length;
+  const total = unreadSick + pendingExtra;
   badge.textContent = total;
   badge.style.display = total > 0 ? "inline-flex" : "none";
 }
 
-window.openInboxModal = function(empId, openForm) {
+window.openInboxModal = function(empId, openSickForm, openExtraForm) {
   document.getElementById("inboxModal").style.display = "flex";
-  if (openForm) {
-    const content = document.getElementById("manualEntryContent");
-    if (content) content.style.display = "block";
+  const sickContent = document.getElementById("manualEntryContent");
+  const extraContent = document.getElementById("manualExtraContent");
+  if (sickContent) sickContent.style.display = openSickForm ? "block" : "none";
+  if (extraContent) extraContent.style.display = openExtraForm ? "block" : "none";
+  if (openExtraForm && document.getElementById("manualExtraDate") && !document.getElementById("manualExtraDate").value) {
+    document.getElementById("manualExtraDate").value = getTodayIso();
   }
   renderInboxLists();
 };
@@ -782,6 +952,16 @@ window.toggleManualEntryBox = function() {
   const content = document.getElementById("manualEntryContent");
   if (!content) return;
   content.style.display = content.style.display === "none" ? "block" : "none";
+};
+
+window.toggleManualExtraBox = function() {
+  const content = document.getElementById("manualExtraContent");
+  if (!content) return;
+  const isOpening = content.style.display === "none";
+  content.style.display = isOpening ? "block" : "none";
+  if (isOpening && document.getElementById("manualExtraDate") && !document.getElementById("manualExtraDate").value) {
+    document.getElementById("manualExtraDate").value = getTodayIso();
+  }
 };
 
 window.onManualSickNameInput = function(val) {
@@ -810,7 +990,10 @@ window.addManualSickLeave = function() {
   const end = document.getElementById("manualSickEnd").value;
   const cat = document.getElementById("manualSickCategory").value;
   const reason = document.getElementById("manualSickReason").value.trim();
-  if (!selectedManualSickEmpId || !start || !end) return;
+  if (!selectedManualSickEmpId || !start || !end) {
+    showToast("Bitte Mitarbeiter, Von- und Bis-Datum wählen", true);
+    return;
+  }
 
   sickLeaves.push({
     id: "sl_" + Date.now(), empId: selectedManualSickEmpId, startDate: start, endDate: end,
@@ -820,26 +1003,92 @@ window.addManualSickLeave = function() {
   const today = getTodayIso();
   if (emp && start <= today && end >= today) emp.zone = "absent";
 
+  document.getElementById("manualSickEmpInput").value = "";
+  document.getElementById("manualSickReason").value = "";
+  selectedManualSickEmpId = null;
+
   logHistory("Abwesenheit", (emp ? fullName(emp) : "") + ": " + cat);
+  saveToFirebase(); renderEmployees(); renderInboxLists(); updateInboxBadge();
+  showToast("Abwesenheit gespeichert");
+};
+
+// Manuelle Bringschicht im Planer-Postfach
+window.onManualExtraNameInput = function(val) {
+  selectedManualExtraEmpId = null;
+  const box = document.getElementById("manualExtraSuggestions"), q = (val || "").trim().toLowerCase();
+  if (!box || !employees.length) return;
+  const matches = q ? employees.filter(function(e) { return fullName(e).toLowerCase().indexOf(q) !== -1; }) : employees.slice(0, 12);
+  if (!matches.length) { box.style.display = "none"; return; }
+  box.innerHTML = matches.map(function(e) {
+    return '<div class="suggestion-item" onclick="selectManualExtraEmp(\'' + e.id + '\')"><b>' + fullName(e) + '</b></div>';
+  }).join("");
+  box.style.display = "block";
+};
+
+window.selectManualExtraEmp = function(id) {
+  const e = employees.find(function(x) { return x.id === id; });
+  if (e) {
+    selectedManualExtraEmpId = e.id;
+    document.getElementById("manualExtraEmpInput").value = fullName(e);
+    document.getElementById("manualExtraSuggestions").style.display = "none";
+  }
+};
+
+window.addManualExtraShift = function() {
+  const dateVal = document.getElementById("manualExtraDate").value;
+  const shiftVal = document.getElementById("manualExtraShift").value;
+  const noteVal = document.getElementById("manualExtraNote").value.trim();
+  if (!selectedManualExtraEmpId || !dateVal) {
+    showToast("Bitte Mitarbeiter und Datum für die Bringschicht wählen", true);
+    return;
+  }
+
+  extraShifts.push({
+    id: "es_" + Date.now(),
+    empId: selectedManualExtraEmpId,
+    date: dateVal,
+    shift: shiftVal,
+    note: noteVal || "Vom Planer eingetragen",
+    status: "approved"
+  });
+
+  const emp = employees.find(function(e) { return e.id === selectedManualExtraEmpId; });
+  const today = getTodayIso();
+  if (emp && dateVal === today && emp.zone === "pool") {
+    emp.zone = "extra";
+  }
+
+  document.getElementById("manualExtraEmpInput").value = "";
+  document.getElementById("manualExtraNote").value = "";
+  selectedManualExtraEmpId = null;
+
+  logHistory("Bringschicht", (emp ? fullName(emp) : "") + " am " + formatDateDe(dateVal) + " (" + shiftsShortLabel[shiftVal] + ")");
+  saveToFirebase(); renderEmployees(); renderInboxLists(); updateInboxBadge();
+  showToast("Bringschicht eingetragen");
+};
+
+window.deleteExtraShift = function(id) {
+  extraShifts = extraShifts.filter(function(es) { return es.id !== id; });
   saveToFirebase(); renderEmployees(); renderInboxLists(); updateInboxBadge();
 };
 
 function renderInboxLists() {
   const unreadEl = document.getElementById("unreadSickList");
   const activeEl = document.getElementById("activeSickList");
+  const extraEl = document.getElementById("inboxExtraList");
   if (!unreadEl || !activeEl) return;
 
   const today = getTodayIso();
-  const matchQuery = function(sl) {
+  const matchQuery = function(empId, text) {
     if (!inboxSearchQuery) return true;
-    const emp = employees.find(function(e) { return e.id === sl.empId; });
+    const emp = employees.find(function(e) { return e.id === empId; });
     const name = emp ? fullName(emp).toLowerCase() : "";
-    const cat = (sl.category || "").toLowerCase();
-    return name.indexOf(inboxSearchQuery) !== -1 || cat.indexOf(inboxSearchQuery) !== -1;
+    return name.indexOf(inboxSearchQuery) !== -1 || (text || "").toLowerCase().indexOf(inboxSearchQuery) !== -1;
   };
 
-  const unread = sickLeaves.filter(function(sl) { return !sl.readByPlanner && matchQuery(sl); });
-  const active = sickLeaves.filter(function(sl) { return sl.endDate >= today && matchQuery(sl); });
+  const unread = sickLeaves.filter(function(sl) { return !sl.readByPlanner && matchQuery(sl.empId, sl.category); });
+  const active = sickLeaves.filter(function(sl) { return sl.endDate >= today && matchQuery(sl.empId, sl.category); });
+  const extras = extraShifts.filter(function(es) { return es.date >= today && matchQuery(es.empId, es.note); });
 
   unreadEl.innerHTML = unread.length ? unread.map(function(sl) {
     const emp = employees.find(function(e) { return e.id === sl.empId; });
@@ -847,12 +1096,37 @@ function renderInboxLists() {
     return '<div class="sick-card unread"><div style="display:flex; justify-content:space-between;"><b>' + name + '</b><span style="font-size:0.75rem; font-weight:700; color:#dc2626;">' + (sl.category || 'Abwesend') + '</span></div><small>Von ' + formatDateDe(sl.startDate) + ' bis ' + formatDateDe(sl.endDate) + '</small><br><em>' + (sl.reason || '') + '</em><div style="margin-top:6px; display:flex; gap:6px;"><button class="btn btn-primary" style="padding:3px 10px; font-size:0.72rem;" onclick="markSickRead(\'' + sl.id + '\')">Bestätigen</button><button class="btn btn-outline" style="padding:3px 10px; font-size:0.72rem; color:#dc2626;" onclick="deleteSickLeave(\'' + sl.id + '\')">Löschen</button></div></div>';
   }).join("") : '<p style="font-size:0.82rem; color:#64748b;">Keine offenen Anträge.</p>';
 
+  if (extraEl) {
+    extraEl.innerHTML = extras.length ? extras.map(function(es) {
+      const emp = employees.find(function(e) { return e.id === es.empId; });
+      const name = emp ? fullName(emp) : "Unbekannt";
+      return '<div class="sick-card extra-card" style="display:flex; justify-content:space-between; align-items:center;">' +
+        '<div><b>' + name + '</b> · <span style="color:#166534; font-weight:700;">' + formatDateDe(es.date) + ' (' + (shiftsLabel[es.shift] || es.shift) + ')</span>' +
+        (es.note ? '<br><small style="color:#475569;">' + es.note + '</small>' : '') + '</div>' +
+        '<div style="display:flex; gap:6px;">' +
+          '<button class="btn btn-outline" style="padding:3px 8px; font-size:0.72rem; color:#166534;" onclick="moveEmpToExtraZone(\'' + es.empId + '\')" title="In Bringschicht-Pool setzen">📥 In Box</button>' +
+          '<button class="btn btn-outline" style="padding:3px 8px; font-size:0.72rem; color:#dc2626;" onclick="deleteExtraShift(\'' + es.id + '\')">🗑️</button>' +
+        '</div>' +
+      '</div>';
+    }).join("") : '<p style="font-size:0.82rem; color:#64748b;">Keine eingetragenen Bringschichten.</p>';
+  }
+
   activeEl.innerHTML = active.length ? active.map(function(sl) {
     const emp = employees.find(function(e) { return e.id === sl.empId; });
     const name = emp ? fullName(emp) : "Unbekannt";
     return '<div class="sick-card" style="display:flex; justify-content:space-between; align-items:center;"><div><b>' + name + '</b> (' + (sl.category || 'Abwesend') + ')<br><small>Von ' + formatDateDe(sl.startDate) + ' bis ' + formatDateDe(sl.endDate) + '</small></div><button class="btn btn-outline" style="padding:3px 8px; font-size:0.72rem; color:#dc2626;" onclick="deleteSickLeave(\'' + sl.id + '\')">🗑️</button></div>';
   }).join("") : '<p style="font-size:0.82rem; color:#64748b;">Keine aktiven Abwesenheiten.</p>';
 }
+
+window.moveEmpToExtraZone = function(empId) {
+  const emp = employees.find(function(e) { return e.id === empId; });
+  if (emp) {
+    emp.zone = "extra";
+    saveToFirebase();
+    renderEmployees();
+    showToast(fullName(emp) + " in Bringschicht-Box gesetzt");
+  }
+};
 
 window.markSickRead = function(id) {
   const sl = sickLeaves.find(function(x) { return x.id === id; });
@@ -883,7 +1157,7 @@ function applyTeamStyles() {
   let st = document.getElementById("dynamicTeamStyles");
   if (!st) { st = document.createElement("style"); st.id = "dynamicTeamStyles"; document.head.appendChild(st); }
   st.textContent = Object.keys(teamsConfig).sort().map(function(k) {
-    return ".employee-card." + k + " { border-left-color: " + teamsConfig[k].color + " !important; }";
+    return '.employee-card[data-team="' + k + '"] { border-left-color: ' + teamsConfig[k].color + ' !important; }';
   }).join("\n");
 }
 
@@ -891,10 +1165,15 @@ function updateTeamDropdowns() {
   const keys = Object.keys(teamsConfig).sort();
   const freiSel = document.getElementById("teamSelect_frei");
   if (freiSel) {
-    const curFreiKey = shiftRotation.frei || keys[0];
+    const curFreiKey = (shiftRotation.frei && teamsConfig[shiftRotation.frei]) ? shiftRotation.frei : keys[0];
+    shiftRotation.frei = curFreiKey;
     freiSel.innerHTML = keys.map(function(k) {
       return '<option value="' + k + '" ' + (curFreiKey === k ? 'selected' : '') + '>Frei: ' + teamsConfig[k].name + '</option>';
     }).join("");
+    freiSel.onchange = function() {
+      shiftRotation.frei = this.value;
+      saveToFirebase();
+    };
   }
   const empTeamSel = document.getElementById("newEmpTeam");
   if (empTeamSel) {
@@ -914,14 +1193,15 @@ function updatePoolSearch(val) {
 function renderTeamFilterCheckboxes() {
   const c = document.getElementById("teamFilterContainer"); if (!c) return;
   c.innerHTML = Object.keys(teamsConfig).sort().map(function(k) {
-    return '<label style="display:inline-flex; align-items:center; gap:3px;"><input type="checkbox" ' + (activeTeamFilters[k] !== false ? 'checked' : '') + ' onchange="activeTeamFilters[\'' + k + '\']=this.checked; renderEmployees();"> ' + teamsConfig[k].name + '</label>';
+    const t = teamsConfig[k];
+    return '<label style="display:inline-flex; align-items:center; gap:4px; cursor:pointer;"><input type="checkbox" ' + (activeTeamFilters[k] !== false ? 'checked' : '') + ' onchange="activeTeamFilters[\'' + k + '\']=this.checked; renderEmployees();"> <span style="color:' + t.color + '; font-weight:700;">■</span> ' + t.name + '</label>';
   }).join("");
 }
 function toggleAllTeamFilters(s) { Object.keys(teamsConfig).forEach(function(k) { activeTeamFilters[k] = s; }); renderTeamFilterCheckboxes(); renderEmployees(); }
 
 function renderRoleFilterCheckboxes() {
   const c = document.getElementById("roleFilterContainer"); if (!c) return;
-  c.innerHTML = roles.map(function(r, i) { return '<label style="display:inline-flex; align-items:center; gap:3px;"><input type="checkbox" ' + (activeRoleFilters[r] !== false ? 'checked' : '') + ' onchange="activeRoleFilters[roles[' + i + ']]=this.checked; renderEmployees();"> ' + r + '</label>'; }).join("");
+  c.innerHTML = roles.map(function(r, i) { return '<label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer;"><input type="checkbox" ' + (activeRoleFilters[r] !== false ? 'checked' : '') + ' onchange="activeRoleFilters[roles[' + i + ']]=this.checked; renderEmployees();"> ' + r + '</label>'; }).join("");
 }
 function toggleAllRoleFilters(s) { roles.forEach(function(r) { activeRoleFilters[r] = s; }); renderRoleFilterCheckboxes(); renderEmployees(); }
 
@@ -930,7 +1210,7 @@ function renderLineCheckboxes(selMain, selSec) {
   const mC = document.getElementById("mainLinesCheckboxes"), sC = document.getElementById("secLinesCheckboxes"); if (!mC || !sC) return;
   const build = function(cls, sel) {
     return lines.map(function(l) {
-      return '<label style="font-size:0.78rem; display:inline-flex; align-items:center; gap:3px;"><input type="checkbox" value="' + l.id + '" class="' + cls + '" ' + (sel.indexOf(l.id) !== -1 ? 'checked' : '') + '> ' + l.name + '</label>';
+      return '<label style="font-size:0.78rem; display:inline-flex; align-items:center; gap:3px; cursor:pointer;"><input type="checkbox" value="' + l.id + '" class="' + cls + '" ' + (sel.indexOf(l.id) !== -1 ? 'checked' : '') + '> ' + l.name + '</label>';
     }).join("");
   };
   mC.innerHTML = build("main-line-chk", selMain); sC.innerHTML = build("sec-line-chk", selSec);
@@ -987,8 +1267,9 @@ function renderSettingsLists() {
       return !settingsEmpSearchQuery || fullName(e).toLowerCase().indexOf(settingsEmpSearchQuery) !== -1;
     });
     empListEl.innerHTML = filtered.map(function(e) {
+      const tObj = teamsConfig[e.team] || { name: e.team, color: "#0091df" };
       return '<div class="item-row">' +
-        '<span><b>' + fullName(e) + '</b> <small style="color:#64748b;">(' + (teamsConfig[e.team] ? teamsConfig[e.team].name : e.team) + ' · ' + e.role + ')</small></span>' +
+        '<span><span style="color:' + tObj.color + '; font-weight:700;">■</span> <b>' + fullName(e) + '</b> <small style="color:#64748b;">(' + tObj.name + ' · ' + e.role + ')</small></span>' +
         '<div style="display:flex; gap:6px;">' +
           '<button class="btn btn-outline" style="padding:2px 8px; font-size:0.75rem;" onclick="editEmployee(\'' + e.id + '\')">✏️</button>' +
           '<button class="btn btn-outline" style="padding:2px 8px; font-size:0.75rem; color:#dc2626;" onclick="deleteEmployee(\'' + e.id + '\')">🗑️</button>' +
@@ -1040,7 +1321,7 @@ function renderSettingsLists() {
           '<label style="font-size:0.8rem; display:flex; align-items:center; gap:4px; cursor:pointer;">' +
             '<input type="checkbox" ' + rotChk + ' onchange="toggleTeamRotateSetting(\'' + k + '\', this.checked)"> Rotiert mit' +
           '</label>' +
-          '<button class="btn btn-outline" style="padding:2px 7px; font-size:0.72rem; color:#dc2626;" onclick="deleteTeam(\'' + k + '\')" title="Team löschen">🗑️</button>' +
+          '<button class="btn btn-outline" style="padding:2px 7px; font-size:0.72rem; color:#dc2626;" onclick="deleteTeam(\'' + k + '\')" title="Team endgültig löschen">🗑️</button>' +
         '</div>' +
       '</div>';
     }).join("");
@@ -1107,11 +1388,17 @@ window.toggleTeamRotateSetting = function(teamKey, rotates) {
   }
 };
 
+// Endgültiges Löschen eines Teams (inkl. Bereinigung in shiftRotation & Cloud)
 window.deleteTeam = function(teamKey) {
   if (Object.keys(teamsConfig).length <= 1) return;
+  const removedName = teamsConfig[teamKey] ? teamsConfig[teamKey].name : teamKey;
   delete teamsConfig[teamKey];
   delete activeTeamFilters[teamKey];
-  saveToFirebase(); initBoard();
+  sanitizeTeamReferences();
+  logHistory("Teams", "Team \"" + removedName + "\" gelöscht");
+  saveToFirebase();
+  initBoard();
+  showToast("Team \"" + removedName + "\" gelöscht");
 };
 
 window.filterHistoryUnified = function() {
@@ -1167,7 +1454,7 @@ window.deleteBackup = function(id) {
 
 window.saveProfilePinChange = function() {
   const oldP = document.getElementById("profOldPin").value.trim();
-  const newP = document.getElementById("newNewPin").value.trim();
+  const newP = document.getElementById("profNewPin").value.trim();
   const confP = document.getElementById("profNewPinConfirm").value.trim();
   if (!newP || newP.length < 4 || newP !== confP) {
     showTimedBoxMsg("profPinMsg", "❌ Neue PIN muss mind. 4 Zeichen haben und übereinstimmen!", false); return;
@@ -1181,7 +1468,7 @@ window.saveProfilePinChange = function() {
   }
   emp.password = newP; emp.mustChangePw = false;
   document.getElementById("profOldPin").value = "";
-  document.getElementById("newNewPin").value = "";
+  document.getElementById("profNewPin").value = "";
   document.getElementById("profNewPinConfirm").value = "";
   saveToFirebase();
   showTimedBoxMsg("profPinMsg", "✅ PIN erfolgreich geändert!", true);
@@ -1197,7 +1484,7 @@ window.editEmployee = function(id) {
   document.getElementById("editEmpId").value = emp.id;
   document.getElementById("newEmpFirstName").value = emp.firstName || "";
   document.getElementById("newEmpLastName").value = emp.lastName || "";
-  document.getElementById("newEmpTeam").value = emp.team || "team-1";
+  document.getElementById("newEmpTeam").value = emp.team || Object.keys(teamsConfig)[0];
   document.getElementById("newEmpRole").value = emp.role || roles[0];
   document.getElementById("newEmpAccessLevel").value = String(emp.accessLevel || 1);
   if (document.getElementById("newEmpFirstAider")) document.getElementById("newEmpFirstAider").checked = !!emp.ersthelfer;
@@ -1285,3 +1572,12 @@ function autoSaveSecurityConfig() {
   securityConfig.boardPw = pwInp ? pwInp.value.trim() : "0110";
   saveToFirebase();
 }
+
+document.addEventListener("click", function(e) {
+  ["plannerLoginSuggestions", "manualSickSuggestions", "manualExtraSuggestions"].forEach(function(boxId) {
+    const box = document.getElementById(boxId);
+    if (box && !box.contains(e.target) && e.target.tagName !== "INPUT") {
+      box.style.display = "none";
+    }
+  });
+});
