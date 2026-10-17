@@ -12,23 +12,24 @@
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
     body { background-color: var(--bg-gray); min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
     
-    /* DYNAMISCHER BRAND-GRADIENT (KRÄFTIGES BLAU-ROT = WARTET / BLAU-GRÜN = FREIGEGEBEN) */
+    /* DYNAMISCHER BRAND-GRADIENT (BLAU-ROT = WARTET AUF FREIGABE / BLAU-GRÜN = FREIGEGEBEN) */
     .brand-gradient { height: 6px; width: 100%; flex-shrink: 0; transition: background 0.3s ease; }
     .brand-gradient.pending { background: linear-gradient(90deg, #0091df 0%, #ef4444 45%, #dc2626 100%); }
     .brand-gradient.approved { background: linear-gradient(90deg, #0091df 0%, #00bcff 50%, #89d329 100%); }
 
     header { background: #fff; padding: 10px 24px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 6px rgba(0,0,0,0.06); position: sticky; top: 0; z-index: 50; }
     .header-left { display: flex; align-items: center; gap: 16px; }
-    .bayer-logo-btn { width: 64px; height: 64px; cursor: pointer; transition: 0.2s; }
+    .bayer-logo-btn { width: 64px; height: 64px; cursor: pointer; transition: 0.2s; flex-shrink: 0; }
     .bayer-logo-btn:hover { transform: scale(1.05); }
     .bayer-logo-btn img { width: 100%; height: 100%; object-fit: contain; }
     .header-title h1 { font-size: 1.35rem; font-weight: 700; color: var(--bayer-blue); margin: 0; }
     .header-meta { font-size: 0.78rem; color: #64748b; font-weight: 600; margin-top: 2px; }
     .header-badges-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+    
     .status-badge { display: none; font-size: 0.73rem; padding: 3px 10px; border-radius: 999px; font-weight: 700; background: #dcfce7; color: #166534; }
     body.planner-active .status-badge { display: inline-block; }
 
-    /* ANZEIGE FÜR AKTIVE AUTO-ROTATION & SCHICHTMODELL IM DASHBOARD */
+    /* DEZENTER VERMERK FÜR SCHICHTMODELL & AUTO-ROTATION IM PLANER-DASHBOARD */
     .auto-rotation-badge {
       display: none;
       align-items: center;
@@ -38,15 +39,16 @@
       border-radius: 999px;
       font-weight: 700;
       cursor: pointer;
-      border: 1px solid #bae6fd;
-      background: #f0f9ff;
-      color: #0369a1;
+      border: 1px solid #cbd5e1;
+      background: #f8fafc;
+      color: #334155;
       transition: 0.15s;
     }
-    .auto-rotation-badge.inactive {
-      background: #f1f5f9;
-      color: #64748b;
-      border-color: #cbd5e1;
+    .auto-rotation-badge:hover { background: #f1f5f9; }
+    .auto-rotation-badge.active {
+      border-color: #bae6fd;
+      background: #f0f9ff;
+      color: #0369a1;
     }
     body.planner-active .auto-rotation-badge { display: inline-flex; }
 
@@ -57,12 +59,12 @@
     .btn-outline { border-color: #cbd5e1; background: #fff; color: #475569; }
     .btn-outline:hover { background: #f8fafc; }
 
-    /* DEZENTER SCHALTER FÜR DEN PLANER */
+    /* DEZENTER FREIGABE-SCHALTER FÜR DEN PLANER */
     .planner-approval-indicator {
       display: none;
       align-items: center;
       gap: 6px;
-      font-size: 0.76rem;
+      font-size: 0.78rem;
       font-weight: 700;
       padding: 6px 12px;
       border-radius: 6px;
@@ -99,6 +101,9 @@
     .card-sick-tag { display: none; font-size: 0.62rem; color: #b91c1c; background: #fee2e2; padding: 1px 5px; border-radius: 4px; font-weight: 700; margin-top: 1px; align-self: flex-start; }
     body.planner-active .card-sick-tag { display: inline-block; }
     .card-extra-tag { font-size: 0.62rem; color: #166534; background: #dcfce7; padding: 1px 5px; border-radius: 4px; font-weight: 700; margin-top: 1px; align-self: flex-start; }
+    .quick-sick-btn { display: none; border: none; background: #f1f5f9; border-radius: 4px; padding: 2px 4px; font-size: 0.72rem; cursor: pointer; line-height: 1; }
+    .quick-sick-btn:hover { background: #fee2e2; }
+    body.planner-lvl-3 .quick-sick-btn { display: inline-block; }
     .board-container { flex: 1; background: #fff; border-radius: 10px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: flex; flex-direction: column; overflow: hidden; }
     .board-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     .board-table th, .board-table td { border: 1px solid #e2e8f0; vertical-align: top; }
@@ -127,7 +132,7 @@
     .modal { background: #fff; padding: 24px; border-radius: 10px; width: 100%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.18); max-height: 90vh; overflow-y: auto; }
     .form-group { margin-bottom: 12px; position: relative; }
     .form-group label { display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; color: #475569; }
-    .form-control { width: 100%; padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; }
+    .form-control { width: 100%; padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; background: #fff; }
     textarea.form-control { resize: vertical; min-height: 65px; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
     .suggestions-box { display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 8px 20px rgba(0,0,0,0.12); max-height: 180px; overflow-y: auto; z-index: 60; margin-top: 2px; text-align: left; }
@@ -138,11 +143,17 @@
     .tab-btn.active { color: var(--bayer-blue); border-bottom-color: var(--bayer-blue); }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
-    .item-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; gap: 8px; }
+    .item-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid #f1f5f9; font-size: 0.88rem; gap: 8px; }
     .sick-card { background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid var(--bayer-blue); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
     .sick-card.unread { background: #fff1f2; border-color: #fecdd3; border-left: 4px solid #dc2626; }
+    .inbox-filter-bar { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+    .filter-chip { padding: 4px 10px; border-radius: 999px; font-size: 0.74rem; font-weight: 600; cursor: pointer; border: 1px solid #cbd5e1; background: #fff; color: #475569; transition: 0.15s; }
+    .filter-chip:hover { background: #f1f5f9; }
+    .filter-chip.active { background: var(--bayer-blue); color: #fff; border-color: var(--bayer-blue); }
     .manual-entry-toggle { width: 100%; text-align: left; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 14px; font-size: 0.86rem; font-weight: 700; color: #0f172a; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
     .manual-entry-toggle:hover { background: #f1f5f9; }
+    .settings-card { background: #f8fafc; padding: 14px; border-radius: 8px; margin-bottom: 12px; border: 1px solid #e2e8f0; }
+    .settings-card-title { font-size: 0.85rem; font-weight: 700; color: #1e293b; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
     .lvl-3-only, .admin-element { display: none !important; }
     body.planner-active .admin-element { display: inline-flex !important; }
     body.planner-lvl-3 .lvl-3-only { display: inline-flex !important; }
@@ -178,15 +189,15 @@
         <div id="headerDateKw" class="header-meta">Lade Datum...</div>
         <div class="header-badges-row">
           <span id="plannerStatusBadge" class="status-badge">Planer-Modus aktiv</span>
-          <span id="autoRotationBadge" class="auto-rotation-badge active" onclick="openShiftModelSettingsQuick()" title="Klicken, um Schichtmodell & automatische Rotation anzupassen">
+          <span id="autoRotationBadge" class="auto-rotation-badge active" onclick="openShiftModelSettingsQuick()" title="Schichtmodell & Automatische Rotation verwalten">
             <span id="autoRotationDot" style="width:7px; height:7px; border-radius:50%; background:#0091df;"></span>
-            <span id="autoRotationText">🔄 Auto-Rotation: Vollkonti</span>
+            <span id="autoRotationText">Auto: Vollkonti (Sonntags frei)</span>
           </span>
         </div>
       </div>
     </div>
     <div class="header-actions">
-      <!-- FÜR PLANER: DEZENTER KLICKBARER PUNKT ZUM FREIGEBEN -->
+      <!-- FÜR PLANER: FREIGABE-SCHALTER -->
       <button id="plannerApprovalIndicator" class="planner-approval-indicator" onclick="toggleShiftApprovalState()">
         <span id="indicatorDot" style="width:8px; height:8px; border-radius:50%; background:#dc2626;"></span>
         <span id="indicatorText">Freigeben</span>
@@ -274,6 +285,21 @@
     </div>
   </div>
 
+  <!-- ERST-LOGIN PIN ÄNDERN -->
+  <div id="changePinModal" class="modal-overlay">
+    <div class="modal" style="max-width: 390px;">
+      <h3 style="color: var(--bayer-blue); margin-bottom: 12px; text-align:center;">🔑 Eigene Planer-PIN festlegen</h3>
+      <div id="changePinError" style="display:none; background:#fee2e2; color:#b91c1c; padding:8px; border-radius:6px; font-size:0.8rem; font-weight:700; margin-bottom:10px; text-align:center;"></div>
+      <div class="form-group"><label>Aktuelle PIN / Passwort</label><input type="password" id="oldPlannerPinInput" class="form-control" placeholder="Aktuelle PIN..."></div>
+      <div class="form-group"><label>Neue PIN / Passwort (mind. 4 Zeichen)</label><input type="password" id="newPlannerPinInput" class="form-control" placeholder="Neue PIN eingeben..."></div>
+      <div class="form-group"><label>Neue PIN bestätigen</label><input type="password" id="newPlannerPinConfirm" class="form-control" placeholder="Neue PIN wiederholen..." onkeydown="if(event.key==='Enter') saveNewPlannerPin()"></div>
+      <div class="modal-actions" style="justify-content: space-between;">
+        <button class="btn btn-outline" onclick="closeModal('changePinModal')">Abbrechen</button>
+        <button class="btn btn-primary" onclick="saveNewPlannerPin()">Speichern</button>
+      </div>
+    </div>
+  </div>
+
   <!-- POSTFACH & ANTRÄGE -->
   <div id="inboxModal" class="modal-overlay">
     <div class="modal" style="max-width: 680px;">
@@ -286,24 +312,29 @@
         <button class="btn btn-outline" style="padding:2px 8px; font-size:0.7rem;" onclick="forceRefreshFromServer()">🔄 Jetzt abrufen</button>
       </div>
 
+      <div class="search-wrapper" style="margin-bottom: 12px;">
+        <input type="text" id="inboxSearchInput" class="search-input" style="padding: 8px 30px 8px 12px; font-size: 0.84rem; background: #fff; border-color: #94a3b8;" placeholder="🔍 Postfach durchsuchen..." oninput="updateInboxSearch(this.value)">
+        <span id="clearInboxSearchBtn" class="search-clear" onclick="document.getElementById('inboxSearchInput').value=''; updateInboxSearch('')">&times;</span>
+      </div>
+
       <div style="margin-bottom: 16px;">
         <button type="button" class="manual-entry-toggle" onclick="toggleManualEntryBox()">
           <span>➕ Abwesenheit direkt eintragen</span>
           <span id="manualEntryArrow" style="font-size:0.76rem; color:var(--bayer-blue);">▼ Formular öffnen</span>
         </button>
         <div id="manualEntryContent" style="display:none; background:#f8fafc; border:1px solid #cbd5e1; border-top:none; border-radius:0 0 8px 8px; padding:14px;">
-          <div style="display:flex; gap:10px;">
-            <div class="form-group" id="manualSickSearchGroup" style="flex:1.4;">
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <div class="form-group" id="manualSickSearchGroup" style="flex:1.4; min-width:180px;">
               <label>Mitarbeiter</label>
               <input type="text" id="manualSickEmpInput" class="form-control" placeholder="🔍 Name tippen..." autocomplete="off" onfocus="onManualSickNameInput(this.value)" oninput="onManualSickNameInput(this.value)">
               <div id="manualSickSuggestions" class="suggestions-box"></div>
             </div>
-            <div class="form-group" style="flex:1;">
+            <div class="form-group" style="flex:1; min-width:160px;">
               <label>Art der Abwesenheit</label>
               <select id="manualSickCategory" class="form-control">
-                <option value="Arbeitsunfähigkeit (Krank)">🏥 Arbeitsunfähigkeit</option>
-                <option value="Urlaub - bezahlt">🌴 Urlaub</option>
-                <option value="Freizeitausgleich / Gleittag">⏱️ Freizeitausgleich / Gleittag</option>
+                <option value="Urlaub">Urlaub</option>
+                <option value="Arbeitsunfähigkeit">Arbeitsunfähigkeit</option>
+                <option value="Freizeitausgleich / Gleittag">Freizeitausgleich / Gleittag</option>
                 <option value="Kind krank">Kind krank</option>
                 <option value="Sonderurlaub">Sonderurlaub</option>
               </select>
@@ -323,11 +354,13 @@
           <h4 style="font-size:0.92rem; color:#dc2626;">🔔 Offene Anträge & Meldungen</h4>
           <button id="btnMarkAllRead" class="btn btn-outline" style="padding:4px 10px; font-size:0.75rem;" onclick="markAllSickLeavesRead()">Alle gelesen</button>
         </div>
+        <div id="inboxUnreadFilterBar" class="inbox-filter-bar"></div>
         <div id="unreadSickList"></div>
       </div>
 
       <div style="border-top: 2px solid #e2e8f0; padding-top: 14px;">
         <h4 style="font-size:0.92rem; margin-bottom: 6px;">📋 Aktive Abwesenheiten</h4>
+        <div id="inboxActiveFilterBar" class="inbox-filter-bar"></div>
         <div id="activeSickList"></div>
       </div>
     </div>
@@ -352,7 +385,7 @@
     </div>
   </div>
 
-  <!-- EINSTELLUNGEN -->
+  <!-- EINSTELLUNGEN (ALLE 8 REITER VOLLSTÄNDIG) -->
   <div id="settingsModal" class="modal-overlay">
     <div class="modal" style="max-width: 680px;">
       <h3 style="display:flex; justify-content:space-between; color:var(--bayer-blue); margin-bottom:14px;">
@@ -363,12 +396,16 @@
         <button id="tabBtnEmployees" class="tab-btn lvl-3-only active" onclick="switchTab('tabEmployees', this)">Mitarbeiter</button>
         <button class="tab-btn lvl-3-only" onclick="switchTab('tabRoles', this)">Rollen</button>
         <button class="tab-btn lvl-3-only" onclick="switchTab('tabLines', this)">Linien</button>
-        <button id="tabBtnTeams" class="tab-btn lvl-3-only" onclick="switchTab('tabTeams', this)">Teams & Schichtmodell</button>
+        <button id="tabBtnTeams" class="tab-btn lvl-3-only" onclick="switchTab('tabTeams', this)">Teams</button>
         <button class="tab-btn lvl-3-only" onclick="switchTab('tabSecurity', this)">Sicherheit</button>
+        <button class="tab-btn lvl-3-only" onclick="switchTab('tabHistory', this)">Historie</button>
+        <button class="tab-btn lvl-3-only" onclick="switchTab('tabBackups', this)">Backups</button>
+        <button id="tabBtnProfile" class="tab-btn" onclick="switchTab('tabProfile', this)">Mein Profil</button>
       </div>
       
+      <!-- 1. MITARBEITER -->
       <div id="tabEmployees" class="tab-content active">
-        <div style="background:#f8fafc; padding:14px; border-radius:8px; margin-bottom:14px; border:1px solid #e2e8f0;">
+        <div class="settings-card">
           <input type="hidden" id="editEmpId">
           <div style="display:flex; gap:10px;">
             <div class="form-group" style="flex:1;"><label>Vorname</label><input type="text" id="newEmpFirstName" class="form-control"></div>
@@ -388,8 +425,8 @@
           </div>
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px; flex-wrap:wrap; gap:8px;">
             <div style="display:flex; gap:14px; align-items:center;">
-              <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="newEmpFirstAider"> Ersthelfer +</label>
-              <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="newEmpNoRotation"> ⚓ Fix</label>
+              <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:0.84rem; font-weight:600;"><input type="checkbox" id="newEmpFirstAider"> Ersthelfer +</label>
+              <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:0.84rem; font-weight:600;"><input type="checkbox" id="newEmpNoRotation"> ⚓ Fix</label>
             </div>
           </div>
           <div class="form-group"><label>Prio-Linien:</label><div id="mainLinesCheckboxes" style="display:flex; flex-wrap:wrap; gap:6px;"></div></div>
@@ -399,66 +436,111 @@
             <button id="btnCancelEditEmp" class="btn btn-outline" style="display:none;" onclick="resetEmpForm()">Abbrechen</button>
           </div>
         </div>
-        <div style="margin-bottom:8px;"><input type="text" id="settingsEmpSearchInput" class="search-input" placeholder="🔍 Suchen..." oninput="filterSettingsEmployees(this.value)" style="font-size:0.8rem; padding:6px 10px;"></div>
-        <div id="employeeList" style="max-height: 180px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
+        <div style="margin-bottom:8px;"><input type="text" id="settingsEmpSearchInput" class="search-input" placeholder="🔍 Mitarbeiter suchen..." oninput="filterSettingsEmployees(this.value)" style="font-size:0.8rem; padding:6px 10px;"></div>
+        <div id="employeeList" style="max-height: 190px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
       </div>
       
+      <!-- 2. ROLLEN -->
       <div id="tabRoles" class="tab-content">
-        <div style="display:flex; gap:10px; margin-bottom:16px;"><input type="text" id="newRoleName" class="form-control" placeholder="Neue Rolle"><button class="btn btn-primary" onclick="addRole()">Hinzufügen</button></div>
-        <div id="roleList" style="max-height: 250px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
+        <div style="display:flex; gap:10px; margin-bottom:14px;">
+          <input type="text" id="newRoleName" class="form-control" placeholder="Neue Rolle eingeben..." onkeydown="if(event.key==='Enter') addRole()">
+          <button class="btn btn-primary" onclick="addRole()">Hinzufügen</button>
+        </div>
+        <div id="roleList" style="max-height: 260px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
       </div>
 
+      <!-- 3. LINIEN -->
       <div id="tabLines" class="tab-content">
-        <div style="display:flex; gap:10px; margin-bottom:16px;"><input type="text" id="newLineName" class="form-control" placeholder="Neue Linie"><button class="btn btn-primary" onclick="addLine()">Hinzufügen</button></div>
-        <div id="lineSettingsList" style="max-height: 250px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
+        <div style="display:flex; gap:10px; margin-bottom:14px;">
+          <input type="text" id="newLineName" class="form-control" placeholder="Neue Linie (z.B. Linie 40)..." onkeydown="if(event.key==='Enter') addLine()">
+          <button class="btn btn-primary" onclick="addLine()">Hinzufügen</button>
+        </div>
+        <div id="lineSettingsList" style="max-height: 260px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
       </div>
 
-      <!-- TEAMS & SCHICHTMODELL KONFIGURATION -->
+      <!-- 4. TEAMS & SCHICHTMODELL -->
       <div id="tabTeams" class="tab-content">
-        <div style="background:#f0f9ff; padding:14px; border-radius:8px; margin-bottom:14px; border:1px solid #bae6fd;">
-          <h4 style="font-size:0.9rem; color:#0369a1; margin-bottom:10px;">🔄 Schichtmodell & Automatische Rotation</h4>
-          <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
-            <div style="flex:1; min-width:180px;">
-              <label style="font-size:0.78rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">Aktives Schichtmodell</label>
+        <div class="settings-card">
+          <div class="settings-card-title">
+            <span>Schichtmodell & Rotation</span>
+            <span style="font-size:0.72rem; color:#64748b; font-weight:600;">Umschaltung jeweils 21:00 Uhr (1h vor Nachtschicht)</span>
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+            <div style="flex:1.2; min-width:170px;">
+              <label style="font-size:0.78rem; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Schichtmodell</label>
               <select id="cfgShiftModel" class="form-control" onchange="saveShiftModelSettings()">
-                <option value="vollkonti">Vollkonti (4-Team-Rotation mit Freischicht)</option>
-                <option value="dreierschicht">Dreierschicht (3-Team-Rotation Früh / Spät / Nacht)</option>
+                <option value="dreierschicht">Dreierschicht</option>
+                <option value="vollkonti">Vollkonti</option>
+                <option value="vollkonti_sonntag_frei">Vollkonti (Sonntags frei)</option>
               </select>
             </div>
+            <div style="flex:1; min-width:150px;">
+              <label style="font-size:0.78rem; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Startdatum (ab 21:00 Uhr)</label>
+              <input type="date" id="cfgRotationStartDate" class="form-control" onchange="saveShiftModelSettings()">
+            </div>
           </div>
-          <div style="display:flex; gap:14px; flex-wrap:wrap;">
-            <label style="display:flex; align-items:center; gap:6px; font-size:0.82rem; font-weight:700; cursor:pointer; background:#fff; padding:7px 12px; border-radius:6px; border:1px solid #cbd5e1;">
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+            <label style="display:flex; align-items:center; gap:6px; font-size:0.82rem; font-weight:600; color:#1e293b; cursor:pointer;">
               <input type="checkbox" id="cfgAutoRotate" checked onchange="saveShiftModelSettings()"> Automatische Rotation aktiv
             </label>
-            <label style="display:flex; align-items:center; gap:6px; font-size:0.82rem; font-weight:700; cursor:pointer; background:#fff; padding:7px 12px; border-radius:6px; border:1px solid #cbd5e1;">
-              <input type="checkbox" id="cfgSundayOff" checked onchange="saveShiftModelSettings()"> Immer Sonntags frei (Start So. 22:00 Uhr)
-            </label>
+            <span id="cfgRotationStatusHint" style="font-size:0.74rem; color:#0369a1; font-weight:600;"></span>
           </div>
         </div>
 
-        <div style="background:#f8fafc; padding:14px; border-radius:8px; margin-bottom:12px; border:1px solid #e2e8f0;">
-          <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:6px;">Neues Team hinzufügen</label>
+        <div class="settings-card">
+          <label style="font-size:0.82rem; font-weight:700; color:#1e293b; display:block; margin-bottom:8px;">Neues Team anlegen</label>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-            <input type="color" id="newTeamColor" value="#3b82f6" style="width:40px; height:38px; border:none; cursor:pointer;">
-            <input type="text" id="newTeamName" class="form-control" placeholder="Name" style="flex:1; min-width:140px;">
-            <label style="display:flex; align-items:center; gap:5px; font-size:0.82rem; font-weight:600; cursor:pointer; background:#fff; padding:7px 10px; border-radius:6px; border:1px solid #cbd5e1;">
+            <input type="color" id="newTeamColor" value="#3b82f6" style="width:40px; height:38px; border:1px solid #cbd5e1; border-radius:6px; cursor:pointer; background:#fff; padding:2px;">
+            <input type="text" id="newTeamName" class="form-control" placeholder="Teamname..." style="flex:1; min-width:140px;" onkeydown="if(event.key==='Enter') addTeam()">
+            <label style="display:flex; align-items:center; gap:5px; font-size:0.82rem; font-weight:600; cursor:pointer; background:#fff; padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1;">
               <input type="checkbox" id="newTeamRotates" checked> Rotiert
             </label>
             <button class="btn btn-primary" onclick="addTeam()">+ Hinzufügen</button>
           </div>
         </div>
-        <div id="teamSettingsList" style="max-height: 200px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
+        <div id="teamSettingsList" style="max-height: 190px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
       </div>
 
+      <!-- 5. SICHERHEIT -->
       <div id="tabSecurity" class="tab-content">
-        <div style="background:#f8fafc; padding:14px; border-radius:8px; margin-bottom:14px; border:1px solid #e2e8f0;">
-          <h4 style="font-size:0.9rem; color:#0f172a; margin-bottom:6px;">Start-Passwort</h4>
+        <div class="settings-card">
+          <h4 style="font-size:0.88rem; color:#0f172a; margin-bottom:8px;">Start-Passwort für die Übersicht</h4>
           <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-            <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem; font-weight:700; cursor:pointer; background:#fff; padding:8px 12px; border-radius:6px; border:1px solid #cbd5e1;">
+            <label style="display:flex; align-items:center; gap:6px; font-size:0.84rem; font-weight:600; cursor:pointer; background:#fff; padding:8px 12px; border-radius:6px; border:1px solid #cbd5e1;">
               <input type="checkbox" id="secBoardPwEnabled" onchange="autoSaveSecurityConfig()"> Aktivieren
             </label>
-            <input type="text" id="secBoardPwValue" class="form-control" placeholder="Passwort" style="padding:7px 10px; flex:1;" onchange="autoSaveSecurityConfig()">
+            <input type="text" id="secBoardPwValue" class="form-control" placeholder="Passwort" style="padding:8px 10px; flex:1;" onchange="autoSaveSecurityConfig()">
           </div>
+        </div>
+      </div>
+
+      <!-- 6. HISTORIE -->
+      <div id="tabHistory" class="tab-content">
+        <div style="margin-bottom:10px;"><input type="text" id="historyUnifiedInput" class="form-control" placeholder="🔍 Historie filtern..." oninput="filterHistoryUnified()" style="font-size:0.82rem; padding:8px 10px;"></div>
+        <div id="historyList" style="max-height: 250px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px; padding:8px;"></div>
+      </div>
+
+      <!-- 7. BACKUPS -->
+      <div id="tabBackups" class="tab-content">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <span style="font-size:0.82rem; color:#475569; font-weight:600;">Gespeicherte Sicherungspunkte</span>
+          <button class="btn btn-primary" style="padding:6px 12px; font-size:0.8rem;" onclick="createManualBackup()">+ Backup erstellen</button>
+        </div>
+        <div id="backupList" style="max-height: 240px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px; padding:8px;"></div>
+      </div>
+
+      <!-- 8. MEIN PROFIL -->
+      <div id="tabProfile" class="tab-content">
+        <div id="profileInfoBox" class="settings-card"></div>
+        <div style="background:#fff; padding:14px; border-radius:8px; border:1px solid #cbd5e1;">
+          <h4 style="font-size:0.9rem; color:var(--bayer-blue); margin-bottom:10px;">Persönliche PIN ändern</h4>
+          <div id="profPinMsg" style="display:none; padding:8px 10px; border-radius:6px; font-size:0.82rem; font-weight:700; margin-bottom:10px; text-align:center;"></div>
+          <div class="form-group"><label>Aktuelle PIN</label><input type="password" id="profOldPin" class="form-control"></div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <div class="form-group" style="flex:1; min-width:180px;"><label>Neue PIN</label><input type="password" id="profNewPin" class="form-control"></div>
+            <div class="form-group" style="flex:1; min-width:180px;"><label>Wiederholen</label><input type="password" id="profNewPinConfirm" class="form-control" onkeydown="if(event.key==='Enter') saveProfilePinChange()"></div>
+          </div>
+          <button class="btn btn-primary" style="width:100%;" onclick="saveProfilePinChange()">PIN aktualisieren</button>
         </div>
       </div>
     </div>
