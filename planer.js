@@ -1,5 +1,5 @@
 /* ==========================================================================
-   PLANER-BOARD LOGIK (planer.js) - Komplettversion mit 21:00-Uhr-Automatik
+   PLANER-BOARD LOGIK (planer.js) - Inkl. korrigierter Nadel- & Memory-Funktion
    ========================================================================== */
 
 firebase.initializeApp({
@@ -26,20 +26,17 @@ let teamsConfig = {
 };
 let securityConfig = { boardPwEnabled: false, boardPw: "0110", plannerTimeoutMin: 180 };
 
-// Schichtmodell-Konfiguration (Umschaltung immer um 21:00 Uhr = 1h vor 22:00 Uhr Nachtschicht)
 let shiftModelConfig = {
-  model: "vollkonti_sonntag_frei", // "dreierschicht", "vollkonti", "vollkonti_sonntag_frei"
+  model: "vollkonti_sonntag_frei",
   autoRotate: true,
   startDate: "",
   lastRotatedWeekKey: ""
 };
 
-// Speichert den Schlüssel der aktuell freigegebenen Schicht (z.B. "2026-10-17_frueh")
 let approvedShiftKey = "";
-
 let hasLoadedFromCloud = false;
 let activeTeamFilters = {}, activeRoleFilters = {}, poolSearchQuery = "", settingsEmpSearchQuery = "";
-let inboxSearchQuery = "", inboxUnreadFilter = "all", inboxActiveFilter = "all";
+let inboxSearchQuery = "";
 let selectedManualSickEmpId = null, selectedLoginPlannerId = null;
 let isPlanner = false, plannerLevel = 0, currentPlannerName = "", currentPlannerEmpId = null;
 let sortableInstances = [];
@@ -51,11 +48,6 @@ function getShiftModelLabel(modelKey) {
   return "Vollkonti (Sonntags frei)";
 }
 
-// ============================================================================
-// ZEIT- & SCHICHT-LOGIK (Tages-/Wochenwechsel um 21:00 Uhr statt 00:00 Uhr!)
-// ============================================================================
-// Da die Vorbereitung der Nachtschicht um 21:00 Uhr (1h vor 22:00 Uhr) startet,
-// beginnt der neue logische Produktionstag exakt um 21:00 Uhr (+3 Stunden Versatz zu 00:00 Uhr).
 function getLogicalDateObj(baseDate) {
   const now = baseDate || new Date();
   return new Date(now.getTime() + 3 * 60 * 60 * 1000);
@@ -71,10 +63,6 @@ function getTodayIso() {
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
 
-// 1-Stunde-vor-Schichtbeginn Logik:
-// 05:00 - 12:59 -> Früh (Start 06:00)
-// 13:00 - 20:59 -> Spät (Start 14:00)
-// 21:00 - 04:59 -> Nacht (Start 22:00)
 function getCurrentActiveShiftId() {
   const hour = new Date().getHours();
   if (hour >= 5 && hour < 13) return "frueh";
@@ -82,15 +70,13 @@ function getCurrentActiveShiftId() {
   return "nacht";
 }
 
-// Prüft, ob aktuell das sonntägliche Schichtfrei aktiv ist (Samstag 21:00 Uhr bis Sonntag 21:00 Uhr)
 function isSundayOffWindow() {
   const m = shiftModelConfig ? shiftModelConfig.model : "vollkonti_sonntag_frei";
   if (m !== "vollkonti_sonntag_frei" && m !== "dreierschicht") return false;
   const ld = getLogicalDateObj();
-  return ld.getDay() === 0; // Logischer Sonntag = Sa 21:00 Uhr bis So 20:59 Uhr
+  return ld.getDay() === 0;
 }
 
-// Eindeutiger Schlüssel pro Schicht (bleibt von 21:00 Uhr bis 04:59 Uhr über Mitternacht stabil!)
 function getCurrentShiftApprovalKey() {
   return getLogicalDateIso() + "_" + getCurrentActiveShiftId();
 }
@@ -109,19 +95,12 @@ function getCalendarWeek(d) {
   return Math.ceil((firstThursday - target) / (7 * 86400000) + 1);
 }
 
-// Prüft und führt die automatische Rotation pünktlich ab Sonntag 21:00 Uhr (Wochenstart) aus
 function checkAndRunAutoRotation() {
   if (!hasLoadedFromCloud || !shiftModelConfig || !shiftModelConfig.autoRotate) return;
-
-  const ld = getLogicalDateObj(); // Ab Sonntag 21:00 Uhr ist ld bereits Montag der neuen KW!
+  const ld = getLogicalDateObj();
   const logicalIso = getLogicalDateIso();
 
-  // Falls ein Startdatum gesetzt ist: Erst ab diesem Startdatum (um 21:00 Uhr) aktivieren
-  if (shiftModelConfig.startDate && logicalIso < shiftModelConfig.startDate) {
-    return;
-  }
-
-  // Während des Sonntags-Fensters (Sa 21:00 - So 20:59) noch nicht rotieren, erst ab So 21:00 Uhr (ld.getDay() >= 1)
+  if (shiftModelConfig.startDate && logicalIso < shiftModelConfig.startDate) return;
   if (ld.getDay() === 0) return;
 
   const kw = getCalendarWeek(ld);
@@ -145,7 +124,6 @@ function updateAutoRotationUI() {
   const isAuto = shiftModelConfig.autoRotate !== false;
   const startStr = shiftModelConfig.startDate ? formatDateDe(shiftModelConfig.startDate) : "";
 
-  // 1. Planer-Dashboard Badge (index.html)
   const badge = document.getElementById("autoRotationBadge");
   const badgeDot = document.getElementById("autoRotationDot");
   const badgeText = document.getElementById("autoRotationText");
@@ -161,13 +139,11 @@ function updateAutoRotationUI() {
     }
   }
 
-  // 2. Portal-Anzeige (portal.html)
   const portalModelBadge = document.getElementById("portalModelBadge");
   if (portalModelBadge) {
     portalModelBadge.textContent = "Modell: " + modelName + (isAuto ? " · Auto-Rotation aktiv" : "");
   }
 
-  // 3. Einstellungs-Felder im Tab "Teams" synchronisieren
   const selModel = document.getElementById("cfgShiftModel");
   const inpStart = document.getElementById("cfgRotationStartDate");
   const chkAuto = document.getElementById("cfgAutoRotate");
@@ -188,7 +164,6 @@ function updateAutoRotationUI() {
     }
   }
 
-  // 4. "Frei"-Auswahl im Pool bei Dreierschicht ausblenden
   const freiWrap = document.getElementById("poolFreiControlWrap");
   if (freiWrap) {
     freiWrap.style.display = shiftModelConfig.model === "dreierschicht" ? "none" : "flex";
@@ -201,13 +176,9 @@ function updateShiftApprovalUI() {
   const shiftName = shiftsLabel[activeShift] || "Schicht";
   const sundayOff = isSundayOffWindow();
 
-  // 1. Oberer Farbverlaufs-Balken (Board & Portal)
   const bar = document.getElementById("brandGradientBar");
-  if (bar) {
-    bar.className = approved ? "brand-gradient approved" : "brand-gradient pending";
-  }
+  if (bar) bar.className = approved ? "brand-gradient approved" : "brand-gradient pending";
 
-  // 2. Planer-Schalter in der index.html
   const dot = document.getElementById("indicatorDot");
   const text = document.getElementById("indicatorText");
   const btn = document.getElementById("plannerApprovalIndicator");
@@ -227,7 +198,6 @@ function updateShiftApprovalUI() {
     }
   }
 
-  // 3. Status-Anzeige für Mitarbeiter in der portal.html
   const portalBadge = document.getElementById("portalShiftStatusBadge");
   const portalDot = document.getElementById("portalStatusDot");
   const portalText = document.getElementById("portalStatusText");
@@ -253,16 +223,15 @@ window.toggleShiftApprovalState = function() {
   const currentKey = getCurrentShiftApprovalKey();
   if (approvedShiftKey === currentKey) {
     approvedShiftKey = "";
-    logHistory("Freigabe", "Schichtfreigabe zurückgezogen (" + currentKey + ")");
+    logHistory("Freigabe", "Schichtfreigabe zurückgezogen");
   } else {
     approvedShiftKey = currentKey;
-    logHistory("Freigabe", "Schicht freigegeben (" + currentKey + ")");
+    logHistory("Freigabe", "Schicht freigegeben");
   }
   updateShiftApprovalUI();
   saveToFirebase();
 };
 
-// Überwacht im Hintergrund den Schichtwechsel um 05:00, 13:00 und 21:00 Uhr
 let lastWatchedShiftKey = getCurrentShiftApprovalKey();
 setInterval(function() {
   const currentKey = getCurrentShiftApprovalKey();
@@ -275,7 +244,6 @@ setInterval(function() {
   checkAndRunAutoRotation();
 }, 20000);
 
-// Inaktivitäts-Logout für den Planer
 let planerLastActivityTime = Date.now();
 function resetPlanerActivity() {
   planerLastActivityTime = Date.now();
@@ -284,9 +252,7 @@ function resetPlanerActivity() {
 setInterval(function() {
   const timeoutMin = Number(securityConfig.plannerTimeoutMin);
   if (isPlanner && timeoutMin > 0) {
-    if (Date.now() - planerLastActivityTime > timeoutMin * 60 * 1000) {
-      logoutPlanner();
-    }
+    if (Date.now() - planerLastActivityTime > timeoutMin * 60 * 1000) logoutPlanner();
   }
 }, 15000);
 
@@ -297,9 +263,15 @@ function extractShiftIdFromZone(z) { return (!z || ["pool","absent","extra"].ind
 function isTeamRotating(teamKey) { return teamsConfig[teamKey] ? (teamsConfig[teamKey].rotates !== false) : true; }
 function isEmpProtectedFromRotation(emp) { return !!(emp.noRotation || !isTeamRotating(emp.team)); }
 
+// Nadel-Memory-Funktion: Nadel direkt per Klick löschen
 window.deletePin = function(id) {
   const emp = employees.find(function(e) { return e.id === id; });
-  if (emp) { delete emp.lastLineId; saveToFirebase(); renderEmployees(); }
+  if (emp) {
+    delete emp.lastLineId;
+    logHistory("Nadel", "Stammlinie für " + fullName(emp) + " gelöscht");
+    saveToFirebase();
+    renderEmployees();
+  }
 };
 
 function updateHeaderDateKw() {
@@ -366,9 +338,7 @@ window.unlockBoardView = function() {
   }
 };
 
-window.openPlannerLoginFromLock = function() {
-  handleLogoClick();
-};
+window.openPlannerLoginFromLock = function() { handleLogoClick(); };
 
 function logHistory(action, details) {
   const entry = {
@@ -446,15 +416,12 @@ function renderEmployees() {
     if (emp.lastLineId) {
       const lastL = lines.find(function(x) { return x.id === emp.lastLineId; });
       if (lastL) {
-        const delBtn = emp.zone === "pool" ? '<span onclick="event.stopPropagation(); deletePin(\'' + emp.id + '\')" style="cursor:pointer; color:#ef4444; font-size:0.75rem; padding:0 3px;">✖</span>' : "";
-        parts.push('<span style="color:#0284c7; font-weight:700;">📌 ' + lastL.name.replace(/Linie\s*/i, '') + ' ' + delBtn + '</span>');
+        const delBtn = '<span onclick="event.stopPropagation(); deletePin(\'' + emp.id + '\')" style="cursor:pointer; color:#ef4444; font-size:0.75rem; padding:0 3px;" title="Nadel entfernen">✖</span>';
+        parts.push('<span style="color:#0284c7; font-weight:700;" title="Gemerkte Stammlinie (Memory-Effekt)">📌 ' + lastL.name.replace(/Linie\s*/i, '') + ' ' + delBtn + '</span>');
       }
     }
     if (emp.mainLines && emp.mainLines.length) {
       parts.push("<b>Prio:</b> " + emp.mainLines.map(function(id) { const l = lines.find(function(x){return x.id===id;}); return l ? l.name.replace(/Linie\s*/i, '') : null; }).filter(Boolean).join(", "));
-    }
-    if (emp.secLines && emp.secLines.length) {
-      parts.push("<b>Sek:</b> " + emp.secLines.map(function(id) { const l = lines.find(function(x){return x.id===id;}); return l ? l.name.replace(/Linie\s*/i, '') : null; }).filter(Boolean).join(", "));
     }
 
     const fixHtml = emp.noRotation ? '<span class="card-fix-tag" title="Fixiert">⚓ Fix</span>' : '';
@@ -487,6 +454,7 @@ function renderEmployees() {
   if (document.getElementById("absentCount")) document.getElementById("absentCount").textContent = "(" + (aEl ? aEl.children.length : 0) + ")";
 }
 
+// DRAG-AND-DROP MIT ROBUSTER NADEL-LOGIK (MEMORY-EFFEKT)
 function initDragAndDrop() {
   sortableInstances.forEach(function(s) { s.destroy(); }); sortableInstances = [];
   document.querySelectorAll(".drop-zone").forEach(function(zone) {
@@ -499,8 +467,13 @@ function initDragAndDrop() {
           emp.zone = newZone;
           const nL = extractLineIdFromZone(newZone), nS = extractShiftIdFromZone(newZone);
           if (nL && nS) emp.lastShiftId = nS;
-          if (nL && (!emp.lastLineId || (nS && shiftRotation[nS] === emp.team) || isEmpProtectedFromRotation(emp))) emp.lastLineId = nL;
-          saveToFirebase(); renderEmployees();
+          
+          // Sobald der Mitarbeiter auf eine Linie gezogen wird, merkt sich das System diese Linie als seine Stamm-Nadel
+          if (nL) {
+            emp.lastLineId = nL;
+          }
+          saveToFirebase();
+          renderEmployees();
         }
       }
     }));
@@ -626,7 +599,6 @@ function applyIncomingDocData(d) {
     if (d.shiftRotation && typeof d.shiftRotation === "object") shiftRotation = d.shiftRotation;
     if (d.teamsConfig && typeof d.teamsConfig === "object") {
       teamsConfig = d.teamsConfig;
-      // Sicherstellen, dass jedes geladene Team im Filter standardmäßig sichtbar ist
       Object.keys(teamsConfig).forEach(function(k) {
         if (typeof activeTeamFilters[k] === "undefined") activeTeamFilters[k] = true;
       });
@@ -661,9 +633,7 @@ function saveToFirebase() {
   }, { merge: true }).catch(function(err){ console.error(err); });
 }
 
-// ============================================================================
-// ROTATIONS-LOGIK (DREIERSCHICHT / VOLLKONTI / VOLLKONTI SONNTAGS FREI)
-// ============================================================================
+// Rotations-Logik unter Berücksichtigung der gemerkten Nadel (lastLineId)
 function performShiftRotationLogic(autoPlaceEmployees) {
   const isDreier = shiftModelConfig && shiftModelConfig.model === "dreierschicht";
   const slotOrder = isDreier ? ["frueh", "spaet", "nacht"] : ["frueh", "spaet", "nacht", "frei"];
@@ -687,6 +657,7 @@ function performShiftRotationLogic(autoPlaceEmployees) {
       });
 
       if (targetShift) {
+        // Beim Rotieren greift exakt der Memory-Effekt (lastLineId)
         const targetLine = (emp.lastLineId && lines.some(function(l){ return l.id === emp.lastLineId; }))
           ? emp.lastLineId
           : (emp.mainLines && emp.mainLines[0] ? emp.mainLines[0] : null);
@@ -702,7 +673,7 @@ function performShiftRotationLogic(autoPlaceEmployees) {
 }
 
 function rotateAllShifts() {
-  logHistory("Rotation", "Manuelle Schichtrotation ausgelöst (" + getShiftModelLabel(shiftModelConfig.model) + ")");
+  logHistory("Rotation", "Schichtrotation ausgelöst (" + getShiftModelLabel(shiftModelConfig.model) + ")");
   performShiftRotationLogic(true);
 }
 
@@ -715,7 +686,7 @@ window.saveShiftModelSettings = function() {
   if (inpStart) shiftModelConfig.startDate = inpStart.value;
   if (chkAuto) shiftModelConfig.autoRotate = chkAuto.checked;
 
-  logHistory("Schichtmodell", "Modell: " + getShiftModelLabel(shiftModelConfig.model) + (shiftModelConfig.startDate ? " (Start: " + formatDateDe(shiftModelConfig.startDate) + ")" : ""));
+  logHistory("Schichtmodell", "Modell: " + getShiftModelLabel(shiftModelConfig.model));
   updateAutoRotationUI();
   updateHeaderDateKw();
   updateShiftApprovalUI();
@@ -755,7 +726,7 @@ window.loadTeamToShift = function(slotKey) {
   saveToFirebase(); initBoard();
 };
 
-window.clearShiftRow = function(shiftId, shiftName) {
+window.clearShiftRow = function(shiftId) {
   if (!isPlanner) return;
   employees.forEach(function(emp) {
     if (extractShiftIdFromZone(emp.zone) === shiftId && !emp.noRotation) {
@@ -849,7 +820,7 @@ window.addManualSickLeave = function() {
   const today = getTodayIso();
   if (emp && start <= today && end >= today) emp.zone = "absent";
 
-  logHistory("Abwesenheit", (emp ? fullName(emp) : "") + ": " + cat + " (" + formatDateDe(start) + " - " + formatDateDe(end) + ")");
+  logHistory("Abwesenheit", (emp ? fullName(emp) : "") + ": " + cat);
   saveToFirebase(); renderEmployees(); renderInboxLists(); updateInboxBadge();
 };
 
@@ -1009,11 +980,7 @@ function updateRoleDropdown() {
   sel.innerHTML = roles.map(function(r) { return '<option value="' + r + '">' + r + '</option>'; }).join("");
 }
 
-// ============================================================================
-// VOLLSTÄNDIGE EINSTELLUNGS-LISTEN (MITARBEITER, ROLLEN, LINIEN, TEAMS, HISTORIE, BACKUPS, PROFIL)
-// ============================================================================
 function renderSettingsLists() {
-  // 1. Mitarbeiter-Liste
   const empListEl = document.getElementById("employeeList");
   if (empListEl) {
     const filtered = employees.filter(function(e) {
@@ -1030,7 +997,6 @@ function renderSettingsLists() {
     }).join("");
   }
 
-  // 2. Rollen-Liste
   const roleListEl = document.getElementById("roleList");
   if (roleListEl) {
     roleListEl.innerHTML = roles.map(function(r, idx) {
@@ -1045,22 +1011,20 @@ function renderSettingsLists() {
     }).join("");
   }
 
-  // 3. Linien-Liste (inkl. Verschieben ⬆️/⬇️ & Löschen)
   const lineListEl = document.getElementById("lineSettingsList");
   if (lineListEl) {
     lineListEl.innerHTML = lines.map(function(l, idx) {
       return '<div class="item-row">' +
         '<span><b>' + l.name + '</b> ' + (l.prio ? '<small style="color:#dc2626; font-weight:700;">[' + l.prio + ']</small>' : '') + '</span>' +
         '<div style="display:flex; gap:4px;">' +
-          '<button class="btn btn-outline" style="padding:2px 7px; font-size:0.72rem;" onclick="moveLine(' + idx + ', -1)" title="Nach links/oben">⬆️</button>' +
-          '<button class="btn btn-outline" style="padding:2px 7px; font-size:0.72rem;" onclick="moveLine(' + idx + ', 1)" title="Nach rechts/unten">⬇️</button>' +
+          '<button class="btn btn-outline" style="padding:2px 7px; font-size:0.72rem;" onclick="moveLine(' + idx + ', -1)">⬆️</button>' +
+          '<button class="btn btn-outline" style="padding:2px 7px; font-size:0.72rem;" onclick="moveLine(' + idx + ', 1)">⬇️</button>' +
           '<button class="btn btn-outline" style="padding:2px 7px; font-size:0.72rem; color:#dc2626;" onclick="deleteLine(\'' + l.id + '\')">🗑️</button>' +
         '</div>' +
       '</div>';
     }).join("");
   }
 
-  // 4. Teams-Liste (inkl. Farbe ändern, Rotations-Haken & Löschen-Button)
   const teamListEl = document.getElementById("teamSettingsList");
   if (teamListEl) {
     const keys = Object.keys(teamsConfig).sort();
@@ -1082,10 +1046,8 @@ function renderSettingsLists() {
     }).join("");
   }
 
-  // 5. Historie
   filterHistoryUnified();
 
-  // 6. Backups
   const backupListEl = document.getElementById("backupList");
   if (backupListEl) {
     backupListEl.innerHTML = backups.length ? backups.map(function(b) {
@@ -1099,10 +1061,9 @@ function renderSettingsLists() {
     }).join("") : '<p style="font-size:0.82rem; color:#64748b;">Noch keine Backups vorhanden.</p>';
   }
 
-  // 7. Profil-Info
   const profBox = document.getElementById("profileInfoBox");
   if (profBox) {
-    profBox.innerHTML = '<b>Angemeldet als:</b> ' + (currentPlannerName || "Admin") + ' <span style="color:#64748b;">(Zugriffsstufe ' + (plannerLevel || 3) + ')</span>';
+    profBox.innerHTML = '<b>Angemeldet als:</b> ' + (currentPlannerName || "Admin") + ' <span style="color:#64748b;">(Stufe ' + (plannerLevel || 3) + ')</span>';
   }
 }
 
@@ -1194,7 +1155,7 @@ window.restoreBackup = function(id) {
     if (data.teamsConfig) teamsConfig = data.teamsConfig;
     if (data.employees) employees = data.employees;
     if (data.shiftRotation) shiftRotation = data.shiftRotation;
-    logHistory("Backup", "Backup wiederhergestellt (" + b.time + ")");
+    logHistory("Backup", "Backup wiederhergestellt");
     saveToFirebase(); initBoard();
   } catch (e) { console.error(e); }
 };
@@ -1206,7 +1167,7 @@ window.deleteBackup = function(id) {
 
 window.saveProfilePinChange = function() {
   const oldP = document.getElementById("profOldPin").value.trim();
-  const newP = document.getElementById("profNewPin").value.trim();
+  const newP = document.getElementById("newNewPin").value.trim();
   const confP = document.getElementById("profNewPinConfirm").value.trim();
   if (!newP || newP.length < 4 || newP !== confP) {
     showTimedBoxMsg("profPinMsg", "❌ Neue PIN muss mind. 4 Zeichen haben und übereinstimmen!", false); return;
@@ -1220,7 +1181,7 @@ window.saveProfilePinChange = function() {
   }
   emp.password = newP; emp.mustChangePw = false;
   document.getElementById("profOldPin").value = "";
-  document.getElementById("profNewPin").value = "";
+  document.getElementById("newNewPin").value = "";
   document.getElementById("profNewPinConfirm").value = "";
   saveToFirebase();
   showTimedBoxMsg("profPinMsg", "✅ PIN erfolgreich geändert!", true);
