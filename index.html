@@ -17,9 +17,9 @@
     .brand-gradient.pending { background: linear-gradient(90deg, #0091df 0%, #ef4444 45%, #dc2626 100%); }
     .brand-gradient.approved { background: linear-gradient(90deg, #0091df 0%, #00bcff 50%, #89d329 100%); }
 
-    header { background: #fff; padding: 10px 24px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 6px rgba(0,0,0,0.06); position: sticky; top: 0; z-index: 50; }
+    header { background: #fff; padding: 10px 24px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 6px rgba(0,0,0,0.06); position: sticky; top: 0; z-index: 50; gap: 12px; flex-wrap: wrap; }
     .header-left { display: flex; align-items: center; gap: 16px; }
-    .bayer-logo-btn { width: 64px; height: 64px; cursor: pointer; transition: 0.2s; flex-shrink: 0; }
+    .bayer-logo-btn { width: 62px; height: 62px; cursor: pointer; transition: transform 0.2s; flex-shrink: 0; }
     .bayer-logo-btn:hover { transform: scale(1.05); }
     .bayer-logo-btn img { width: 100%; height: 100%; object-fit: contain; }
     .header-title h1 { font-size: 1.35rem; font-weight: 700; color: var(--bayer-blue); margin: 0; }
@@ -29,31 +29,36 @@
     .status-badge { display: none; font-size: 0.73rem; padding: 3px 10px; border-radius: 999px; font-weight: 700; background: #dcfce7; color: #166534; }
     body.planner-active .status-badge { display: inline-block; }
 
-    /* DEZENTER VERMERK FÜR SCHICHTMODELL & AUTO-ROTATION IM PLANER-DASHBOARD */
+    /* KOMPAKTER AUTOMATIK-INDIKATOR MIT ROTIERENDEM PFEIL */
+    @keyframes slowSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     .auto-rotation-badge {
       display: none;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
       font-size: 0.73rem;
       padding: 3px 10px;
       border-radius: 999px;
       font-weight: 700;
       cursor: pointer;
       border: 1px solid #cbd5e1;
-      background: #f8fafc;
-      color: #334155;
-      transition: 0.15s;
+      background: #f1f5f9;
+      color: #64748b;
+      transition: background 0.15s, border-color 0.15s;
     }
-    .auto-rotation-badge:hover { background: #f1f5f9; }
+    .auto-rotation-badge:hover { background: #e2e8f0; }
     .auto-rotation-badge.active {
       border-color: #bae6fd;
       background: #f0f9ff;
       color: #0369a1;
     }
+    .auto-rotation-badge.active .rot-icon {
+      display: inline-block;
+      animation: slowSpin 8s linear infinite;
+    }
     body.planner-active .auto-rotation-badge { display: inline-flex; }
 
     .header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .btn { padding: 8px 14px; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; position: relative; transition: 0.15s; }
+    .btn { padding: 8px 14px; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; position: relative; transition: background 0.15s, border-color 0.15s; }
     .btn-primary { background: var(--bayer-blue); color: #fff; }
     .btn-primary:hover { background: #0077b6; }
     .btn-outline { border-color: #cbd5e1; background: #fff; color: #475569; }
@@ -72,17 +77,32 @@
       border: 1px solid #cbd5e1;
       background: #f8fafc;
       color: #475569;
-      transition: 0.2s;
+      transition: background 0.2s, border-color 0.2s;
     }
     body.planner-active .planner-approval-indicator { display: inline-flex; }
 
     .inbox-badge { position: absolute; top: -6px; right: -6px; background: #dc2626; color: #fff; font-size: 0.72rem; font-weight: 800; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; display: none; align-items: center; justify-content: center; }
-    main { padding: 16px; display: flex; gap: 16px; flex: 1; width: 100%; }
-    .sidebar { width: 290px; flex-shrink: 0; display: none; flex-direction: column; gap: 10px; }
+    main { padding: 16px; display: flex; gap: 16px; flex: 1; width: 100%; align-items: flex-start; }
+    .sidebar { width: 292px; flex-shrink: 0; display: none; flex-direction: column; gap: 10px; }
     body.planner-active .sidebar { display: flex; }
-    .panel { background: #fff; border-radius: 10px; padding: 10px 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; display: flex; flex-direction: column; max-height: 32vh; }
+    .panel { background: #fff; border-radius: 10px; padding: 10px 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; display: flex; flex-direction: column; max-height: 33vh; }
     .panel h2 { font-size: 0.86rem; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; color: #1e293b; }
-    .card-list { flex: 1; overflow-y: auto; min-height: 65px; padding: 6px; background: #f8fafc; border-radius: 6px; border: 1px dashed #cbd5e1; display: flex; flex-direction: column; gap: 6px; }
+    
+    /* STABILER SCROLL-BEREICH GEGEN MAUSZEIGER-FLACKERN IM POOL */
+    .card-list {
+      flex: 1;
+      overflow-y: auto;
+      scrollbar-gutter: stable;
+      min-height: 68px;
+      padding: 6px;
+      background: #f8fafc;
+      border-radius: 6px;
+      border: 1px dashed #cbd5e1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
     .team-filter-box { display: none; background: #fff; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 0.78rem; }
     body.planner-active .team-filter-box { display: block; }
     .team-filter-options { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; }
@@ -90,8 +110,24 @@
     .search-wrapper { position: relative; margin-bottom: 8px; }
     .search-input { width: 100%; padding: 6px 26px 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.8rem; background: #f8fafc; }
     .search-clear { display: none; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #64748b; font-weight: bold; font-size: 1rem; }
-    .employee-card { background: #fff; padding: 6px 8px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); display: flex; flex-direction: column; border-left: 5px solid #94a3b8; user-select: none; gap: 3px; }
+
+    /* MITARBEITERKARTE MIT KLAREM FARBIGEM TEAM-RAND LINKS */
+    .employee-card {
+      background: #fff;
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+      border-left: 5px solid #0091df;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+      gap: 3px;
+      position: relative;
+      backface-visibility: hidden;
+    }
     body.planner-active .employee-card { cursor: grab; }
+    body.planner-active .employee-card:active { cursor: grabbing; }
     .card-name { font-size: 0.8rem; font-weight: 700; color: #1e293b; line-height: 1.15; word-break: break-word; }
     .card-role { font-size: 0.68rem; padding: 2px 5px; background: #f1f5f9; border-radius: 4px; color: #475569; font-weight: 600; }
     .card-fix-tag { display: none; font-size: 0.62rem; padding: 1px 5px; background: #fef08a; color: #854d0e; border-radius: 4px; font-weight: 700; }
@@ -101,11 +137,9 @@
     .card-sick-tag { display: none; font-size: 0.62rem; color: #b91c1c; background: #fee2e2; padding: 1px 5px; border-radius: 4px; font-weight: 700; margin-top: 1px; align-self: flex-start; }
     body.planner-active .card-sick-tag { display: inline-block; }
     .card-extra-tag { font-size: 0.62rem; color: #166534; background: #dcfce7; padding: 1px 5px; border-radius: 4px; font-weight: 700; margin-top: 1px; align-self: flex-start; }
-    .quick-sick-btn { display: none; border: none; background: #f1f5f9; border-radius: 4px; padding: 2px 4px; font-size: 0.72rem; cursor: pointer; line-height: 1; }
-    .quick-sick-btn:hover { background: #fee2e2; }
-    body.planner-lvl-3 .quick-sick-btn { display: inline-block; }
-    .board-container { flex: 1; background: #fff; border-radius: 10px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: flex; flex-direction: column; overflow: hidden; }
-    .board-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+
+    .board-container { flex: 1; background: #fff; border-radius: 10px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: flex; flex-direction: column; overflow-x: auto; }
+    .board-table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 780px; }
     .board-table th, .board-table td { border: 1px solid #e2e8f0; vertical-align: top; }
     .line-header { background: #f8fafc; padding: 10px 4px; text-align: center; position: relative; }
     body.planner-active .line-header { cursor: pointer; }
@@ -128,6 +162,7 @@
     .shift-clear-btn { width: 100%; font-size: 0.68rem; font-weight: 600; padding: 4px; border-radius: 4px; border: 1px solid #cbd5e1; background: #fff; color: #64748b; cursor: pointer; }
     .shift-clear-btn:hover { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
     .drop-zone { padding: 5px; min-height: 120px; display: flex; flex-direction: column; gap: 5px; background: #fafafa; }
+
     .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15,23,42,0.55); display: none; align-items: center; justify-content: center; z-index: 100; padding: 12px; }
     .modal { background: #fff; padding: 24px; border-radius: 10px; width: 100%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.18); max-height: 90vh; overflow-y: auto; }
     .form-group { margin-bottom: 12px; position: relative; }
@@ -146,14 +181,13 @@
     .item-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid #f1f5f9; font-size: 0.88rem; gap: 8px; }
     .sick-card { background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid var(--bayer-blue); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
     .sick-card.unread { background: #fff1f2; border-color: #fecdd3; border-left: 4px solid #dc2626; }
+    .sick-card.extra-card { background: #f0fdf4; border-color: #bbf7d0; border-left: 4px solid #16a34a; }
     .inbox-filter-bar { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
-    .filter-chip { padding: 4px 10px; border-radius: 999px; font-size: 0.74rem; font-weight: 600; cursor: pointer; border: 1px solid #cbd5e1; background: #fff; color: #475569; transition: 0.15s; }
-    .filter-chip:hover { background: #f1f5f9; }
-    .filter-chip.active { background: var(--bayer-blue); color: #fff; border-color: var(--bayer-blue); }
     .manual-entry-toggle { width: 100%; text-align: left; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 14px; font-size: 0.86rem; font-weight: 700; color: #0f172a; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
     .manual-entry-toggle:hover { background: #f1f5f9; }
     .settings-card { background: #f8fafc; padding: 14px; border-radius: 8px; margin-bottom: 12px; border: 1px solid #e2e8f0; }
-    .settings-card-title { font-size: 0.85rem; font-weight: 700; color: #1e293b; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+    .settings-card-title { font-size: 0.85rem; font-weight: 700; color: #1e293b; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }
+    .toast-banner { display: none; position: fixed; top: 20px; right: 20px; background: #16a34a; color: #fff; padding: 10px 16px; border-radius: 8px; font-weight: 700; font-size: 0.86rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 250; }
     .lvl-3-only, .admin-element { display: none !important; }
     body.planner-active .admin-element { display: inline-flex !important; }
     body.planner-lvl-3 .lvl-3-only { display: inline-flex !important; }
@@ -163,6 +197,7 @@
 <body>
   <!-- DYNAMISCHER BALKEN GANZ OBEN -->
   <div id="brandGradientBar" class="brand-gradient pending"></div>
+  <div id="toastBanner" class="toast-banner">Gespeichert</div>
 
   <!-- START-PASSWORT SPERRE -->
   <div id="boardLockModal" class="modal-overlay" style="background: rgba(15,23,42,0.92); z-index: 180;">
@@ -189,9 +224,9 @@
         <div id="headerDateKw" class="header-meta">Lade Datum...</div>
         <div class="header-badges-row">
           <span id="plannerStatusBadge" class="status-badge">Planer-Modus aktiv</span>
-          <span id="autoRotationBadge" class="auto-rotation-badge active" onclick="openShiftModelSettingsQuick()" title="Schichtmodell & Automatische Rotation verwalten">
-            <span id="autoRotationDot" style="width:7px; height:7px; border-radius:50%; background:#0091df;"></span>
-            <span id="autoRotationText">Auto: Vollkonti (Sonntags frei)</span>
+          <span id="autoRotationBadge" class="auto-rotation-badge active" onclick="openShiftModelSettingsQuick()" title="Klicken für Schichtmodell & Rotations-Einstellungen">
+            <span id="autoRotationIcon" class="rot-icon">🔄</span>
+            <span id="autoRotationText">Auto aktiv</span>
           </span>
         </div>
       </div>
@@ -241,7 +276,10 @@
       </div>
 
       <div class="panel">
-        <h2><span>➕ Bringschichten / Zusatz <span id="extraCount" style="font-size:0.8rem; color:#166534;">(0)</span></span></h2>
+        <h2>
+          <span>➕ Bringschichten / Zusatz <span id="extraCount" style="font-size:0.8rem; color:#166534;">(0)</span></span>
+          <button class="btn btn-outline lvl-3-only" style="padding:2px 7px; font-size:0.72rem;" onclick="openInboxModal(null, false, true)">+ Neu</button>
+        </h2>
         <div id="extra" class="card-list drop-zone" data-zone="extra" style="background:#f0fdf4; border-color:#86efac;"></div>
         <div id="approvedExtraList" style="max-height:75px; overflow-y:auto; margin-top:4px; font-size:0.72rem;"></div>
       </div>
@@ -249,7 +287,7 @@
       <div class="panel">
         <h2>
           <span>Abwesend <span id="absentCount" style="font-size:0.8rem; color:#b91c1c;">(0)</span></span>
-          <button class="btn btn-outline lvl-3-only" style="padding:2px 7px; font-size:0.72rem;" onclick="openInboxModal(null, true)">+ Zeitraum</button>
+          <button class="btn btn-outline lvl-3-only" style="padding:2px 7px; font-size:0.72rem;" onclick="openInboxModal(null, true, false)">+ Zeitraum</button>
         </h2>
         <div id="absent" class="card-list drop-zone" data-zone="absent" style="background: #fff1f2;"></div>
       </div>
@@ -267,7 +305,7 @@
   <div id="pinModal" class="modal-overlay">
     <div class="modal" style="max-width: 380px;">
       <h3 style="color: var(--bayer-blue); margin-bottom: 4px; text-align:center;">🔐 Planer-Anmeldung</h3>
-      <div style="text-align:center; font-size:0.7rem; color:#64748b; margin-bottom:12px;">System-Version 2.8</div>
+      <div style="text-align:center; font-size:0.7rem; color:#64748b; margin-bottom:12px;">System-Version 2.9</div>
       <div id="loginModalError" style="display:none; background:#fee2e2; color:#b91c1c; padding:10px; border-radius:6px; font-size:0.82rem; font-weight:700; margin-bottom:12px; text-align:center;"></div>
       <div class="form-group" id="plannerLoginSearchGroup">
         <label>Dein Name (oder "Admin")</label>
@@ -300,7 +338,7 @@
     </div>
   </div>
 
-  <!-- POSTFACH & ANTRÄGE -->
+  <!-- POSTFACH, URLAUB & BRINGSCHICHTEN -->
   <div id="inboxModal" class="modal-overlay">
     <div class="modal" style="max-width: 680px;">
       <h3 style="display:flex; justify-content:space-between; align-items:center; color:var(--bayer-blue); margin-bottom:8px;">
@@ -317,26 +355,29 @@
         <span id="clearInboxSearchBtn" class="search-clear" onclick="document.getElementById('inboxSearchInput').value=''; updateInboxSearch('')">&times;</span>
       </div>
 
-      <div style="margin-bottom: 16px;">
+      <!-- 1. ABWESENHEIT MANUELL EINTRAGEN -->
+      <div style="margin-bottom: 10px;">
         <button type="button" class="manual-entry-toggle" onclick="toggleManualEntryBox()">
           <span>➕ Abwesenheit direkt eintragen</span>
           <span id="manualEntryArrow" style="font-size:0.76rem; color:var(--bayer-blue);">▼ Formular öffnen</span>
         </button>
         <div id="manualEntryContent" style="display:none; background:#f8fafc; border:1px solid #cbd5e1; border-top:none; border-radius:0 0 8px 8px; padding:14px;">
           <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <div class="form-group" id="manualSickSearchGroup" style="flex:1.4; min-width:180px;">
+            <div class="form-group" id="manualSickSearchGroup" style="flex:1.2; min-width:180px;">
               <label>Mitarbeiter</label>
               <input type="text" id="manualSickEmpInput" class="form-control" placeholder="🔍 Name tippen..." autocomplete="off" onfocus="onManualSickNameInput(this.value)" oninput="onManualSickNameInput(this.value)">
               <div id="manualSickSuggestions" class="suggestions-box"></div>
             </div>
-            <div class="form-group" style="flex:1; min-width:160px;">
-              <label>Art der Abwesenheit</label>
+            <div class="form-group" style="flex:1.2; min-width:200px;">
+              <label>Abwesenheit (offizielles Formular)</label>
               <select id="manualSickCategory" class="form-control">
-                <option value="Urlaub">Urlaub</option>
+                <option value="Urlaub - bezahlt">Urlaub - bezahlt</option>
+                <option value="Urlaub - unbezahlt">Urlaub - unbezahlt</option>
                 <option value="Arbeitsunfähigkeit">Arbeitsunfähigkeit</option>
-                <option value="Freizeitausgleich / Gleittag">Freizeitausgleich / Gleittag</option>
-                <option value="Kind krank">Kind krank</option>
-                <option value="Sonderurlaub">Sonderurlaub</option>
+                <option value="Aus- und Fortbildung">Aus- und Fortbildung</option>
+                <option value="Dienstreise">Dienstreise</option>
+                <option value="Dienstgang">Dienstgang</option>
+                <option value="Freizeitausgleich / Gleittag / Altersfreizeit">Freizeitausgleich / Gleittag / Altersfreizeit</option>
               </select>
             </div>
           </div>
@@ -344,12 +385,47 @@
             <div class="form-group" style="flex:1;"><label>Von</label><input type="date" id="manualSickStart" class="form-control"></div>
             <div class="form-group" style="flex:1;"><label>Bis</label><input type="date" id="manualSickEnd" class="form-control"></div>
           </div>
-          <div class="form-group"><label>Notiz</label><input type="text" id="manualSickReason" class="form-control" placeholder="Optional..."></div>
-          <button class="btn btn-primary" style="width:100%;" onclick="addManualSickLeave()">Eintragen & Genehmigen</button>
+          <div class="form-group"><label>Notiz / Grund (optional)</label><input type="text" id="manualSickReason" class="form-control" placeholder="z.B. Uhrzeit bei Dienstgang / Kommentar..."></div>
+          <button class="btn btn-primary" style="width:100%;" onclick="addManualSickLeave()">Abwesenheit eintragen & genehmigen</button>
         </div>
       </div>
 
-      <div style="margin-bottom: 18px;">
+      <!-- 2. BRINGSCHICHT / ZUSATZSCHICHT MANUELL EINTRAGEN -->
+      <div style="margin-bottom: 16px;">
+        <button type="button" class="manual-entry-toggle" onclick="toggleManualExtraBox()">
+          <span>➕ Bringschicht / Zusatzschicht direkt eintragen</span>
+          <span id="manualExtraArrow" style="font-size:0.76rem; color:#166534;">▼ Formular öffnen</span>
+        </button>
+        <div id="manualExtraContent" style="display:none; background:#f0fdf4; border:1px solid #86efac; border-top:none; border-radius:0 0 8px 8px; padding:14px;">
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <div class="form-group" id="manualExtraSearchGroup" style="flex:1.4; min-width:180px;">
+              <label>Mitarbeiter</label>
+              <input type="text" id="manualExtraEmpInput" class="form-control" placeholder="🔍 Name tippen..." autocomplete="off" onfocus="onManualExtraNameInput(this.value)" oninput="onManualExtraNameInput(this.value)">
+              <div id="manualExtraSuggestions" class="suggestions-box"></div>
+            </div>
+            <div class="form-group" style="flex:1; min-width:140px;">
+              <label>Datum</label>
+              <input type="date" id="manualExtraDate" class="form-control">
+            </div>
+            <div class="form-group" style="flex:1; min-width:140px;">
+              <label>Schicht</label>
+              <select id="manualExtraShift" class="form-control">
+                <option value="frueh">Frühschicht</option>
+                <option value="spaet">Spätschicht</option>
+                <option value="nacht">Nachtschicht</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Notiz / Linie (optional)</label>
+            <input type="text" id="manualExtraNote" class="form-control" placeholder="z.B. Geplant für Linie 34...">
+          </div>
+          <button class="btn btn-primary" style="width:100%; background:#16a34a;" onclick="addManualExtraShift()">Bringschicht eintragen & aktivieren</button>
+        </div>
+      </div>
+
+      <!-- OFFENE ANTRÄGE -->
+      <div style="margin-bottom: 16px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
           <h4 style="font-size:0.92rem; color:#dc2626;">🔔 Offene Anträge & Meldungen</h4>
           <button id="btnMarkAllRead" class="btn btn-outline" style="padding:4px 10px; font-size:0.75rem;" onclick="markAllSickLeavesRead()">Alle gelesen</button>
@@ -358,8 +434,15 @@
         <div id="unreadSickList"></div>
       </div>
 
-      <div style="border-top: 2px solid #e2e8f0; padding-top: 14px;">
-        <h4 style="font-size:0.92rem; margin-bottom: 6px;">📋 Aktive Abwesenheiten</h4>
+      <!-- GEPLANTE BRINGSCHICHTEN -->
+      <div style="border-top: 2px solid #e2e8f0; padding-top: 12px; margin-bottom: 16px;">
+        <h4 style="font-size:0.92rem; color:#166534; margin-bottom: 6px;">➕ Eingetragene Bringschichten / Zusatzschichten</h4>
+        <div id="inboxExtraList"></div>
+      </div>
+
+      <!-- AKTIVE ABWESENHEITEN -->
+      <div style="border-top: 2px solid #e2e8f0; padding-top: 12px;">
+        <h4 style="font-size:0.92rem; margin-bottom: 6px;">📋 Aktive & kommende Abwesenheiten</h4>
         <div id="inboxActiveFilterBar" class="inbox-filter-bar"></div>
         <div id="activeSickList"></div>
       </div>
@@ -377,7 +460,7 @@
           <option value="">Keine</option><option value="PRIO 1">PRIO 1</option><option value="PRIO 2">PRIO 2</option><option value="PRIO 3">PRIO 3</option>
         </select>
       </div>
-      <div class="form-group"><label>Status / Tag</label><input type="text" id="editLineTag" class="form-control" onchange="saveLineDetails(true)"></div>
+      <div class="form-group"><label>Status / Tag (z.B. Wartung)</label><input type="text" id="editLineTag" class="form-control" onchange="saveLineDetails(true)"></div>
       <div class="form-group"><label>Notiz</label><textarea id="editLineNote" class="form-control" onchange="saveLineDetails(true)"></textarea></div>
       <div class="modal-actions">
         <button class="btn btn-primary" onclick="saveLineDetails(false)">Fertig</button>
@@ -462,16 +545,16 @@
       <div id="tabTeams" class="tab-content">
         <div class="settings-card">
           <div class="settings-card-title">
-            <span>Schichtmodell & Rotation</span>
-            <span style="font-size:0.72rem; color:#64748b; font-weight:600;">Umschaltung jeweils 21:00 Uhr (1h vor Nachtschicht)</span>
+            <span>🔄 Schichtmodell & Automatische Rotation</span>
+            <span style="font-size:0.72rem; color:#64748b; font-weight:600;">Umschaltung jeweils 21:00 Uhr (1h vor 22:00 Nachtschicht)</span>
           </div>
           <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
-            <div style="flex:1.2; min-width:170px;">
+            <div style="flex:1.2; min-width:180px;">
               <label style="font-size:0.78rem; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Schichtmodell</label>
               <select id="cfgShiftModel" class="form-control" onchange="saveShiftModelSettings()">
-                <option value="dreierschicht">Dreierschicht</option>
-                <option value="vollkonti">Vollkonti</option>
-                <option value="vollkonti_sonntag_frei">Vollkonti (Sonntags frei)</option>
+                <option value="vollkonti_sonntag_frei">Vollkonti (2-Tage-Rhythmus · Sonntags Früh/Spät frei)</option>
+                <option value="vollkonti">Vollkonti (Durchgehend)</option>
+                <option value="dreierschicht">Dreierschicht (Wochenwechsel · Sonntags frei)</option>
               </select>
             </div>
             <div style="flex:1; min-width:150px;">
